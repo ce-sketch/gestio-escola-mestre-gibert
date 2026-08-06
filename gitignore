@@ -1,0 +1,10 @@
+node_modules/
+dist/
+
+# Seguretat: mai pugem fitxers d'exportació d'alumnat (Excel/CSV) al
+# repositori, encara que algú els deixi per error dins la carpeta del
+# projecte. Les dades d'alumnat només han de viure a Firestore, mai a Git.
+*.xlsx
+*.xls
+*.csv
+LLISTAT*
