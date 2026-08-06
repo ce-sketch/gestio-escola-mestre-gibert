@@ -1,0 +1,99 @@
+rules_version = '2';
+
+// Regles de seguretat de Firestore per al projecte "Escola Mestre Gibert".
+//
+// Com aplicar-les:
+// 1. A Firebase Console, ves a Firestore Database → pestanya "Reglas"
+// 2. Enganxa el contingut d'aquest fitxer, substituint el que hi hagi
+// 3. Clica "Publicar"
+//
+// Criteri general: qualsevol usuari autenticat i de personal del centre
+// (domini @escolamestregibert.cat, i que NO sigui un compte d'alumnat —
+// aquests comencen sempre per "00") pot llegir i introduir dades
+// pedagògiques (assistència, avaluació, documentació). La gestió
+// d'alumnes, el calendari escolar i el backup, en canvi, només els pot
+// escriure el compte administrador (ce@escolamestregibert.cat) — la resta
+// de personal els pot seguir consultant, però no modificar-los.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function esAdmin() {
+      return request.auth != null && request.auth.token.email == 'ce@escolamestregibert.cat';
+    }
+
+    // Personal del centre: domini correcte i NO és un compte d'alumnat
+    // (que sempre comencen per "00", doble zero). Aquesta comprovació es
+    // fa aquí, a Firestore, perquè cap alumne pugui llegir ni escriure
+    // res encara que es saltés la pantalla de login de l'app.
+    function esComptePersonal() {
+      return request.auth != null
+        && request.auth.token.email.matches('.*@escolamestregibert[.]cat$')
+        && !request.auth.token.email.matches('^00.*');
+    }
+
+    // Assistència: registres d'entrada per data, mai se sobreescriuen.
+    match /assistencia/{registreId} {
+      allow read: if esComptePersonal();
+      allow create: if esComptePersonal();
+      allow update, delete: if false; // l'historial no es modifica ni s'esborra
+    }
+
+    // Avaluació: notes per alumne, àrea i trimestre.
+    match /avaluacio/{registreId} {
+      allow read: if esComptePersonal();
+      allow create: if esComptePersonal();
+      allow update, delete: if false;
+    }
+
+    // Documentació: metadades de documents (els fitxers en si aniran a Cloudflare R2).
+    match /documentacio/{registreId} {
+      allow read: if esComptePersonal();
+      allow create: if esComptePersonal();
+      allow update, delete: if false;
+    }
+
+    // Fitxa central de l'alumne. Tothom del personal la pot consultar (cal
+    // per passar llista, posar notes, etc.), però només l'administrador
+    // la pot donar d'alta, editar o desactivar.
+    match /alumnes/{alumneId} {
+      allow read: if esComptePersonal();
+      allow write: if esAdmin();
+    }
+
+    // Calendari escolar: tothom del personal el pot consultar (cal per
+    // calcular l'absentisme), però només l'administrador el pot crear o editar.
+    match /calendari/{cursId} {
+      allow read: if esComptePersonal();
+      allow write: if esAdmin();
+    }
+
+    // Configuració general de l'aplicació.
+    // - "backup": només l'administrador (és qui té accés al mòdul).
+    // - "contactes", "pesosTEE", "llindarsCL": tot el personal els pot
+    //   llegir; només l'administrador els pot editar.
+    match /configuracio/backup {
+      allow read, write: if esAdmin();
+    }
+    match /configuracio/contactes {
+      allow read: if esComptePersonal();
+      allow write: if esComptePersonal();
+    }
+    match /configuracio/pesosTEE {
+      allow read: if esComptePersonal();
+      allow write: if esAdmin();
+    }
+    match /configuracio/llindarsCL {
+      allow read: if esComptePersonal();
+      allow write: if esAdmin();
+    }
+    match /configuracio/{altres} {
+      allow read, write: if esAdmin();
+    }
+
+    // Per defecte, tot el que no s'hagi definit explícitament queda bloquejat.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

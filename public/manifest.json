@@ -1,0 +1,15 @@
+{
+  "name": "Gestió Escola Mestre Enric Gibert i Camins",
+  "short_name": "Gestió Escola",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F7F5EF",
+  "theme_color": "#1E3A5F",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
