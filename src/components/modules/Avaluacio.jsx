@@ -2,13 +2,15 @@ import { useState } from 'react'
 import TEE from './avaluacio/TEE.jsx'
 import Lectura from './avaluacio/Lectura.jsx'
 import NotaArea from './avaluacio/NotaArea.jsx'
+import NotesGenerals from './avaluacio/NotesGenerals.jsx'
 import InformeCatala from './avaluacio/InformeCatala.jsx'
 import Resum from './avaluacio/Resum.jsx'
 
 const PESTANYES = [
   { id: 'tee', label: 'TEE (Text Escrit)', component: TEE },
   { id: 'lectura', label: 'Lectura (VL/CL)', component: Lectura },
-  { id: 'area', label: 'Nota d\'àrea', component: NotaArea },
+  { id: 'area', label: 'Nota d\'àrea (Català)', component: NotaArea },
+  { id: 'notes-generals', label: 'Notes per àrea (totes)', component: NotesGenerals },
   { id: 'informe', label: 'Informe per alumne', component: InformeCatala },
   { id: 'resum', label: 'Resums', component: Resum },
 ]
