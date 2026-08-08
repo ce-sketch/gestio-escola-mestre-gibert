@@ -1,3 +1,6 @@
+import { normalitza } from './text'
+import { paraulesNivell } from './dictatTEE'
+
 // Àrees generals per fer el seguiment de notes de tot el centre, tal com
 // apareixen a la graella "Nota mitjana d'àrea" (full "Àrees no superades" i
 // fulls "Resum" per trimestre). No totes les àrees s'apliquen a tots els
@@ -37,3 +40,81 @@ export function areaAplicaAClasse(areaId, classe) {
 }
 
 export const TRIMESTRES = ['1r trimestre', '2n trimestre', '3r trimestre']
+
+// --- Dictat per veu ---
+
+const CURT_A_ID = {
+  ae: 'assoliment_excel·lent',
+  an: 'assoliment_notable',
+  as: 'assoliment_satisfactori',
+  na: 'no_assoliment',
+}
+
+// Paraules que ha de dir el mestre per referir-se a cada àrea. La clau ha
+// de coincidir amb l'id de AREES.
+const PARAULES_AREA = {
+  catala: ['catala'],
+  castella: ['castella'],
+  angles: ['angles'],
+  matematiques: ['matematiques', 'mates'],
+  medi: ['medi'],
+  science: ['science'],
+  plastica: ['plastica'],
+  musica: ['musica'],
+  efisica: ['educacio fisica', 'ed fisica', 'efisica', 'gimnastica'],
+  religio: ['religio', 'valors'],
+}
+
+/**
+ * Interpreta un dictat del tipus "Alumne 3 català notable, matemàtiques
+ * excel·lent, alumne 7 castellà satisfactori..." — cada alumne pot portar
+ * diverses àrees seguides. Retorna { [numLlista]: { [areaId]: nivellId } }.
+ */
+export function interpretaDictatNotesArea(transcripcio) {
+  const text = normalitza(transcripcio)
+  const nivellsParaules = paraulesNivell('primaria')
+
+  const marques = [...text.matchAll(/alumne\s+(?:numero\s+)?(\d+)/g)]
+  if (marques.length === 0) return {}
+
+  const resultat = {}
+
+  marques.forEach((marca, i) => {
+    const numLlista = Number(marca[1])
+    const inici = marca.index + marca[0].length
+    const fi = i + 1 < marques.length ? marques[i + 1].index : text.length
+    const segment = text.slice(inici, fi)
+
+    const notesAlumne = {}
+
+    const posicionsArea = AREES
+      .map((a) => {
+        const paraules = PARAULES_AREA[a.id] ?? [a.label.toLowerCase()]
+        let millorPos = -1
+        for (const p of paraules) {
+          const idx = segment.indexOf(p)
+          if (idx !== -1 && (millorPos === -1 || idx < millorPos)) millorPos = idx
+        }
+        return { id: a.id, pos: millorPos }
+      })
+      .filter((a) => a.pos !== -1)
+      .sort((a, b) => a.pos - b.pos)
+
+    posicionsArea.forEach((area, idx) => {
+      const finsA = idx + 1 < posicionsArea.length ? posicionsArea[idx + 1].pos : segment.length
+      const tros = segment.slice(area.pos, finsA)
+      for (const [curt, paraules] of Object.entries(nivellsParaules)) {
+        if (paraules.some((p) => tros.includes(p))) {
+          notesAlumne[area.id] = CURT_A_ID[curt]
+          break
+        }
+      }
+    })
+
+    if (Object.keys(notesAlumne).length > 0) {
+      resultat[numLlista] = notesAlumne
+    }
+  })
+
+  return resultat
+}
