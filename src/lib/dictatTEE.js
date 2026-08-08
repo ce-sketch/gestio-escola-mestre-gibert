@@ -9,7 +9,7 @@ const PARAULES_CRITERI = {
   morfosintaxis: ['morfosintaxi', 'morfosintaxis', 'morfosintactica', 'morfosintactic'],
 }
 
-function paraulesNivell(cicle) {
+export function paraulesNivell(cicle) {
   if (cicle === 'EI') {
     return { expert: ['expert'], avancat: ['avancat'], aprenent: ['aprenent'] }
   }
