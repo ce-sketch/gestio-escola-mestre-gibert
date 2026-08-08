@@ -3,7 +3,7 @@ import { collection, query, where, getDocs } from 'firebase/firestore'
 import { db } from '../../../firebase'
 import { redueixVigents } from '../../../lib/avaluacioCatala'
 import { NIVELLS_PER_CICLE, cicleDe, aEscalaComuna } from '../../../lib/rubricaTEE'
-import { MOMENTS_LECTURA, vlAEscalaComuna } from '../../../lib/rubricaLectura'
+import { MOMENTS_LECTURA, vlAEscalaComuna, grauPrimaria } from '../../../lib/rubricaLectura'
 import { cursEscolarActual } from '../../../lib/cursEscolar'
 
 const TRIMESTRES = ['1r trimestre', '2n trimestre', '3r trimestre']
@@ -44,7 +44,45 @@ export default function Resum() {
     carrega()
   }, [])
 
-  const cursos = useMemo(() => [...new Set(alumnesTots.map((a) => a.curs))].sort(), [alumnesTots])
+  const cursos = useMemo(
+    () => [...new Set(alumnesTots.map((a) => a.curs))].filter((c) => grauPrimaria(c) !== null).sort(),
+    [alumnesTots]
+  )
+
+  /** Suma totes les files d'un resum en un únic total global — amb l'opció
+   *  d'excloure 1r (que fa servir un criteri diferent, sense curs inferior
+   *  amb què comparar-se, així que sovint interessa veure'l a part). */
+  function totalGlobal(files, columnes, excloure1r) {
+    const ids = columnes.map((c) => c.id ?? c)
+    const comptadors = Object.fromEntries(ids.map((id) => [id, 0]))
+    let total = 0
+    files.forEach((f) => {
+      if (excloure1r && grauPrimaria(f.curs) === 1) return
+      for (const id of ids) comptadors[id] += f.comptadors[id]
+      total += f.total
+    })
+    return { comptadors, total }
+  }
+
+  function FilaTotal({ label, files, columnes }) {
+    const ambPrimer = totalGlobal(files, columnes, false)
+    const sensePrimer = totalGlobal(files, columnes, true)
+    const ids = columnes.map((c) => c.id ?? c)
+    return (
+      <>
+        <tr style={{ borderBottom: '1px solid var(--line)', background: 'var(--bg-soft, #f5f5f0)' }}>
+          <td style={{ padding: '6px 8px', fontWeight: 700 }}>{label} — TOTAL (amb 1r)</td>
+          {ids.map((id) => <td key={id} style={{ padding: '6px 8px', fontWeight: 700 }}>{ambPrimer.comptadors[id]}</td>)}
+          <td style={{ padding: '6px 8px', fontWeight: 700 }}>{ambPrimer.total}</td>
+        </tr>
+        <tr style={{ borderBottom: '2px solid var(--line)', background: 'var(--bg-soft, #f5f5f0)' }}>
+          <td style={{ padding: '6px 8px', fontWeight: 700 }}>{label} — TOTAL (sense 1r)</td>
+          {ids.map((id) => <td key={id} style={{ padding: '6px 8px', fontWeight: 700 }}>{sensePrimer.comptadors[id]}</td>)}
+          <td style={{ padding: '6px 8px', fontWeight: 700 }}>{sensePrimer.total}</td>
+        </tr>
+      </>
+    )
+  }
 
   // ---- Resum TEE del trimestre seleccionat ----
   const resumTee = useMemo(() => {
@@ -103,8 +141,10 @@ export default function Resum() {
     <div>
       <p className="module-lead">
         Resums globals, equivalents als fulls "Global curs" i "Resum Trimestres" dels
-        documents originals — calculats sols a partir de les notes introduïdes, sense
-        fórmules que es puguin trencar.
+        documents originals. Només inclou cursos de Primària (1r-6è). Cada taula porta,
+        a sota de les classes, dues files de TOTAL: una comptant totes les classes, i una
+        altra sense 1r (que fa servir un criteri diferent, sense curs inferior amb què
+        comparar-se) — igual que es distingia al full de càlcul original.
       </p>
 
       <div style={{ display: 'flex', gap: 16, marginTop: 16, flexWrap: 'wrap' }}>
@@ -142,6 +182,7 @@ export default function Resum() {
               <td style={{ padding: '6px 8px', fontWeight: 600 }}>{fila.total}</td>
             </tr>
           ))}
+          <FilaTotal label="TEE" files={resumTee} columnes={COLUMNES_COMUNES} />
         </tbody>
       </table>
 
@@ -165,6 +206,7 @@ export default function Resum() {
                   <td style={{ padding: '6px 8px', fontWeight: 600 }}>{fila.total}</td>
                 </tr>
               ))}
+              <FilaTotal label={`CL ${label}`} files={files} columnes={COLUMNES_CL} />
             </tbody>
           </table>
         </div>
@@ -190,6 +232,7 @@ export default function Resum() {
                   <td style={{ padding: '6px 8px', fontWeight: 600 }}>{fila.total}</td>
                 </tr>
               ))}
+              <FilaTotal label={`VL ${moment.label}`} files={files} columnes={COLUMNES_COMUNES} />
             </tbody>
           </table>
         </div>
