@@ -265,6 +265,7 @@ export default function Lectura() {
           <table style={{ borderCollapse: 'collapse', fontSize: 13, width: '100%' }}>
             <thead>
               <tr style={{ textAlign: 'left', borderBottom: '2px solid var(--line)' }}>
+                <th style={{ padding: '6px 8px', width: 44 }}>Núm.</th>
                 <th style={{ padding: '6px 8px', minWidth: 160 }}>Alumne</th>
                 <th style={{ padding: '6px 8px' }}>VL (paraules/min)</th>
                 <th style={{ padding: '6px 8px' }}>Nivell lector</th>
@@ -280,6 +281,7 @@ export default function Lectura() {
                 const nCl = moment.teCL ? nivellCL(cl, curs, llindarsCl) : null
                 return (
                   <tr key={alumne.id} style={{ borderBottom: '1px solid var(--line)' }}>
+                    <td style={{ padding: '6px 8px', color: 'var(--ink-soft)' }}>{alumne.numLlista ?? '—'}</td>
                     <td style={{ padding: '6px 8px', fontWeight: 500 }}>{alumne.nom}</td>
                     <td style={{ padding: '4px 6px' }}>
                       <input
