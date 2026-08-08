@@ -22,6 +22,41 @@ function paraulesNivell(cicle) {
 }
 
 /**
+ * Interpreta un dictat del tipus "Alumne 1 notable, alumne 2 excel·lent..."
+ * per a mòduls on cada alumne només té UN nivell (no diversos criteris com
+ * TEE). Retorna { [numLlista]: nivellId }.
+ */
+export function interpretaDictatNivellUnic(transcripcio) {
+  const text = normalitza(transcripcio)
+  const nivellsParaules = paraulesNivell('primaria') // ae/an/as/na (no és EI)
+  const CURT_A_ID = {
+    ae: 'assoliment_excel·lent',
+    an: 'assoliment_notable',
+    as: 'assoliment_satisfactori',
+    na: 'no_assoliment',
+  }
+
+  const marques = [...text.matchAll(/alumne\s+(?:numero\s+)?(\d+)/g)]
+  if (marques.length === 0) return {}
+
+  const resultat = {}
+  marques.forEach((marca, i) => {
+    const numLlista = Number(marca[1])
+    const inici = marca.index + marca[0].length
+    const fi = i + 1 < marques.length ? marques[i + 1].index : text.length
+    const segment = text.slice(inici, fi)
+
+    for (const [curt, paraules] of Object.entries(nivellsParaules)) {
+      if (paraules.some((p) => segment.includes(p))) {
+        resultat[numLlista] = CURT_A_ID[curt]
+        break
+      }
+    }
+  })
+  return resultat
+}
+
+/**
  * Interpreta un dictat del tipus "Alumne 1 coherència notable lèxic
  * excel·lent... Alumne 2 coherència..." i el converteix en notes
  * estructurades per número de llista (no per nom), perquè el mestre no
