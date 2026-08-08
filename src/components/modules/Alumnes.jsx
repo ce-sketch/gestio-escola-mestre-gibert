@@ -27,6 +27,9 @@ export default function Alumnes() {
   const [important, setImportantFitxer] = useState(false)
   const [errorFitxer, setErrorFitxer] = useState(null)
 
+  const [confirmaEsborrat, setConfirmaEsborrat] = useState('')
+  const [esborrant, setEsborrant] = useState(false)
+
   function updateClass(index, field, value) {
     setClasses((prev) => prev.map((c, i) => (i === index ? { ...c, [field]: value } : c)))
   }
@@ -131,6 +134,33 @@ export default function Alumnes() {
   const totalAlumnesPrevisualitzats = previsualitzacio
     ? Object.values(previsualitzacio).reduce((acc, llista) => acc + llista.length, 0)
     : 0
+
+  async function esborraTotsElsAlumnes() {
+    setEsborrant(true)
+    setLog([])
+    try {
+      const alumnesRef = collection(db, 'alumnes')
+      const snapshot = await getDocs(alumnesRef)
+      const docs = snapshot.docs
+
+      // Firestore només permet 500 operacions per lot (batch), així que si
+      // hi ha més alumnes que això cal fer-ho a trossos.
+      for (let i = 0; i < docs.length; i += 500) {
+        const batch = writeBatch(db)
+        for (const d of docs.slice(i, i + 500)) {
+          batch.delete(doc(alumnesRef, d.id))
+        }
+        await batch.commit()
+      }
+
+      setLog([{ type: 'ok', text: `Esborrats ${docs.length} alumnes. La llista ja és buida — puja un Excel per tornar-la a omplir.` }])
+      setConfirmaEsborrat('')
+    } catch (err) {
+      setLog([{ type: 'error', text: `No s'ha pogut esborrar: ${err.message}` }])
+    } finally {
+      setEsborrant(false)
+    }
+  }
 
   return (
     <div className="module">
@@ -267,6 +297,45 @@ export default function Alumnes() {
           ))}
         </ul>
       )}
+
+      <details style={{ marginTop: 40 }}>
+        <summary style={{ cursor: 'pointer', fontWeight: 600, color: 'var(--red)' }}>
+          Zona perillosa: esborra tots els alumnes
+        </summary>
+        <div className="placeholder-box" style={{ borderStyle: 'solid', marginTop: 16, borderColor: 'var(--red)' }}>
+          <p>
+            <strong>Això esborra tota la llista d'alumnes de Firestore</strong> (útil per
+            començar un curs nou de zero, en comptes d'arrossegar dades d'anys anteriors).
+            No esborra l'historial d'assistència ni d'avaluació ja desat — es queda tal
+            com estava, però deixarà de poder-se relacionar amb un alumne actiu fins que
+            tornis a pujar l'Excel.
+          </p>
+          <p style={{ marginTop: 10 }}>
+            Per confirmar, escriu <strong>ESBORRA</strong> aquí sota i clica el botó:
+          </p>
+          <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <input
+              type="text"
+              value={confirmaEsborrat}
+              onChange={(e) => setConfirmaEsborrat(e.target.value)}
+              placeholder="ESBORRA"
+              style={{ border: '1px solid var(--red)', borderRadius: 8, padding: '8px 10px', maxWidth: 160 }}
+            />
+            <button
+              type="button"
+              onClick={esborraTotsElsAlumnes}
+              disabled={confirmaEsborrat !== 'ESBORRA' || esborrant}
+              style={{
+                background: 'var(--red)', color: '#fff', border: 'none', borderRadius: 8,
+                padding: '10px 16px', fontWeight: 600, cursor: confirmaEsborrat === 'ESBORRA' ? 'pointer' : 'not-allowed',
+                opacity: confirmaEsborrat === 'ESBORRA' ? 1 : 0.5,
+              }}
+            >
+              {esborrant ? 'Esborrant…' : 'Esborra tots els alumnes'}
+            </button>
+          </div>
+        </div>
+      </details>
     </div>
   )
 }
