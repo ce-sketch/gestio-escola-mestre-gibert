@@ -172,10 +172,10 @@ export default function Assistencia() {
   async function marcaTothomPresent(tornsAaplicar) {
     const promeses = []
     for (const alumne of alumnesClasse) {
-      for (const t of tornsAaplicar) {
-        const actual = registreActual(alumne.id, t.id)
+      for (const idTorn of tornsAaplicar) {
+        const actual = registreActual(alumne.id, idTorn)
         if (!actual || actual.estat === 'sense_marcar') {
-          promeses.push(marca(alumne, t.id, 'present'))
+          promeses.push(marca(alumne, idTorn, 'present'))
         }
       }
     }
