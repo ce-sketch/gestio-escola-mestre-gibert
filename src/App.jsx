@@ -62,3 +62,4 @@ export default function App() {
   }
 
   return <Dashboard user={user} onSignOut={() => signOut(auth)} />
+}
