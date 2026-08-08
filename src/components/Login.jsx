@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { signInWithEmailAndPassword, signInWithRedirect } from 'firebase/auth'
 import { auth, googleProvider } from '../firebase'
 
-export default function Login({ errorExtern }) {
+export default function Login({ errorExtern, debugInfo }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState(null)
@@ -139,6 +139,12 @@ export default function Login({ errorExtern }) {
         <p className="login-footnote">
           Accés reservat al professorat i personal del centre. Si tens problemes, contacta amb secretaria.
         </p>
+
+        {debugInfo && (
+          <p style={{ marginTop: 20, fontSize: 10, color: 'var(--ink-soft)', opacity: 0.7, wordBreak: 'break-word', borderTop: '1px dashed var(--line)', paddingTop: 8 }}>
+            Diagnòstic temporal: {debugInfo}
+          </p>
+        )}
       </div>
     </div>
   )
