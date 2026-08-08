@@ -395,7 +395,10 @@ export default function Assistencia() {
             <ul className="roster" style={{ marginTop: 24 }}>
               {alumnesClasse.map((alumne) => (
                 <li key={alumne.id} className="roster-row">
-                  <span className="roster-name">{alumne.nom}</span>
+                  <span className="roster-name">
+                    <span style={{ color: 'var(--ink-soft)', fontWeight: 400, marginRight: 8 }}>{alumne.numLlista ?? '—'}</span>
+                    {alumne.nom}
+                  </span>
                   <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap' }}>
                     {TORNS.map((t) => {
                       const registre = registreActual(alumne.id, t.id)
