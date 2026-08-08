@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore'
 import { db, auth } from '../../../firebase'
 import { NIVELLS, nivellDe, redueixVigents } from '../../../lib/avaluacioCatala'
-import { AREES, TRIMESTRES, areaAplicaAClasse } from '../../../lib/notesArea'
+import { AREES, TRIMESTRES, areaAplicaAClasse, interpretaDictatNotesArea } from '../../../lib/notesArea'
 import { cursEscolarActual, NIVELLS_ESCOLARS, nivellEscolarDe } from '../../../lib/cursEscolar'
 
 const VISTES = [
@@ -23,6 +23,7 @@ export default function NotesGenerals() {
   const [nivellResum, setNivellResum] = useState(NIVELLS_ESCOLARS[0].label)
   const [valors, setValors] = useState({})
   const [desant, setDesant] = useState(false)
+  const [dictat, setDictat] = useState(null) // { escoltant, transcripcio, resultat: {numLlista: {areaId: nivellId}} }
 
   useEffect(() => {
     async function carrega() {
@@ -115,6 +116,58 @@ export default function NotesGenerals() {
     } finally {
       setDesant(false)
     }
+  }
+
+  // Valor numèric representatiu de cada nivell qualitatiu, per quan
+  // s'introdueix la nota per veu (aquest mòdul fa servir notes 0-10, no
+  // un desplegable de nivells) — cada valor cau clarament dins de la
+  // banda corresponent segons nivellDe().
+  const NOTA_REPRESENTATIVA = {
+    no_assoliment: 4,
+    assoliment_satisfactori: 6,
+    assoliment_notable: 8,
+    'assoliment_excel·lent': 9.5,
+  }
+
+  function iniciaDictat() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+    if (!SpeechRecognition) {
+      setMissatge({ type: 'error', text: 'Aquest navegador no permet el dictat per veu. Prova-ho amb Chrome.' })
+      return
+    }
+    const recognition = new SpeechRecognition()
+    recognition.lang = 'ca-ES'
+    recognition.interimResults = false
+
+    setDictat({ escoltant: true, transcripcio: '', resultat: {} })
+
+    recognition.onresult = (event) => {
+      const transcripcio = event.results[0][0].transcript
+      const resultat = interpretaDictatNotesArea(transcripcio)
+      setDictat({ escoltant: false, transcripcio, resultat })
+    }
+    recognition.onerror = () => {
+      setDictat(null)
+      setMissatge({ type: 'error', text: 'No s\'ha pogut entendre el dictat. Torna-ho a provar.' })
+    }
+    recognition.start()
+  }
+
+  function aplicaDictat() {
+    if (!dictat) return
+    let comptador = 0
+    Object.entries(dictat.resultat).forEach(([numLlista, notesPerArea]) => {
+      const alumne = alumnesClasse.find((a) => String(a.numLlista) === numLlista)
+      if (!alumne) return
+      Object.entries(notesPerArea).forEach(([areaId, nivellId]) => {
+        const nota = NOTA_REPRESENTATIVA[nivellId]
+        if (nota === undefined) return
+        setValors((prev) => ({ ...prev, [clauValor(alumne.id, areaId)]: String(nota) }))
+        comptador += 1
+      })
+    })
+    setMissatge({ type: 'ok', text: `${comptador} notes aplicades. Revisa-les (són valors orientatius dins la banda dita) i clica "Desa notes de la classe".` })
+    setDictat(null)
   }
 
   // ---- Resum per curs (agrupa totes les classes A/B d'un mateix nivell) ----
@@ -316,9 +369,65 @@ export default function NotesGenerals() {
             </table>
           </div>
 
-          <button className="btn-primary" style={{ marginTop: 20, maxWidth: 220 }} onClick={desaTot} disabled={desant}>
-            {desant ? 'Desant…' : 'Desa notes de la classe'}
-          </button>
+          <div style={{ display: 'flex', gap: 10, marginTop: 20, flexWrap: 'wrap' }}>
+            <button className="btn-primary" style={{ maxWidth: 220 }} onClick={desaTot} disabled={desant}>
+              {desant ? 'Desant…' : 'Desa notes de la classe'}
+            </button>
+            <button
+              className="btn-ghost"
+              style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
+              onClick={iniciaDictat}
+              type="button"
+            >
+              🎤 Dicta notes ("Alumne 3 català notable matemàtiques excel·lent...")
+            </button>
+          </div>
+
+          {dictat && (
+            <div className="placeholder-box" style={{ borderStyle: 'solid', marginTop: 16 }}>
+              {dictat.escoltant ? (
+                <p>Escoltant… digues, per exemple, "Alumne 3 català notable, matemàtiques excel·lent, alumne 7 castellà satisfactori".</p>
+              ) : Object.keys(dictat.resultat).length === 0 ? (
+                <>
+                  <p><strong>Sentit:</strong> "{dictat.transcripcio}"</p>
+                  <p style={{ marginTop: 8, color: 'var(--red)' }}>No s'ha reconegut cap alumne/àrea. Torna-ho a provar dient "Alumne [número] [àrea] [nivell]".</p>
+                  <button className="btn-ghost" style={{ maxWidth: 160, marginTop: 8 }} onClick={() => setDictat(null)} type="button">
+                    Tanca
+                  </button>
+                </>
+              ) : (
+                <>
+                  <p><strong>Sentit:</strong> "{dictat.transcripcio}"</p>
+                  <p style={{ marginTop: 8 }}>Notes detectades:</p>
+                  <ul className="roster" style={{ marginTop: 8 }}>
+                    {Object.entries(dictat.resultat).map(([numLlista, notesPerArea]) => {
+                      const alumne = alumnesClasse.find((a) => String(a.numLlista) === numLlista)
+                      return (
+                        <li key={numLlista} className="roster-row" style={{ display: 'block' }}>
+                          <strong>{alumne ? alumne.nom : `Alumne ${numLlista} (no trobat a la classe)`}</strong>
+                          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 4 }}>
+                            {Object.entries(notesPerArea).map(([areaId, nivellId]) => (
+                              <span key={areaId} style={{ fontSize: 12 }}>
+                                {AREES.find((a) => a.id === areaId)?.label}: <strong>{nivellId.replace('assoliment_', '').replace('no_assoliment', 'NA')}</strong>
+                              </span>
+                            ))}
+                          </div>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                  <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                    <button className="btn-primary" style={{ maxWidth: 160 }} onClick={aplicaDictat} type="button">
+                      Aplica
+                    </button>
+                    <button className="btn-ghost" style={{ maxWidth: 160 }} onClick={() => setDictat(null)} type="button">
+                      Cancel·la
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </>
       ) : (
         <>
