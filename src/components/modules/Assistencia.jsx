@@ -135,13 +135,14 @@ export default function Assistencia() {
         creatEl: serverTimestamp(),
         creatPer: auth.currentUser?.email ?? null,
       })
-      return true
+      return { ok: true }
     } catch (err) {
       // Si falla el desat de debò, treu la marca optimista i avisa.
       console.error('Error en desar assistència:', err.code, err.message)
       setRegistres((prev) => prev.filter((r) => r.id !== registreOptimista.id))
-      setMissatge({ type: 'error', text: `No s'ha pogut desar la marca de ${alumne.nom}: ${err.message}` })
-      return false
+      const textError = `No s'ha pogut desar la marca de ${alumne.nom}: ${err.message}${err.code ? ` (${err.code})` : ''}`
+      setMissatge({ type: 'error', text: textError })
+      return { ok: false, error: textError }
     } finally {
       setDesant(null)
     }
@@ -186,13 +187,17 @@ export default function Assistencia() {
     }
 
     const resultats = await Promise.all(promeses)
-    const exits = resultats.filter(Boolean).length
+    const exits = resultats.filter((r) => r.ok).length
     const fallades = resultats.length - exits
+    const primerError = resultats.find((r) => !r.ok)?.error
 
     if (fallades === 0) {
       setMissatge({ type: 'ok', text: `${exits} marques de "present" desades correctament (${etiquetaTorns}). Ara retoca només qui falti o arribi tard.` })
     } else {
-      setMissatge({ type: 'error', text: `Només s'han desat ${exits} de ${resultats.length} marques (${etiquetaTorns}). ${fallades} han fallat — mira el missatge anterior per saber per què.` })
+      setMissatge({
+        type: 'error',
+        text: `Només s'han desat ${exits} de ${resultats.length} marques (${etiquetaTorns}). Motiu del primer error: ${primerError ?? 'desconegut'}`,
+      })
     }
   }
 
