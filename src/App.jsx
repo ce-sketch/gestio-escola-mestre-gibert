@@ -23,14 +23,14 @@ export default function App() {
     // confirmat que tot funciona bé.
     getRedirectResult(auth)
       .then((result) => {
-        setDebugInfo(
-          `redirectResult: ${result ? `usuari trobat (${result.user?.email ?? 'sense email'})` : 'buit (cap redirecció pendent)'}`
+        setDebugInfo((prev) =>
+          `${prev}redirectResult: ${result ? `usuari trobat (${result.user?.email ?? 'sense email'})` : 'buit (cap redirecció pendent)'}`
         )
       })
       .catch((err) => {
         console.error('Error en getRedirectResult:', err.code, err.message)
         setErrorRedirect(err.code === 'auth/popup-closed-by-user' ? null : err.message)
-        setDebugInfo(`redirectResult ERROR: ${err.code} — ${err.message}`)
+        setDebugInfo((prev) => `${prev}redirectResult ERROR: ${err.code} — ${err.message}`)
       })
 
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
