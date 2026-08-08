@@ -182,6 +182,43 @@ export default function NotesGenerals() {
 
   // ---- Resum per curs (agrupa totes les classes A/B d'un mateix nivell) ----
 
+  // ---- Resum global de tot el centre (equivalent al full "Resum" de
+  // l'Excel): totes les classes juntes, en dues variants — amb 1r i sense
+  // 1r (com que 1r fa servir un criteri diferent en algunes àrees, sovint
+  // interessa poder-lo mirar per separat). ----
+  const vigentsResumGlobal = useMemo(
+    () => redueixVigents(
+      registres.filter((r) =>
+        (r.cursEscolar ?? cursEscolarActual()) === cursEscolarId &&
+        r.trimestre === trimestre
+      ),
+      (r) => `${r.alumneId}__${r.area}`
+    ),
+    [registres, cursEscolarId, trimestre]
+  )
+
+  function calculaResumPerArea(vigents, alumnesRellevants) {
+    return AREES.map((a) => {
+      const notesArea = vigents.filter((r) => r.area === a.id)
+      const comptes = { no_assoliment: 0, assoliment_satisfactori: 0, assoliment_notable: 0, 'assoliment_excel·lent': 0 }
+      for (const r of notesArea) {
+        const nivell = nivellDe(r.nota)
+        if (nivell) comptes[nivell.id] += 1
+      }
+      return { area: a, avaluats: notesArea.length, comptes, sense: alumnesRellevants - notesArea.length }
+    }).filter((f) => f.avaluats > 0) // amaguem àrees sense cap nota (evita files buides de "Science" a 1r, etc.)
+  }
+
+  const resumGlobalAmb1r = useMemo(
+    () => calculaResumPerArea(vigentsResumGlobal, alumnesTots.length),
+    [vigentsResumGlobal, alumnesTots]
+  )
+  const resumGlobalSense1r = useMemo(() => {
+    const sense1r = vigentsResumGlobal.filter((r) => r.curs?.trim()[0] !== '1')
+    const totalAlumnesSense1r = alumnesTots.filter((a) => a.curs?.trim()[0] !== '1').length
+    return calculaResumPerArea(sense1r, totalAlumnesSense1r)
+  }, [vigentsResumGlobal, alumnesTots])
+
   const alumnesDelNivell = useMemo(
     () => alumnesTots.filter((a) => nivellEscolarDe(a.curs) === nivellResum),
     [alumnesTots, nivellResum]
@@ -447,6 +484,41 @@ export default function NotesGenerals() {
         </>
       ) : (
         <>
+          <h3 style={{ marginTop: 8, fontSize: 15 }}>Resum global de tot el centre</h3>
+          <p className="module-note" style={{ marginTop: 4 }}>
+            Totes les classes juntes, igual que al full "Resum" de l'Excel — en dues variants,
+            amb 1r i sense 1r.
+          </p>
+
+          {[{ label: 'TOTAL — amb 1r', dades: resumGlobalAmb1r }, { label: 'TOTAL — sense 1r', dades: resumGlobalSense1r }].map(({ label, dades }) => (
+            <div key={label} style={{ marginTop: 12 }}>
+              <p style={{ fontSize: 13, fontWeight: 600 }}>{label}</p>
+              <table style={{ borderCollapse: 'collapse', fontSize: 13, width: '100%', marginTop: 6 }}>
+                <thead>
+                  <tr style={{ textAlign: 'left', borderBottom: '2px solid var(--line)' }}>
+                    <th style={{ padding: '6px 8px', minWidth: 140 }}>Àrea</th>
+                    {NIVELLS.map((n) => <th key={n.id} style={{ padding: '6px 8px', color: n.color }}>{n.curt}</th>)}
+                    <th style={{ padding: '6px 8px' }}>Avaluats</th>
+                    <th style={{ padding: '6px 8px' }}>Sense nota</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dades.length === 0 ? (
+                    <tr><td colSpan={7} style={{ padding: '6px 8px', color: 'var(--ink-soft)' }}>Encara no hi ha cap nota d'aquest trimestre.</td></tr>
+                  ) : dades.map(({ area: a, avaluats, comptes, sense }) => (
+                    <tr key={a.id} style={{ borderBottom: '1px solid var(--line)' }}>
+                      <td style={{ padding: '6px 8px', fontWeight: 500 }}>{a.label}</td>
+                      {NIVELLS.map((n) => <td key={n.id} style={{ padding: '6px 8px' }}>{comptes[n.id]}</td>)}
+                      <td style={{ padding: '6px 8px' }}>{avaluats}</td>
+                      <td style={{ padding: '6px 8px', color: 'var(--ink-soft)' }}>{sense}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ))}
+
+          <h3 style={{ marginTop: 32, fontSize: 15 }}>Resum d'un curs concret</h3>
           <table style={{ borderCollapse: 'collapse', fontSize: 13, width: '100%', marginTop: 20 }}>
             <thead>
               <tr style={{ textAlign: 'left', borderBottom: '2px solid var(--line)' }}>
