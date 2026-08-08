@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { signInWithEmailAndPassword, signInWithRedirect } from 'firebase/auth'
+import { signInWithEmailAndPassword, signInWithPopup } from 'firebase/auth'
 import { auth, googleProvider } from '../firebase'
 
 export default function Login({ errorExtern, debugInfo }) {
@@ -26,34 +26,23 @@ export default function Login({ errorExtern, debugInfo }) {
   async function handleGoogleSignIn() {
     setError(null)
     setLoadingGoogle(true)
-    // Redirecció de pàgina completa, en lloc de finestra emergent — les
-    // finestres emergents sovint queden bloquejades dins d'entorns com
-    // StackBlitz. Després de triar el compte, Google torna a portar-te
-    // aquí mateix i App.jsx recull el resultat.
-    //
-    // Si la redirecció no arriba a passar en pocs segons (per exemple
-    // perquè l'iframe de StackBlitz la bloqueja), avisem en lloc de deixar
-    // el botó penjat per sempre.
-    const avisSiEsQuedaPenjat = setTimeout(() => {
-      setLoadingGoogle(false)
-      setError(
-        'La pàgina no s\'ha pogut redirigir a Google. Segurament la vista prèvia de ' +
-        'StackBlitz ho bloqueja — obre la vista prèvia en una pestanya nova del navegador ' +
-        '(icona de fletxa amunt-dreta) i torna-ho a provar des d\'allà.'
-      )
-    }, 4000)
-
+    // Finestra emergent en lloc de redirecció de pàgina completa. Vam
+    // provar signInWithRedirect() primer (evita el bloqueig de finestres
+    // emergents en alguns entorns), però depèn de guardar un "estat
+    // pendent" abans de sortir cap a Google i recuperar-lo en tornar —
+    // alguns navegadors (per la protecció contra seguiment entre llocs)
+    // bloquegen aquest emmagatzematge, i el login queda penjat sense error
+    // clar. signInWithPopup() evita aquest problema perquè mai surt de la
+    // pàgina: obre una finestreta a sobre i rep el resultat directament.
     try {
-      await signInWithRedirect(auth, googleProvider)
+      await signInWithPopup(auth, googleProvider)
+      // En èxit, onAuthStateChanged (a App.jsx) ja recull l'usuari nou
+      // automàticament — no cal fer res més aquí.
     } catch (err) {
-      clearTimeout(avisSiEsQuedaPenjat)
-      setLoadingGoogle(false)
-      // Deixem el codi d'error a la consola sempre: mapAuthError() tradueix
-      // els casos coneguts a un missatge amigable, però si n'apareix un de
-      // nou és molt més ràpid diagnosticar-lo mirant aquí que no pas
-      // adivinant-ho a partir del missatge genèric que veu l'usuari.
-      console.error('Error en signInWithRedirect:', err.code, err.message)
+      console.error('Error en signInWithPopup:', err.code, err.message)
       setError(mapAuthError(err.code))
+    } finally {
+      setLoadingGoogle(false)
     }
   }
 
