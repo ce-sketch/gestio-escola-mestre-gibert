@@ -22,7 +22,7 @@ export default function NotesGenerals() {
   const [classe, setClasse] = useState('')
   const [nivellResum, setNivellResum] = useState(NIVELLS_ESCOLARS[0].label)
   const [valors, setValors] = useState({})
-  const [desant, setDesant] = useState(false)
+  const [desantClau, setDesantClau] = useState(null) // clau "alumneId__areaId" que s'està desant
   const [dictat, setDictat] = useState(null) // { escoltant, transcripcio, resultat: {numLlista: {areaId: nivellId}} }
 
   useEffect(() => {
@@ -80,41 +80,47 @@ export default function NotesGenerals() {
     return existent?.nota ?? ''
   }
 
-  async function desaTot() {
-    setDesant(true)
+  async function desaCella(alumne, area, valorText) {
+    const clau = clauValor(alumne.id, area.id)
+    if (valorText === '') {
+      // Casella buidada: només oblidem l'edició local, no cal escriure res.
+      setValors((prev) => { const n = { ...prev }; delete n[clau]; return n })
+      return
+    }
+    const nota = Number(valorText)
+    if (Number.isNaN(nota)) return
+
+    // Si el valor no ha canviat respecte al que ja hi havia desat, no cal
+    // tornar a escriure res (evita omplir Firestore de registres iguals
+    // cada vegada que es passa pel camp sense modificar-lo).
+    const actual = vigentsEntrada.find((r) => r.alumneId === alumne.id && r.area === area.id)?.nota
+    if (actual === nota) {
+      setValors((prev) => { const n = { ...prev }; delete n[clau]; return n })
+      return
+    }
+
+    setDesantClau(clau)
     setMissatge(null)
-    let desats = 0
     try {
-      for (const alumne of alumnesClasse) {
-        for (const a of areesClasse) {
-          const clau = clauValor(alumne.id, a.id)
-          const valor = valors[clau]
-          if (valor === undefined || valor === '') continue
-          const nota = Number(valor)
-          if (Number.isNaN(nota)) continue
-          await addDoc(collection(db, 'avaluacio'), {
-            tipus: 'nota_area',
-            area: a.id,
-            alumneId: alumne.id,
-            alumneNom: alumne.nom,
-            curs: classe,
-            cursEscolar: cursEscolarId,
-            trimestre,
-            nota,
-            creatEl: serverTimestamp(),
-            creatPer: auth.currentUser?.email ?? null,
-          })
-          desats += 1
-        }
-      }
-      setValors({})
+      await addDoc(collection(db, 'avaluacio'), {
+        tipus: 'nota_area',
+        area: area.id,
+        alumneId: alumne.id,
+        alumneNom: alumne.nom,
+        curs: classe,
+        cursEscolar: cursEscolarId,
+        trimestre,
+        nota,
+        creatEl: serverTimestamp(),
+        creatPer: auth.currentUser?.email ?? null,
+      })
       const snapNotes = await getDocs(query(collection(db, 'avaluacio'), where('tipus', '==', 'nota_area')))
       setRegistres(snapNotes.docs.map((d) => ({ id: d.id, ...d.data() })))
-      setMissatge({ type: 'ok', text: `${desats} notes desades.` })
+      setValors((prev) => { const n = { ...prev }; delete n[clau]; return n })
     } catch (err) {
-      setMissatge({ type: 'error', text: `No s'ha pogut desar: ${err.message}` })
+      setMissatge({ type: 'error', text: `No s'ha pogut desar la nota de ${alumne.nom} (${area.label}): ${err.message}` })
     } finally {
-      setDesant(false)
+      setDesantClau(null)
     }
   }
 
@@ -153,20 +159,24 @@ export default function NotesGenerals() {
     recognition.start()
   }
 
-  function aplicaDictat() {
+  async function aplicaDictat() {
     if (!dictat) return
-    let comptador = 0
+    const entrades = []
     Object.entries(dictat.resultat).forEach(([numLlista, notesPerArea]) => {
       const alumne = alumnesClasse.find((a) => String(a.numLlista) === numLlista)
       if (!alumne) return
       Object.entries(notesPerArea).forEach(([areaId, nivellId]) => {
         const nota = NOTA_REPRESENTATIVA[nivellId]
         if (nota === undefined) return
-        setValors((prev) => ({ ...prev, [clauValor(alumne.id, areaId)]: String(nota) }))
-        comptador += 1
+        const area = areesClasse.find((a) => a.id === areaId)
+        if (!area) return
+        entrades.push({ alumne, area, nota: String(nota) })
       })
     })
-    setMissatge({ type: 'ok', text: `${comptador} notes aplicades. Revisa-les (són valors orientatius dins la banda dita) i clica "Desa notes de la classe".` })
+    for (const { alumne, area, nota } of entrades) {
+      await desaCella(alumne, area, nota)
+    }
+    setMissatge({ type: 'ok', text: `${entrades.length} notes dictades i desades directament (són valors orientatius dins la banda dita).` })
     setDictat(null)
   }
 
@@ -343,17 +353,21 @@ export default function NotesGenerals() {
                     {areesClasse.map((a) => {
                       const nota = notaAlumne(alumne.id, a.id)
                       const nivell = nota !== '' ? nivellDe(Number(nota)) : null
+                      const clau = clauValor(alumne.id, a.id)
+                      const estaDesant = desantClau === clau
                       return (
-                        <td key={a.id} style={{ padding: '4px 3px' }}>
+                        <td key={a.id} style={{ padding: '4px 3px', position: 'relative' }}>
                           <input
                             type="number"
                             min={0}
                             max={10}
                             step={0.1}
                             value={nota}
-                            onChange={(e) => setValors((prev) => ({ ...prev, [clauValor(alumne.id, a.id)]: e.target.value }))}
+                            disabled={estaDesant}
+                            onChange={(e) => setValors((prev) => ({ ...prev, [clau]: e.target.value }))}
+                            onBlur={(e) => desaCella(alumne, a, e.target.value)}
                             style={{
-                              border: `1.5px solid ${nivell?.id === 'no_assoliment' ? 'var(--red)' : 'var(--line)'}`,
+                              border: `1.5px solid ${estaDesant ? 'var(--amber-dark)' : nivell?.id === 'no_assoliment' ? 'var(--red)' : 'var(--line)'}`,
                               borderRadius: 6,
                               padding: '4px 4px',
                               fontSize: 12,
@@ -369,10 +383,12 @@ export default function NotesGenerals() {
             </table>
           </div>
 
-          <div style={{ display: 'flex', gap: 10, marginTop: 20, flexWrap: 'wrap' }}>
-            <button className="btn-primary" style={{ maxWidth: 220 }} onClick={desaTot} disabled={desant}>
-              {desant ? 'Desant…' : 'Desa notes de la classe'}
-            </button>
+          <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 8 }}>
+            Cada nota es desa sola en sortir de la casella (no cal cap botó "Desa") — així no es
+            perd res encara que es tanqui la pestanya sense voler.
+          </p>
+
+          <div style={{ display: 'flex', gap: 10, marginTop: 12, flexWrap: 'wrap' }}>
             <button
               className="btn-ghost"
               style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}

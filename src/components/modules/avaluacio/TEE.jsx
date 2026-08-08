@@ -28,7 +28,7 @@ export default function TEE() {
   const [registres, setRegistres] = useState([])
   const [carregantRegistres, setCarregantRegistres] = useState(false)
   const [valors, setValors] = useState({}) // { [alumneId]: { coherencia: 'ae', ..., globalManual: 'an' } }
-  const [desant, setDesant] = useState(false)
+  const [desantId, setDesantId] = useState(null) // id de l'alumne que s'està desant
   const [dictat, setDictat] = useState(null) // { transcripcio, resultat: {numLlista: {criteri: nivell}} }
   const [errorFitxer, setErrorFitxer] = useState(null)
   const [missatge, setMissatge] = useState(null)
@@ -102,6 +102,59 @@ export default function TEE() {
 
   function updateValor(alumneId, camp, value) {
     setValors((prev) => ({ ...prev, [alumneId]: { ...prev[alumneId], [camp]: value } }))
+  }
+
+  /** Desa TOTS els criteris d'UN alumne a l'instant (es crida en triar
+   *  qualsevol criteri o el nivell global manual) — no cal cap botó "Desa".
+   *  Rep el valor que s'acaba de triar per "override", perquè React encara
+   *  no ha actualitzat l'estat en el moment de cridar-ho. */
+  async function desaAlumneTEE(alumne, override = {}) {
+    const criteris = {}
+    let hiHaCriteris = false
+    for (const c of CRITERIS_TEE) {
+      const v = override[c.id] !== undefined ? override[c.id] : valorAlumne(alumne.id, c.id)
+      if (v) { criteris[c.id] = v; hiHaCriteris = true }
+    }
+    if (!hiHaCriteris) return
+
+    const notaAuto = calculaNotaAutomatica(cicle, criteris, pesosActuals)
+    const nivellAuto = notaAuto !== null ? nivellDeNota(cicle, notaAuto) : null
+    const globalManualId = override.globalManual !== undefined ? override.globalManual : valorAlumne(alumne.id, 'globalManual')
+    const globalFinal = globalManualId || nivellAuto?.id
+
+    // Evitem re-escriure si res ha canviat respecte al que ja hi havia.
+    const vigent = vigents.find((r) => r.alumneId === alumne.id)
+    if (vigent && JSON.stringify(vigent.criteris) === JSON.stringify(criteris) && (vigent.global ?? null) === (globalFinal ?? null)) {
+      setValors((prev) => { const n = { ...prev }; delete n[alumne.id]; return n })
+      return
+    }
+
+    setDesantId(alumne.id)
+    setMissatge(null)
+    try {
+      await addDoc(collection(db, 'avaluacio'), {
+        tipus: 'tee',
+        alumneId: alumne.id,
+        alumneNom: alumne.nom,
+        curs,
+        cursEscolar: cursEscolarId,
+        cicle,
+        trimestre,
+        criteris,
+        notaAutomatica: notaAuto,
+        globalAutomatic: nivellAuto?.id ?? null,
+        global: globalFinal ?? null,
+        globalManual: Boolean(globalManualId),
+        creatEl: serverTimestamp(),
+        creatPer: auth.currentUser?.email ?? null,
+      })
+      await carregaRegistres()
+      setValors((prev) => { const n = { ...prev }; delete n[alumne.id]; return n })
+    } catch (err) {
+      setMissatge({ type: 'error', text: `No s'ha pogut desar el TEE de ${alumne.nom}: ${err.message}` })
+    } finally {
+      setDesantId(null)
+    }
   }
 
   function handleFileUpload(e) {
@@ -228,14 +281,17 @@ export default function TEE() {
     recognition.start()
   }
 
-  function aplicaDictat() {
+  async function aplicaDictat() {
     if (!dictat) return
-    Object.entries(dictat.resultat).forEach(([numLlista, notes]) => {
-      const alumne = alumnesClasse.find((a) => String(a.numLlista) === numLlista)
-      if (!alumne) return
+    const entrades = Object.entries(dictat.resultat)
+      .map(([numLlista, notes]) => ({ alumne: alumnesClasse.find((a) => String(a.numLlista) === numLlista), notes }))
+      .filter((e) => e.alumne)
+
+    for (const { alumne, notes } of entrades) {
       setValors((prev) => ({ ...prev, [alumne.id]: { ...prev[alumne.id], ...notes } }))
-    })
-    setMissatge({ type: 'ok', text: `Notes aplicades a ${Object.keys(dictat.resultat).length} alumnes. Revisa-les i clica "Desa notes de la classe".` })
+      await desaAlumneTEE(alumne, notes)
+    }
+    setMissatge({ type: 'ok', text: `${entrades.length} alumnes dictats i desats directament.` })
     setDictat(null)
   }
 
@@ -282,55 +338,6 @@ export default function TEE() {
       setMissatge({ type: 'error', text: `No s'han pogut desar els pesos: ${err.message}` })
     } finally {
       setDesantPesos(false)
-    }
-  }
-
-  async function desaTot() {
-    setDesant(true)
-    setMissatge(null)
-    let desats = 0
-    try {
-      for (const alumne of alumnesClasse) {
-        if (!valors[alumne.id]) continue
-
-        const criteris = {}
-        let hiHaCriteris = false
-        for (const c of CRITERIS_TEE) {
-          const v = valorAlumne(alumne.id, c.id)
-          if (v) { criteris[c.id] = v; hiHaCriteris = true }
-        }
-        if (!hiHaCriteris) continue
-
-        const notaAuto = calculaNotaAutomatica(cicle, criteris, pesosActuals)
-        const nivellAuto = notaAuto !== null ? nivellDeNota(cicle, notaAuto) : null
-        const globalManualId = valors[alumne.id]?.globalManual
-        const globalFinal = globalManualId || nivellAuto?.id
-
-        await addDoc(collection(db, 'avaluacio'), {
-          tipus: 'tee',
-          alumneId: alumne.id,
-          alumneNom: alumne.nom,
-          curs,
-          cursEscolar: cursEscolarId,
-          cicle,
-          trimestre,
-          criteris,
-          notaAutomatica: notaAuto,
-          globalAutomatic: nivellAuto?.id ?? null,
-          global: globalFinal ?? null,
-          globalManual: Boolean(globalManualId),
-          creatEl: serverTimestamp(),
-          creatPer: auth.currentUser?.email ?? null,
-        })
-        desats += 1
-      }
-      setValors({})
-      await carregaRegistres()
-      setMissatge({ type: 'ok', text: `${desats} alumnes desats.` })
-    } catch (err) {
-      setMissatge({ type: 'error', text: `No s'ha pogut desar: ${err.message}` })
-    } finally {
-      setDesant(false)
     }
   }
 
@@ -515,8 +522,12 @@ export default function TEE() {
                       <td key={c.id} style={{ padding: '4px 6px' }}>
                         <select
                           value={valorAlumne(alumne.id, c.id)}
-                          onChange={(e) => updateValor(alumne.id, c.id, e.target.value)}
-                          style={{ border: '1px solid var(--line)', borderRadius: 6, padding: '4px 6px', fontSize: 12 }}
+                          disabled={desantId === alumne.id}
+                          onChange={(e) => {
+                            updateValor(alumne.id, c.id, e.target.value)
+                            desaAlumneTEE(alumne, { [c.id]: e.target.value })
+                          }}
+                          style={{ border: `1px solid ${desantId === alumne.id ? 'var(--amber-dark)' : 'var(--line)'}`, borderRadius: 6, padding: '4px 6px', fontSize: 12 }}
                         >
                           <option value="">—</option>
                           {nivells.map((n) => <option key={n.id} value={n.id}>{n.punts} · {n.label}</option>)}
@@ -528,12 +539,17 @@ export default function TEE() {
                     <td style={{ padding: '4px 6px' }}>
                       <select
                         value={globalManual ?? ''}
-                        onChange={(e) => updateValor(alumne.id, 'globalManual', e.target.value)}
+                        disabled={desantId === alumne.id}
+                        onChange={(e) => {
+                          updateValor(alumne.id, 'globalManual', e.target.value)
+                          desaAlumneTEE(alumne, { globalManual: e.target.value })
+                        }}
                         style={{ border: '1px solid var(--line)', borderRadius: 6, padding: '4px 6px', fontSize: 12, fontWeight: 600 }}
                       >
                         <option value="">(fer servir el suggerit)</option>
                         {nivells.map((n) => <option key={n.id} value={n.id}>{n.punts} · {n.label}</option>)}
                       </select>
+                      {desantId === alumne.id && <span style={{ fontSize: 11, color: 'var(--ink-soft)', marginLeft: 4 }}>Desant…</span>}
                     </td>
                   </tr>
                 )
@@ -543,9 +559,10 @@ export default function TEE() {
         </div>
       )}
 
-      <button className="btn-primary" style={{ marginTop: 20, maxWidth: 220 }} onClick={desaTot} disabled={desant}>
-        {desant ? 'Desant…' : 'Desa notes de la classe'}
-      </button>
+      <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 12 }}>
+        Cada criteri es desa sol en triar-lo (no cal cap botó "Desa") — així no es perd res
+        encara que es tanqui la pestanya sense voler.
+      </p>
 
       {missatge && (
         <p style={{ marginTop: 12, fontSize: 13, color: missatge.type === 'error' ? 'var(--red)' : 'var(--green)' }}>

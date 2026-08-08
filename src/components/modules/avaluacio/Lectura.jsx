@@ -21,7 +21,7 @@ export default function Lectura() {
   const [registres, setRegistres] = useState([])
   const [carregantRegistres, setCarregantRegistres] = useState(false)
   const [valors, setValors] = useState({})
-  const [desant, setDesant] = useState(false)
+  const [desantId, setDesantId] = useState(null) // id de l'alumne que s'està desant
   const [missatge, setMissatge] = useState(null)
   const [llindarsCl, setLlindarsCl] = useState(LLINDARS_CL_DEFECTE)
   const [editantLlindars, setEditantLlindars] = useState(false)
@@ -91,40 +91,47 @@ export default function Lectura() {
     setValors((prev) => ({ ...prev, [alumneId]: { ...prev[alumneId], [camp]: value } }))
   }
 
-  async function desaTot() {
-    setDesant(true)
-    setMissatge(null)
-    let desats = 0
-    try {
-      for (const alumne of alumnesClasse) {
-        if (!valors[alumne.id]) continue
-        const vl = valorAlumne(alumne.id, 'vl')
-        const cl = valorAlumne(alumne.id, 'cl')
-        if (vl === '' && cl === '') continue
+  /** Desa VL+CL d'UN alumne a l'instant (es crida en sortir de qualsevol
+   *  dels dos camps) — no cal cap botó "Desa" ni recordar-se'n. Com que VL
+   *  i CL viuen al mateix registre, sempre es desen junts amb el valor
+   *  actual de tots dos camps. */
+  async function desaAlumne(alumne) {
+    const vl = valorAlumne(alumne.id, 'vl')
+    const cl = valorAlumne(alumne.id, 'cl')
+    if (vl === '' && cl === '') return
 
-        await addDoc(collection(db, 'avaluacio'), {
-          tipus: 'lectura',
-          alumneId: alumne.id,
-          alumneNom: alumne.nom,
-          curs,
-          cursEscolar: cursEscolarId,
-          moment: momentId,
-          vl: vl !== '' ? Number(vl) : null,
-          nivellVl: vl !== '' ? nivellVL(vl) : null,
-          cl: cl !== '' && moment.teCL ? Number(cl) : null,
-          nivellCl: cl !== '' && moment.teCL ? nivellCL(cl, curs, llindarsCl) : null,
-          creatEl: serverTimestamp(),
-          creatPer: auth.currentUser?.email ?? null,
-        })
-        desats += 1
-      }
-      setValors({})
+    const vigent = vigents.find((r) => r.alumneId === alumne.id)
+    const vlNou = vl !== '' ? Number(vl) : null
+    const clNou = cl !== '' && moment.teCL ? Number(cl) : null
+    if (vigent && (vigent.vl ?? null) === vlNou && (vigent.cl ?? null) === clNou) {
+      // Sense canvis reals respecte al que ja hi havia — no cal escriure res.
+      setValors((prev) => { const n = { ...prev }; delete n[alumne.id]; return n })
+      return
+    }
+
+    setDesantId(alumne.id)
+    setMissatge(null)
+    try {
+      await addDoc(collection(db, 'avaluacio'), {
+        tipus: 'lectura',
+        alumneId: alumne.id,
+        alumneNom: alumne.nom,
+        curs,
+        cursEscolar: cursEscolarId,
+        moment: momentId,
+        vl: vlNou,
+        nivellVl: vl !== '' ? nivellVL(vl) : null,
+        cl: clNou,
+        nivellCl: clNou !== null ? nivellCL(cl, curs, llindarsCl) : null,
+        creatEl: serverTimestamp(),
+        creatPer: auth.currentUser?.email ?? null,
+      })
       await carregaRegistres()
-      setMissatge({ type: 'ok', text: `${desats} alumnes desats.` })
+      setValors((prev) => { const n = { ...prev }; delete n[alumne.id]; return n })
     } catch (err) {
-      setMissatge({ type: 'error', text: `No s'ha pogut desar: ${err.message}` })
+      setMissatge({ type: 'error', text: `No s'ha pogut desar la lectura de ${alumne.nom}: ${err.message}` })
     } finally {
-      setDesant(false)
+      setDesantId(null)
     }
   }
 
@@ -287,8 +294,10 @@ export default function Lectura() {
                       <input
                         type="number" min="0" step="1"
                         value={vl}
+                        disabled={desantId === alumne.id}
                         onChange={(e) => updateValor(alumne.id, 'vl', e.target.value)}
-                        style={{ width: 80, border: '1px solid var(--line)', borderRadius: 6, padding: '4px 6px' }}
+                        onBlur={() => desaAlumne(alumne)}
+                        style={{ width: 80, border: `1px solid ${desantId === alumne.id ? 'var(--amber-dark)' : 'var(--line)'}`, borderRadius: 6, padding: '4px 6px' }}
                       />
                     </td>
                     <td style={{ padding: '4px 6px', fontWeight: 600, color: 'var(--navy)' }}>{nVl ?? '—'}</td>
@@ -297,8 +306,10 @@ export default function Lectura() {
                         <input
                           type="number" min="0" step="1"
                           value={cl}
+                          disabled={desantId === alumne.id}
                           onChange={(e) => updateValor(alumne.id, 'cl', e.target.value)}
-                          style={{ width: 80, border: '1px solid var(--line)', borderRadius: 6, padding: '4px 6px' }}
+                          onBlur={() => desaAlumne(alumne)}
+                          style={{ width: 80, border: `1px solid ${desantId === alumne.id ? 'var(--amber-dark)' : 'var(--line)'}`, borderRadius: 6, padding: '4px 6px' }}
                         />
                       </td>
                     )}
@@ -313,9 +324,10 @@ export default function Lectura() {
         </div>
       )}
 
-      <button className="btn-primary" style={{ marginTop: 20, maxWidth: 220 }} onClick={desaTot} disabled={desant}>
-        {desant ? 'Desant…' : 'Desa notes de la classe'}
-      </button>
+      <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 12 }}>
+        Cada VL/CL es desa sol en sortir de la casella (no cal cap botó "Desa") — així no es
+        perd res encara que es tanqui la pestanya sense voler.
+      </p>
 
       {missatge && (
         <p style={{ marginTop: 12, fontSize: 13, color: missatge.type === 'error' ? 'var(--red)' : 'var(--green)' }}>

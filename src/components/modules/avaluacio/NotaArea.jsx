@@ -25,7 +25,7 @@ export default function NotaArea() {
   const [notesAreaRegistres, setNotesAreaRegistres] = useState([]) // 'nota_area' (mòdul "Notes per àrea"), àrea català
   const [contactes, setContactes] = useState({})
   const [valors, setValors] = useState({})
-  const [desant, setDesant] = useState(false)
+  const [desantId, setDesantId] = useState(null) // id de l'alumne que s'està desant en aquest moment
   const [enviantAvis, setEnviantAvis] = useState(null)
   const [missatge, setMissatge] = useState(null)
   const [dictat, setDictat] = useState(null) // { escoltant, transcripcio, resultat: {numLlista: nivellId} }
@@ -171,33 +171,34 @@ export default function NotaArea() {
     return null
   }
 
-  async function desaTot() {
-    setDesant(true)
+  /** Desa la nota d'UN alumne a l'instant, en triar-la — no cal cap botó
+   *  "Desa" ni recordar-se'n abans de tancar la pestanya. */
+  async function desaUn(alumne, nivell) {
+    setDesantId(alumne.id)
     setMissatge(null)
-    let desats = 0
     try {
-      for (const alumne of alumnesClasse) {
-        if (valors[alumne.id] === undefined || valors[alumne.id] === '') continue
-        await addDoc(collection(db, 'avaluacio'), {
-          tipus: 'area_catala',
-          alumneId: alumne.id,
-          alumneNom: alumne.nom,
-          curs,
-          cursEscolar: cursEscolarId,
-          trimestre,
-          nivell: valors[alumne.id],
-          creatEl: serverTimestamp(),
-          creatPer: auth.currentUser?.email ?? null,
-        })
-        desats += 1
-      }
-      setValors({})
-      await carregaDades()
-      setMissatge({ type: 'ok', text: `${desats} alumnes desats.` })
+      await addDoc(collection(db, 'avaluacio'), {
+        tipus: 'area_catala',
+        alumneId: alumne.id,
+        alumneNom: alumne.nom,
+        curs,
+        cursEscolar: cursEscolarId,
+        trimestre,
+        nivell,
+        creatEl: serverTimestamp(),
+        creatPer: auth.currentUser?.email ?? null,
+      })
+      const snap = await getDocs(query(collection(db, 'avaluacio'), where('curs', '==', curs), where('tipus', '==', 'area_catala')))
+      setRegistresArea(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+      setValors((prev) => {
+        const nou = { ...prev }
+        delete nou[alumne.id]
+        return nou
+      })
     } catch (err) {
-      setMissatge({ type: 'error', text: `No s'ha pogut desar: ${err.message}` })
+      setMissatge({ type: 'error', text: `No s'ha pogut desar la nota de ${alumne.nom}: ${err.message}` })
     } finally {
-      setDesant(false)
+      setDesantId(null)
     }
   }
 
@@ -249,14 +250,19 @@ export default function NotaArea() {
     recognition.start()
   }
 
-  function aplicaDictat() {
+  async function aplicaDictat() {
     if (!dictat) return
-    Object.entries(dictat.resultat).forEach(([numLlista, nivellId]) => {
-      const alumne = alumnesClasse.find((a) => String(a.numLlista) === numLlista)
-      if (!alumne) return
-      setValors((prev) => ({ ...prev, [alumne.id]: nivellId }))
-    })
-    setMissatge({ type: 'ok', text: `Notes aplicades a ${Object.keys(dictat.resultat).length} alumnes. Revisa-les i clica "Desa notes de la classe".` })
+    const entrades = Object.entries(dictat.resultat)
+      .map(([numLlista, nivellId]) => ({
+        alumne: alumnesClasse.find((a) => String(a.numLlista) === numLlista),
+        nivellId,
+      }))
+      .filter((e) => e.alumne)
+
+    for (const { alumne, nivellId } of entrades) {
+      await desaUn(alumne, nivellId)
+    }
+    setMissatge({ type: 'ok', text: `${entrades.length} notes dictades i desades directament.` })
     setDictat(null)
   }
 
@@ -323,7 +329,8 @@ export default function NotaArea() {
                 <td style={{ padding: '4px 6px' }}>
                   <select
                     value={notaGeneralAlumne(alumne.id)}
-                    onChange={(e) => setValors((prev) => ({ ...prev, [alumne.id]: e.target.value }))}
+                    onChange={(e) => desaUn(alumne, e.target.value)}
+                    disabled={desantId === alumne.id}
                     style={{
                       border: `1px solid ${autoOmplert ? 'var(--amber-dark)' : 'var(--line)'}`,
                       borderRadius: 6, padding: '4px 6px', fontSize: 12,
@@ -333,7 +340,10 @@ export default function NotaArea() {
                     <option value="">—</option>
                     {NIVELLS.map((n) => <option key={n.id} value={n.id}>{n.label}</option>)}
                   </select>
-                  {autoOmplert && (
+                  {desantId === alumne.id && (
+                    <span style={{ color: 'var(--ink-soft)', fontSize: 11, marginLeft: 4 }}>Desant…</span>
+                  )}
+                  {autoOmplert && desantId !== alumne.id && (
                     <span style={{ color: 'var(--amber-dark)', fontSize: 11, marginLeft: 4 }} title="Auto-omplert des de Notes per àrea">*</span>
                   )}
                 </td>
@@ -363,9 +373,6 @@ export default function NotaArea() {
       </table>
 
       <div style={{ display: 'flex', gap: 10, marginTop: 20, flexWrap: 'wrap' }}>
-        <button className="btn-primary" style={{ maxWidth: 220 }} onClick={desaTot} disabled={desant}>
-          {desant ? 'Desant…' : 'Desa notes de la classe'}
-        </button>
         <button
           className="btn-ghost"
           style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
