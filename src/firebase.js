@@ -33,8 +33,18 @@ export const auth = getAuth(app)
 
 // Proveïdor de Google, restringit al domini del centre perquè només hi
 // pugui entrar personal amb un compte @escolamestregibert.cat.
+//
+// prompt: 'select_account' força que Google mostri sempre el selector de
+// compte, encara que ja hi hagi una sessió activa al navegador — sense
+// això, si només tens un compte de Google connectat, Google salta
+// directament sense preguntar, cosa que fa impossible provar amb un
+// compte diferent (per exemple, un compte d'alumnat per comprovar que
+// queda bloquejat) sense tancar sessió manualment a accounts.google.com.
 export const googleProvider = new GoogleAuthProvider()
-googleProvider.setCustomParameters({ hd: 'escolamestregibert.cat' })
+googleProvider.setCustomParameters({
+  hd: 'escolamestregibert.cat',
+  prompt: 'select_account',
+})
 
 // Fem servir initializeFirestore (en lloc de getFirestore) amb detecció
 // automàtica de "long polling". Sense això, Firestore pot trigar molt a
