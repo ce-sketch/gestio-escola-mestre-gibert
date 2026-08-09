@@ -91,6 +91,13 @@ service cloud.firestore {
       allow read, write: if esAdmin();
     }
 
+    // Versions amb nom de les còpies de seguretat (nomès administrador,
+    // conté una instantània completa de la llista d'alumnes per poder-la
+    // restaurar).
+    match /versions/{versioId} {
+      allow read, write: if esAdmin();
+    }
+
     // Per defecte, tot el que no s'hagi definit explícitament queda bloquejat.
     match /{document=**} {
       allow read, write: if false;
