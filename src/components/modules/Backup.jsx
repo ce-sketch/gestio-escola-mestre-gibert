@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import JSZip from 'jszip'
-import { collection, getDocs, doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'
-import { db } from '../../firebase'
+import { collection, getDocs, doc, getDoc, setDoc, deleteDoc, writeBatch, serverTimestamp, orderBy, query, limit } from 'firebase/firestore'
+import { db, auth } from '../../firebase'
 import { aCsv, formataData } from '../../lib/csv'
 import { comptaDiesLectius } from '../../lib/calendar'
 import { calculaIndexos } from '../../lib/absentisme'
+import { cursEscolarActual } from '../../lib/cursEscolar'
 
 const DIES_AVIS = 30
 
@@ -13,6 +14,11 @@ export default function Backup() {
   const [ultimBackup, setUltimBackup] = useState(null)
   const [carregant, setCarregant] = useState(true)
   const [missatge, setMissatge] = useState(null)
+  const [nomVersio, setNomVersio] = useState('')
+  const [versions, setVersions] = useState([])
+  const [carregantVersions, setCarregantVersions] = useState(true)
+  const [confirmaRestaura, setConfirmaRestaura] = useState({}) // { [versioId]: text escrit }
+  const [restaurant, setRestaurant] = useState(null)
 
   useEffect(() => {
     async function carrega() {
@@ -28,7 +34,21 @@ export default function Backup() {
       }
     }
     carrega()
+    carregaVersions()
   }, [])
+
+  async function carregaVersions() {
+    setCarregantVersions(true)
+    try {
+      const snap = await getDocs(query(collection(db, 'versions'), orderBy('creatEl', 'desc'), limit(30)))
+      setVersions(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+    } catch (err) {
+      // Si encara no hi ha cap versió (o falta l'índex), no cal amoïnar l'usuari.
+      setVersions([])
+    } finally {
+      setCarregantVersions(false)
+    }
+  }
 
   async function fesBackup() {
     setExportant(true)
@@ -166,11 +186,64 @@ export default function Backup() {
 
       await setDoc(doc(db, 'configuracio', 'backup'), { ultimBackup: serverTimestamp() }, { merge: true })
       setUltimBackup(new Date())
-      setMissatge({ type: 'ok', text: `Còpia de seguretat descarregada (${totalFitxers} fitxers, organitzats per classe).` })
+
+      // Desem també una "versió amb nom" dins de Firestore (no només el
+      // .zip descarregat), amb una instantània dels alumnes perquè es
+      // pugui restaurar més endavant si cal.
+      await setDoc(doc(collection(db, 'versions')), {
+        nom: nomVersio.trim() || `Còpia del ${new Date().toLocaleDateString('ca-ES')}`,
+        cursEscolar: cursEscolarActual(),
+        creatEl: serverTimestamp(),
+        creatPer: auth.currentUser?.email ?? null,
+        comptadors: {
+          alumnes: alumnes.length,
+          assistencia: assistencia.length,
+          avaluacio: avaluacioSnap.size,
+        },
+        alumnesSnapshot: JSON.stringify(alumnes),
+      })
+      setNomVersio('')
+      await carregaVersions()
+
+      setMissatge({ type: 'ok', text: `Còpia de seguretat descarregada (${totalFitxers} fitxers, organitzats per classe) i versió desada.` })
     } catch (err) {
       setMissatge({ type: 'error', text: `No s'ha pogut fer la còpia: ${err.message}` })
     } finally {
       setExportant(false)
+    }
+  }
+
+  async function restauraAlumnes(versio) {
+    setRestaurant(versio.id)
+    setMissatge(null)
+    try {
+      const alumnesNous = JSON.parse(versio.alumnesSnapshot)
+
+      // 1) Esborrem els alumnes actuals (per lots de 500, límit de Firestore).
+      const actualSnap = await getDocs(collection(db, 'alumnes'))
+      for (let i = 0; i < actualSnap.docs.length; i += 500) {
+        const batch = writeBatch(db)
+        for (const d of actualSnap.docs.slice(i, i + 500)) batch.delete(doc(db, 'alumnes', d.id))
+        await batch.commit()
+      }
+
+      // 2) Hi tornem a escriure els de la versió (mateix IDALU com a ID de
+      // document, així l'historial d'assistència/avaluació es manté enllaçat).
+      for (let i = 0; i < alumnesNous.length; i += 500) {
+        const batch = writeBatch(db)
+        for (const a of alumnesNous.slice(i, i + 500)) {
+          const { id, ...dades } = a
+          batch.set(doc(db, 'alumnes', id), dades)
+        }
+        await batch.commit()
+      }
+
+      setConfirmaRestaura((prev) => ({ ...prev, [versio.id]: '' }))
+      setMissatge({ type: 'ok', text: `Llista d'alumnes restaurada a la versió "${versio.nom}" (${alumnesNous.length} alumnes).` })
+    } catch (err) {
+      setMissatge({ type: 'error', text: `No s'ha pogut restaurar: ${err.message}` })
+    } finally {
+      setRestaurant(null)
     }
   }
 
@@ -205,7 +278,18 @@ export default function Backup() {
         </p>
       )}
 
-      <button className="btn-primary" style={{ marginTop: 20, maxWidth: 280 }} onClick={fesBackup} disabled={exportant}>
+      <label className="field" style={{ marginTop: 20, maxWidth: 360 }}>
+        <span>Nom d'aquesta còpia (opcional)</span>
+        <input
+          type="text"
+          value={nomVersio}
+          onChange={(e) => setNomVersio(e.target.value)}
+          placeholder="Per exemple: Abans d'importar el nou Excel"
+          style={{ border: '1px solid var(--line)', borderRadius: 8, padding: '10px 12px' }}
+        />
+      </label>
+
+      <button className="btn-primary" style={{ marginTop: 12, maxWidth: 280 }} onClick={fesBackup} disabled={exportant}>
         {exportant ? 'Generant còpia…' : '⬇ Descarrega còpia de seguretat (.zip)'}
       </button>
 
@@ -214,6 +298,66 @@ export default function Backup() {
           {missatge.text}
         </p>
       )}
+
+      <div className="placeholder-box" style={{ borderStyle: 'solid', marginTop: 28 }}>
+        <strong>Versions desades ({versions.length})</strong>
+        <p style={{ marginTop: 6, fontSize: 13 }}>
+          Cada vegada que fas una còpia de seguretat, també es desa aquí dins amb el nom que
+          li hagis posat. Pots <strong>restaurar la llista d'alumnes</strong> a qualsevol
+          d'aquestes versions (per exemple, si una pujada d'Excel va anar malament). L'historial
+          d'assistència i avaluació no es toca mai — només queda descarregat al .zip de cada
+          còpia, per si mai cal recuperar-lo manualment.
+        </p>
+
+        {carregantVersions ? (
+          <p style={{ marginTop: 12, fontSize: 13, color: 'var(--ink-soft)' }}>Carregant versions…</p>
+        ) : versions.length === 0 ? (
+          <p style={{ marginTop: 12, fontSize: 13, color: 'var(--ink-soft)' }}>Encara no hi ha cap versió desada.</p>
+        ) : (
+          <ul className="roster" style={{ marginTop: 12 }}>
+            {versions.map((v) => {
+              const data = v.creatEl?.toDate?.()
+              const confirmText = confirmaRestaura[v.id] ?? ''
+              return (
+                <li key={v.id} className="roster-row" style={{ display: 'block', paddingBottom: 12 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                    <div>
+                      <strong>{v.nom}</strong>
+                      <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
+                        {data ? data.toLocaleString('ca-ES') : '—'} · {v.creatPer ?? 'desconegut'} ·{' '}
+                        {v.comptadors?.alumnes ?? 0} alumnes, {v.comptadors?.assistencia ?? 0} marques d'assistència,{' '}
+                        {v.comptadors?.avaluacio ?? 0} notes
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <input
+                      type="text"
+                      value={confirmText}
+                      onChange={(e) => setConfirmaRestaura((prev) => ({ ...prev, [v.id]: e.target.value }))}
+                      placeholder="Escriu RESTAURA per confirmar"
+                      style={{ border: '1px solid var(--red)', borderRadius: 6, padding: '6px 8px', fontSize: 12, maxWidth: 200 }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => restauraAlumnes(v)}
+                      disabled={confirmText !== 'RESTAURA' || restaurant === v.id}
+                      style={{
+                        background: 'var(--red)', color: '#fff', border: 'none', borderRadius: 6,
+                        padding: '6px 12px', fontSize: 12, fontWeight: 600,
+                        cursor: confirmText === 'RESTAURA' ? 'pointer' : 'not-allowed',
+                        opacity: confirmText === 'RESTAURA' ? 1 : 0.5,
+                      }}
+                    >
+                      {restaurant === v.id ? 'Restaurant…' : 'Restaura la llista d\'alumnes a aquesta versió'}
+                    </button>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </div>
 
       <div className="placeholder-box" style={{ borderStyle: 'solid', marginTop: 28 }}>
         <strong>Com queda organitzat el fitxer:</strong>
