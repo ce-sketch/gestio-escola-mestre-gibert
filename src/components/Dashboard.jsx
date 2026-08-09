@@ -9,6 +9,7 @@ const Assistencia = lazy(() => import('./modules/Assistencia.jsx'))
 const Absentisme = lazy(() => import('./modules/Absentisme.jsx'))
 const Documentacio = lazy(() => import('./modules/Documentacio.jsx'))
 const Backup = lazy(() => import('./modules/Backup.jsx'))
+const Economia = lazy(() => import('./modules/Economia.jsx'))
 
 const MODULES = [
   { id: 'inici', label: 'Inici', component: Inici },
@@ -18,6 +19,7 @@ const MODULES = [
   { id: 'assistencia', label: 'Assistència', component: Assistencia },
   { id: 'absentisme', label: 'Absentisme', component: Absentisme },
   { id: 'documentacio', label: 'Documentació', component: Documentacio },
+  { id: 'economia', label: 'Economia', component: Economia, nomesAdmin: true },
   { id: 'backup', label: 'Backup', component: Backup, nomesAdmin: true },
 ]
 
