@@ -4,6 +4,7 @@ import { collection, query, where, getDocs, addDoc, doc, getDoc, setDoc, serverT
 import { db, auth } from '../../../firebase'
 import { redueixVigents } from '../../../lib/avaluacioCatala'
 import { CICLES, CRITERIS_TEE, NIVELLS_PER_CICLE, PESOS_PER_CICLE_DEFECTE, cicleDe, calculaNotaAutomatica, nivellDeNota } from '../../../lib/rubricaTEE'
+import { exportaExcel, exportaPDF } from '../../../lib/exportTaula'
 import { interpretaDictatTEE } from '../../../lib/dictatTEE'
 import { cursEscolarActual } from '../../../lib/cursEscolar'
 import { normalitza } from '../../../lib/text'
@@ -303,6 +304,30 @@ export default function TEE() {
     return { nota, nivell }
   }
 
+  /** Taula del TEE de LA CLASSE ACTUAL (no de tot el centre), perquè el
+   *  tutor pugui descarregar-se les notes que acaba d'introduir. */
+  function taulaClasseActual() {
+    const capçalera = ['Núm.', 'Alumne', ...CRITERIS_TEE.map((c) => c.label), 'Nota', 'Nivell']
+    const files = alumnesClasse.map((alumne) => {
+      const { nota, nivell } = globalAutoAlumne(alumne.id)
+      const globalManual = valorAlumne(alumne.id, 'globalManual')
+      const nivellFinal = globalManual ? nivells.find((n) => n.id === globalManual) : nivell
+      return [
+        alumne.numLlista ?? '',
+        alumne.nom,
+        ...CRITERIS_TEE.map((c) => {
+          const v = valorAlumne(alumne.id, c.id)
+          return nivells.find((n) => n.id === v)?.label ?? ''
+        }),
+        nota ?? '',
+        nivellFinal?.label ?? '',
+      ]
+    })
+    return [{ nom: `TEE ${curs}`, files: [capçalera, ...files] }]
+  }
+
+  const nomFitxerClasse = `TEE-${curs}-${trimestre.replace(/\s+/g, '_')}`
+
   function iniciaEdicioPesos() {
     // Els pesos s'editen en tant per cent enters (25, 20, 10...), no en
     // fraccions (0.25), perquè és més fàcil de llegir i escriure.
@@ -496,7 +521,26 @@ export default function TEE() {
       {carregantRegistres ? (
         <p style={{ marginTop: 20 }}>Carregant notes…</p>
       ) : (
-        <div style={{ overflowX: 'auto', marginTop: 20 }}>
+        <>
+          <div style={{ display: 'flex', gap: 10, marginTop: 20, flexWrap: 'wrap' }}>
+            <button
+              className="btn-ghost"
+              style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
+              onClick={() => exportaExcel(nomFitxerClasse, taulaClasseActual())}
+              type="button"
+            >
+              📥 Descarrega Excel ({curs})
+            </button>
+            <button
+              className="btn-ghost"
+              style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
+              onClick={() => exportaPDF(`TEE — ${curs} — ${trimestre}`, taulaClasseActual())}
+              type="button"
+            >
+              📄 Descarrega PDF ({curs})
+            </button>
+          </div>
+          <div style={{ overflowX: 'auto', marginTop: 12 }}>
           <table style={{ borderCollapse: 'collapse', fontSize: 13, width: '100%' }}>
             <thead>
               <tr style={{ textAlign: 'left', borderBottom: '2px solid var(--line)' }}>
@@ -556,7 +600,8 @@ export default function TEE() {
               })}
             </tbody>
           </table>
-        </div>
+          </div>
+        </>
       )}
 
       <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 12 }}>
