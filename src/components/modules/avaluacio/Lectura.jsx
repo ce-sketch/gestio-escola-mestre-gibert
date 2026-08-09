@@ -5,6 +5,7 @@ import { redueixVigents } from '../../../lib/avaluacioCatala'
 import { MOMENTS_LECTURA, nivellVL, nivellCL, LLINDARS_CL_DEFECTE } from '../../../lib/rubricaLectura'
 import { cursEscolarActual } from '../../../lib/cursEscolar'
 import { esAdmin } from '../../../lib/roles'
+import { exportaExcel, exportaPDF } from '../../../lib/exportTaula'
 
 const GRUPS_LLINDAR = [
   { id: 'grau1', label: '1r' },
@@ -175,6 +176,20 @@ export default function Lectura() {
 
   if (carregant) return <p>Carregant…</p>
 
+  /** Taula de Lectura de LA CLASSE ACTUAL (VL i CL del moment seleccionat). */
+  function taulaClasseActual() {
+    const capçalera = ['Núm.', 'Alumne', 'VL (paraules/min)', 'Nivell lector']
+    if (moment.teCL) capçalera.push('CL (respostes correctes)', 'Nivell CL')
+    const files = alumnesClasse.map((alumne) => {
+      const vl = valorAlumne(alumne.id, 'vl')
+      const cl = valorAlumne(alumne.id, 'cl')
+      const fila = [alumne.numLlista ?? '', alumne.nom, vl, nivellVL(vl) ?? '']
+      if (moment.teCL) fila.push(cl, moment.teCL ? (nivellCL(cl, curs, llindarsCl) ?? '') : '')
+      return fila
+    })
+    return [{ nom: `Lectura ${curs}`, files: [capçalera, ...files] }]
+  }
+
   return (
     <div>
       <p className="module-lead">
@@ -268,7 +283,26 @@ export default function Lectura() {
       {carregantRegistres ? (
         <p style={{ marginTop: 20 }}>Carregant notes…</p>
       ) : (
-        <div style={{ overflowX: 'auto', marginTop: 20 }}>
+        <>
+          <div style={{ display: 'flex', gap: 10, marginTop: 20, flexWrap: 'wrap' }}>
+            <button
+              className="btn-ghost"
+              style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
+              onClick={() => exportaExcel(`Lectura-${curs}-${moment.label.replace(/\s+/g, '_')}`, taulaClasseActual())}
+              type="button"
+            >
+              📥 Descarrega Excel ({curs})
+            </button>
+            <button
+              className="btn-ghost"
+              style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
+              onClick={() => exportaPDF(`Lectura — ${curs} — ${moment.label}`, taulaClasseActual())}
+              type="button"
+            >
+              📄 Descarrega PDF ({curs})
+            </button>
+          </div>
+        <div style={{ overflowX: 'auto', marginTop: 12 }}>
           <table style={{ borderCollapse: 'collapse', fontSize: 13, width: '100%' }}>
             <thead>
               <tr style={{ textAlign: 'left', borderBottom: '2px solid var(--line)' }}>
@@ -322,6 +356,7 @@ export default function Lectura() {
             </tbody>
           </table>
         </div>
+        </>
       )}
 
       <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 12 }}>

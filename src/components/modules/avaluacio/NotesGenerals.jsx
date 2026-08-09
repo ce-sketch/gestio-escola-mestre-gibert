@@ -4,11 +4,12 @@ import { db, auth } from '../../../firebase'
 import { NIVELLS, nivellDe, redueixVigents } from '../../../lib/avaluacioCatala'
 import { AREES, TRIMESTRES, areaAplicaAClasse, interpretaDictatNotesArea } from '../../../lib/notesArea'
 import { cursEscolarActual, NIVELLS_ESCOLARS, nivellEscolarDe } from '../../../lib/cursEscolar'
+import { grauPrimaria } from '../../../lib/rubricaLectura'
 import { exportaExcel, exportaPDF } from '../../../lib/exportTaula'
 
 const VISTES = [
   { id: 'entrada', label: 'Entrada de notes' },
-  { id: 'resum', label: 'Resum per curs' },
+  { id: 'resum', label: 'Resum escola' },
 ]
 
 export default function NotesGenerals() {
@@ -40,7 +41,10 @@ export default function NotesGenerals() {
         const llista = snapAlumnes.docs.map((d) => ({ id: d.id, ...d.data() }))
         llista.sort((a, b) => (a.numLlista ?? 999) - (b.numLlista ?? 999) || a.nom.localeCompare(b.nom))
         setAlumnesTots(llista)
-        if (llista.length > 0) setClasse((c) => c || llista[0].curs)
+        const primeraClassePrimaria = [...new Set(llista.map((a) => a.curs))]
+          .filter((c) => grauPrimaria(c) !== null)
+          .sort()[0]
+        if (primeraClassePrimaria) setClasse((c) => c || primeraClassePrimaria)
         setRegistres(snapNotes.docs.map((d) => ({ id: d.id, ...d.data() })))
       } catch (err) {
         setMissatge({ type: 'error', text: `No s'han pogut carregar les dades: ${err.message}` })
@@ -51,7 +55,10 @@ export default function NotesGenerals() {
     carrega()
   }, [])
 
-  const classes = useMemo(() => [...new Set(alumnesTots.map((a) => a.curs))].sort(), [alumnesTots])
+  const classes = useMemo(
+    () => [...new Set(alumnesTots.map((a) => a.curs))].filter((c) => grauPrimaria(c) !== null).sort(),
+    [alumnesTots]
+  )
   const alumnesClasse = useMemo(() => alumnesTots.filter((a) => a.curs === classe), [alumnesTots, classe])
   const areesClasse = useMemo(() => AREES.filter((a) => areaAplicaAClasse(a.id, classe)), [classe])
 
@@ -79,6 +86,18 @@ export default function NotesGenerals() {
     if (valors[clau] !== undefined) return valors[clau]
     const existent = vigentsEntrada.find((r) => r.alumneId === alumneId && r.area === areaId)
     return existent?.nota ?? ''
+  }
+
+  /** Mitjana de totes les àrees ja introduïdes per aquest alumne (ignora
+   *  les àrees encara buides) — la "nota global" del trimestre. */
+  function notaGlobalAlumne(alumneId) {
+    const valorsOmplerts = areesClasse
+      .map((a) => notaAlumne(alumneId, a.id))
+      .filter((v) => v !== '')
+      .map(Number)
+    if (valorsOmplerts.length === 0) return null
+    const mitjana = valorsOmplerts.reduce((a, b) => a + b, 0) / valorsOmplerts.length
+    return Math.round(mitjana * 10) / 10
   }
 
   async function desaCella(alumne, area, valorText) {
@@ -198,7 +217,10 @@ export default function NotesGenerals() {
     [registres, cursEscolarId, trimestre]
   )
 
-  const totesLesClasses = useMemo(() => [...new Set(alumnesTots.map((a) => a.curs))].sort(), [alumnesTots])
+  const totesLesClasses = useMemo(
+    () => [...new Set(alumnesTots.map((a) => a.curs))].filter((c) => grauPrimaria(c) !== null).sort(),
+    [alumnesTots]
+  )
 
   const resumGlobalPerArea = useMemo(() => {
     return AREES.map((a) => {
@@ -322,6 +344,18 @@ export default function NotesGenerals() {
 
   const nomFitxerResum = `Notes-per-area-${cursEscolarId}-${trimestre.replace(/\s+/g, '_')}`
 
+  /** Taula de la graella d'entrada de LA CLASSE ACTUAL (totes les àrees). */
+  function taulaClasseActual() {
+    const capçalera = ['Núm.', 'Alumne', ...areesClasse.map((a) => a.label), 'Nota global']
+    const files = alumnesClasse.map((alumne) => [
+      alumne.numLlista ?? '',
+      alumne.nom,
+      ...areesClasse.map((a) => notaAlumne(alumne.id, a.id)),
+      notaGlobalAlumne(alumne.id) ?? '',
+    ])
+    return [{ nom: `Notes ${classe}`, files: [capçalera, ...files] }]
+  }
+
   return (
     <div>
       <p className="module-lead">
@@ -393,8 +427,26 @@ export default function NotesGenerals() {
           <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 4 }}>
             Vora vermella = nota per sota de 5 (No Assoliment), igual que al full de càlcul.
           </p>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ borderCollapse: 'collapse', fontSize: 13, width: '100%', marginTop: 12 }}>
+          <div style={{ display: 'flex', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
+            <button
+              className="btn-ghost"
+              style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
+              onClick={() => exportaExcel(`Notes-${classe}-${trimestre.replace(/\s+/g, '_')}`, taulaClasseActual())}
+              type="button"
+            >
+              📥 Descarrega Excel ({classe})
+            </button>
+            <button
+              className="btn-ghost"
+              style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
+              onClick={() => exportaPDF(`Notes per àrea — ${classe} — ${trimestre}`, taulaClasseActual())}
+              type="button"
+            >
+              📄 Descarrega PDF ({classe})
+            </button>
+          </div>
+          <div style={{ overflowX: 'auto', marginTop: 12 }}>
+            <table style={{ borderCollapse: 'collapse', fontSize: 13, width: '100%', marginTop: 0 }}>
               <thead>
                 <tr style={{ textAlign: 'left', borderBottom: '2px solid var(--line)' }}>
                   <th style={{ padding: '6px 8px', minWidth: 44 }}>Núm.</th>
@@ -402,6 +454,7 @@ export default function NotesGenerals() {
                   {areesClasse.map((a) => (
                     <th key={a.id} style={{ padding: '6px 4px', minWidth: 70, fontSize: 11 }}>{a.label}</th>
                   ))}
+                  <th style={{ padding: '6px 8px', minWidth: 70, fontSize: 11 }}>Nota global</th>
                 </tr>
               </thead>
               <tbody>
@@ -436,6 +489,15 @@ export default function NotesGenerals() {
                         </td>
                       )
                     })}
+                    {(() => {
+                      const global = notaGlobalAlumne(alumne.id)
+                      const nivellGlobal = global !== null ? nivellDe(global) : null
+                      return (
+                        <td style={{ padding: '4px 8px', fontWeight: 700, color: nivellGlobal?.color ?? 'var(--ink-soft)' }}>
+                          {global ?? '—'}
+                        </td>
+                      )
+                    })()}
                   </tr>
                 ))}
               </tbody>

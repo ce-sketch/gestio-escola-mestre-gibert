@@ -7,6 +7,7 @@ import { clAEscalaComuna, vlAEscalaComuna } from '../../../lib/rubricaLectura'
 import { interpretaDictatNivellUnic } from '../../../lib/dictatTEE'
 import { enviaAvis, WORKER_AVISOS_URL } from '../../../lib/email'
 import { cursEscolarActual } from '../../../lib/cursEscolar'
+import { exportaExcel, exportaPDF } from '../../../lib/exportTaula'
 
 const TRIMESTRES = ['1r trimestre', '2n trimestre', '3r trimestre']
 // Si la nota general és, com a mínim, aquests nivells millor que el pitjor
@@ -171,6 +172,22 @@ export default function NotaArea() {
     return null
   }
 
+  /** Taula de Nota d'àrea (Català) de LA CLASSE ACTUAL. */
+  function taulaClasseActual() {
+    const capçalera = ['Núm.', 'Alumne', 'Nota general Català', 'Coherència TEE/CL/VL']
+    const files = alumnesClasse.map((alumne) => {
+      const nivellId = notaGeneralAlumne(alumne.id)
+      const incoherencia = comprovaCoherencia(alumne.id)
+      return [
+        alumne.numLlista ?? '',
+        alumne.nom,
+        nivellPerId(nivellId)?.label ?? '',
+        incoherencia ? `Revisar (${incoherencia.origen}: ${incoherencia.pitjor.label})` : 'OK',
+      ]
+    })
+    return [{ nom: `Nota d'àrea ${curs}`, files: [capçalera, ...files] }]
+  }
+
   /** Desa la nota d'UN alumne a l'instant, en triar-la — no cal cap botó
    *  "Desa" ni recordar-se'n abans de tancar la pestanya. */
   async function desaUn(alumne, nivell) {
@@ -309,7 +326,26 @@ export default function NotaArea() {
         </div>
       )}
 
-      <table style={{ borderCollapse: 'collapse', fontSize: 13, width: '100%', marginTop: 20 }}>
+      <div style={{ display: 'flex', gap: 10, marginTop: 20, flexWrap: 'wrap' }}>
+        <button
+          className="btn-ghost"
+          style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
+          onClick={() => exportaExcel(`Nota-area-catala-${curs}-${trimestre.replace(/\s+/g, '_')}`, taulaClasseActual())}
+          type="button"
+        >
+          📥 Descarrega Excel ({curs})
+        </button>
+        <button
+          className="btn-ghost"
+          style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
+          onClick={() => exportaPDF(`Nota d'àrea Català — ${curs} — ${trimestre}`, taulaClasseActual())}
+          type="button"
+        >
+          📄 Descarrega PDF ({curs})
+        </button>
+      </div>
+
+      <table style={{ borderCollapse: 'collapse', fontSize: 13, width: '100%', marginTop: 12 }}>
         <thead>
           <tr style={{ textAlign: 'left', borderBottom: '2px solid var(--line)' }}>
             <th style={{ padding: '6px 8px', width: 44 }}>Núm.</th>
@@ -379,8 +415,15 @@ export default function NotaArea() {
           onClick={iniciaDictat}
           type="button"
         >
-          🎤 Dicta notes ("Alumne 3 notable, alumne 7 excel·lent...")
+          🎤 Dicta notes
         </button>
+      </div>
+      <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 6, lineHeight: 1.6 }}>
+        <p>Format: "Alumne [número] [nivell], alumne [número] [nivell]...".</p>
+        <p style={{ marginTop: 4 }}>
+          <strong>Nivells:</strong> excel·lent · notable · satisfactori · no assoliment (o insuficient)
+        </p>
+        <p style={{ marginTop: 4 }}>Exemple: "Alumne 3 notable, alumne 7 excel·lent"</p>
       </div>
 
       {dictat && (
