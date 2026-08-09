@@ -15,6 +15,13 @@ const DEFAULT_CLASSES = ['1r A', '1r B']
 const COL_IDALU = 0
 const COL_NOM = 4
 const COL_CURS = 6
+const COL_NESE = 8
+const COL_NESE_MOTIU = 9
+
+// Només aquest motiu concret dona dret a la reducció del 100% en material i
+// activitats — no pas qualsevol alumne NESE (una discapacitat o altes
+// capacitats, per exemple, no donen aquest dret).
+const MOTIU_NESE_REDUCCIO = 'situacions socioeconòmiques'
 
 export default function Alumnes() {
   const [classes, setClasses] = useState(
@@ -92,8 +99,11 @@ export default function Alumnes() {
           if (nom === 'Alumnes:' || curs === 'Grup Classe') continue // fila de capçalera
           if (!/[a-zA-ZÀ-ÿ]/.test(nom)) continue
           if (!idalu || !/^\d+$/.test(idalu)) continue // sense IDALU vàlid (p. ex. la fila de capçalera)
+          const esNese = fila[COL_NESE]?.toString().trim().toLowerCase() === 'sí'
+          const neseMotiu = fila[COL_NESE_MOTIU]?.toString().trim() ?? ''
+          const neseEconomic = esNese && neseMotiu.toLowerCase().includes(MOTIU_NESE_REDUCCIO)
           if (!perClasse[curs]) perClasse[curs] = []
-          perClasse[curs].push({ nom, idalu })
+          perClasse[curs].push({ nom, idalu, neseEconomic })
         }
 
         if (Object.keys(perClasse).length === 0) {
@@ -105,7 +115,7 @@ export default function Alumnes() {
         for (const [curs, files2] of Object.entries(perClasse)) {
           previsualitzat[curs] = files2
             .sort((a, b) => a.nom.localeCompare(b.nom))
-            .map((f, i) => ({ nom: f.nom, idalu: f.idalu, numLlista: i + 1 }))
+            .map((f, i) => ({ nom: f.nom, idalu: f.idalu, numLlista: i + 1, neseEconomic: f.neseEconomic }))
         }
         setPrevisualitzacio(previsualitzat)
       } catch (err) {
@@ -133,6 +143,9 @@ export default function Alumnes() {
 
   const totalAlumnesPrevisualitzats = previsualitzacio
     ? Object.values(previsualitzacio).reduce((acc, llista) => acc + llista.length, 0)
+    : 0
+  const totalNeseEconomic = previsualitzacio
+    ? Object.values(previsualitzacio).reduce((acc, llista) => acc + llista.filter((a) => a.neseEconomic).length, 0)
     : 0
 
   async function esborraTotsElsAlumnes() {
@@ -197,13 +210,17 @@ export default function Alumnes() {
         {previsualitzacio && (
           <div style={{ marginTop: 16 }}>
             <p style={{ fontSize: 14, fontWeight: 600 }}>
-              Trobats {totalAlumnesPrevisualitzats} alumnes en {Object.keys(previsualitzacio).length} classes:
+              Trobats {totalAlumnesPrevisualitzats} alumnes en {Object.keys(previsualitzacio).length} classes
+              ({totalNeseEconomic} amb reducció NESE per situació socioeconòmica):
             </p>
             <ul className="roster" style={{ marginTop: 8 }}>
               {Object.entries(previsualitzacio).sort().map(([curs, alumnes]) => (
                 <li key={curs} className="roster-row">
                   <span className="roster-name">{curs}</span>
-                  <span style={{ fontSize: 13, color: 'var(--ink-soft)' }}>{alumnes.length} alumnes</span>
+                  <span style={{ fontSize: 13, color: 'var(--ink-soft)' }}>
+                    {alumnes.length} alumnes
+                    {alumnes.some((a) => a.neseEconomic) && ` · ${alumnes.filter((a) => a.neseEconomic).length} NESE`}
+                  </span>
                 </li>
               ))}
             </ul>
@@ -405,7 +422,7 @@ async function syncTotesLesClasses(perClasse) {
   let desactivats = 0
 
   for (const [curs, alumnes] of Object.entries(perClasse)) {
-    for (const { nom, numLlista, idalu } of alumnes) {
+    for (const { nom, numLlista, idalu, neseEconomic } of alumnes) {
       const id = idalu ? String(idalu) : (existentsPerNom.get(nom)?.id ?? slug(nom))
       const existent = idalu ? existentsPerId.get(id) : existentsPerNom.get(nom)
 
@@ -413,7 +430,7 @@ async function syncTotesLesClasses(perClasse) {
 
       batch.set(
         doc(alumnesRef, id),
-        { nom, curs, numLlista, idalu: idalu ?? null, actiu: true, actualitzatEl: serverTimestamp() },
+        { nom, curs, numLlista, idalu: idalu ?? null, neseEconomic: Boolean(neseEconomic), actiu: true, actualitzatEl: serverTimestamp() },
         { merge: true }
       )
 

@@ -1,9 +1,14 @@
 import { useEffect, useState } from 'react'
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'
+import { doc, getDoc, setDoc, serverTimestamp, collection, getDocs } from 'firebase/firestore'
 import * as XLSX from 'xlsx'
 import { db, auth } from '../../firebase'
 import { cursEscolarActual } from '../../lib/cursEscolar'
 import { ENSENYAMENTS, CURSOS, CONCEPTES, conceptaBuit, filaBuida, totalConcepte, totalFila } from '../../lib/economia'
+
+// Conceptes on la reducció NESE (situació socioeconòmica) és del 100%,
+// segons el criteri del centre: material escolar i activitats
+// complementàries — no s'aplica a la resta de conceptes.
+const CONCEPTES_REDUCCIO_NESE = ['materialEscolar', 'activitatsComplementaries']
 
 export default function Economia() {
   const [cursEscolarId, setCursEscolarId] = useState(cursEscolarActual())
@@ -12,11 +17,22 @@ export default function Economia() {
   const [desant, setDesant] = useState(false)
   const [missatge, setMissatge] = useState(null)
   const [filaOberta, setFilaOberta] = useState(null) // índex de la fila expandida
+  const [alumnesTots, setAlumnesTots] = useState([])
 
   useEffect(() => {
     carrega()
+    carregaAlumnes()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cursEscolarId])
+
+  async function carregaAlumnes() {
+    try {
+      const snap = await getDocs(collection(db, 'alumnes'))
+      setAlumnesTots(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+    } catch {
+      setAlumnesTots([])
+    }
+  }
 
   async function carrega() {
     setCarregant(true)
@@ -82,6 +98,34 @@ export default function Economia() {
   }
 
   function onBlurDesa(noves) {
+    desaTot(noves)
+  }
+
+  /** Compta alumnes amb reducció NESE (situació socioeconòmica) que
+   *  coincideixen amb el curs genèric d'una fila (per exemple "1r" agafa
+   *  tant "1r A" com "1r B"). */
+  function numAlumnesNese(cursGeneric) {
+    if (!cursGeneric) return 0
+    const cg = cursGeneric.trim().toLowerCase()
+    return alumnesTots.filter((a) => a.neseEconomic && a.curs?.trim().toLowerCase().startsWith(cg)).length
+  }
+
+  /** Aplica la reducció del 100% (Material escolar + Activitats
+   *  complementàries) pels alumnes NESE trobats en aquesta fila — sobre
+   *  l'import unitari ja introduït. Es pot desfer/ajustar a mà després. */
+  function aplicaReduccioNese(index) {
+    const fila = files[index]
+    const n = numAlumnesNese(fila.curs)
+    if (n === 0) return
+    let noves = files
+    for (const conceptId of CONCEPTES_REDUCCIO_NESE) {
+      const importUnitari = Number(fila.conceptes[conceptId]?.importUnitari) || 0
+      noves = noves.map((f, i) => {
+        if (i !== index) return f
+        return { ...f, conceptes: { ...f.conceptes, [conceptId]: { ...f.conceptes[conceptId], reduccio: String(n * importUnitari) } } }
+      })
+    }
+    setFiles(noves)
     desaTot(noves)
   }
 
@@ -271,6 +315,21 @@ export default function Economia() {
 
               {oberta && (
                 <div style={{ padding: '4px 14px 14px', borderTop: '1px solid var(--line)' }}>
+                  {numAlumnesNese(fila.curs) > 0 && (
+                    <div className="placeholder-box" style={{ borderStyle: 'solid', borderColor: 'var(--amber-dark)', marginBottom: 12 }}>
+                      <span style={{ fontSize: 12 }}>
+                        <strong>{numAlumnesNese(fila.curs)} alumnes</strong> d'aquest curs tenen reducció NESE per
+                        situació socioeconòmica (100% en Material escolar i Activitats complementàries).
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => aplicaReduccioNese(index)}
+                        style={{ display: 'block', marginTop: 8, background: 'var(--amber-dark)', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+                      >
+                        Aplica la reducció automàticament (calcula sobre l'import unitari ja escrit)
+                      </button>
+                    </div>
+                  )}
                   {CONCEPTES.map((c) => {
                     const concepte = fila.conceptes[c.id] ?? conceptaBuit()
                     const totalC = totalConcepte(fila.numAlumnes, concepte)
