@@ -4,6 +4,7 @@ import { db, auth } from '../../../firebase'
 import { NIVELLS, nivellDe, redueixVigents } from '../../../lib/avaluacioCatala'
 import { AREES, TRIMESTRES, areaAplicaAClasse, interpretaDictatNotesArea } from '../../../lib/notesArea'
 import { cursEscolarActual, NIVELLS_ESCOLARS, nivellEscolarDe } from '../../../lib/cursEscolar'
+import { exportaExcel, exportaPDF } from '../../../lib/exportTaula'
 
 const VISTES = [
   { id: 'entrada', label: 'Entrada de notes' },
@@ -183,9 +184,9 @@ export default function NotesGenerals() {
   // ---- Resum per curs (agrupa totes les classes A/B d'un mateix nivell) ----
 
   // ---- Resum global de tot el centre (equivalent al full "Resum" de
-  // l'Excel): totes les classes juntes, en dues variants — amb 1r i sense
-  // 1r (com que 1r fa servir un criteri diferent en algunes àrees, sovint
-  // interessa poder-lo mirar per separat). ----
+  // l'Excel): una taula per àrea, amb cada CLASSE individual com a fila
+  // (no agrupada per nivell) i una fila de TOTAL a baix — exactament com
+  // al full original. ----
   const vigentsResumGlobal = useMemo(
     () => redueixVigents(
       registres.filter((r) =>
@@ -197,27 +198,28 @@ export default function NotesGenerals() {
     [registres, cursEscolarId, trimestre]
   )
 
-  function calculaResumPerArea(vigents, alumnesRellevants) {
-    return AREES.map((a) => {
-      const notesArea = vigents.filter((r) => r.area === a.id)
-      const comptes = { no_assoliment: 0, assoliment_satisfactori: 0, assoliment_notable: 0, 'assoliment_excel·lent': 0 }
-      for (const r of notesArea) {
-        const nivell = nivellDe(r.nota)
-        if (nivell) comptes[nivell.id] += 1
-      }
-      return { area: a, avaluats: notesArea.length, comptes, sense: alumnesRellevants - notesArea.length }
-    }).filter((f) => f.avaluats > 0) // amaguem àrees sense cap nota (evita files buides de "Science" a 1r, etc.)
-  }
+  const totesLesClasses = useMemo(() => [...new Set(alumnesTots.map((a) => a.curs))].sort(), [alumnesTots])
 
-  const resumGlobalAmb1r = useMemo(
-    () => calculaResumPerArea(vigentsResumGlobal, alumnesTots.length),
-    [vigentsResumGlobal, alumnesTots]
-  )
-  const resumGlobalSense1r = useMemo(() => {
-    const sense1r = vigentsResumGlobal.filter((r) => r.curs?.trim()[0] !== '1')
-    const totalAlumnesSense1r = alumnesTots.filter((a) => a.curs?.trim()[0] !== '1').length
-    return calculaResumPerArea(sense1r, totalAlumnesSense1r)
-  }, [vigentsResumGlobal, alumnesTots])
+  const resumGlobalPerArea = useMemo(() => {
+    return AREES.map((a) => {
+      const files = totesLesClasses.map((classe) => {
+        const notesClasse = vigentsResumGlobal.filter((r) => r.area === a.id && r.curs === classe)
+        const comptes = { no_assoliment: 0, assoliment_satisfactori: 0, assoliment_notable: 0, 'assoliment_excel·lent': 0 }
+        for (const r of notesClasse) {
+          const nivell = nivellDe(r.nota)
+          if (nivell) comptes[nivell.id] += 1
+        }
+        return { classe, avaluats: notesClasse.length, comptes }
+      })
+      const total = { no_assoliment: 0, assoliment_satisfactori: 0, assoliment_notable: 0, 'assoliment_excel·lent': 0 }
+      let avaluatsTotal = 0
+      files.forEach((f) => {
+        for (const k of Object.keys(total)) total[k] += f.comptes[k]
+        avaluatsTotal += f.avaluats
+      })
+      return { area: a, files, total, avaluatsTotal }
+    }).filter((f) => f.avaluatsTotal > 0) // amaguem àrees sense cap nota encara
+  }, [vigentsResumGlobal, totesLesClasses])
 
   const alumnesDelNivell = useMemo(
     () => alumnesTots.filter((a) => nivellEscolarDe(a.curs) === nivellResum),
@@ -294,13 +296,31 @@ export default function NotesGenerals() {
       const nivell = nivellDe(r.nota)
       if (nivell?.id !== 'no_assoliment') continue
       const areaLabel = AREES.find((a) => a.id === r.area)?.label ?? r.area
-      if (!perAlumne.has(r.alumneId)) perAlumne.set(r.alumneId, { nom: r.alumneNom, arees: [] })
+      if (!perAlumne.has(r.alumneId)) {
+        const numLlista = alumnesTots.find((a) => a.id === r.alumneId)?.numLlista
+        perAlumne.set(r.alumneId, { nom: r.alumneNom, numLlista, arees: [] })
+      }
       perAlumne.get(r.alumneId).arees.push(areaLabel)
     }
     return [...perAlumne.values()].sort((a, b) => b.arees.length - a.arees.length)
-  }, [vigentsResum])
+  }, [vigentsResum, alumnesTots])
 
   if (carregant) return <p>Carregant…</p>
+
+  /** Prepara totes les taules del resum global per exportar-les (un full
+   *  per àrea, exactament com es veuen a la pantalla). */
+  function taulesResumGlobalExportables() {
+    return resumGlobalPerArea.map(({ area: a, files, total, avaluatsTotal }) => ({
+      nom: a.label,
+      files: [
+        ['Classe', ...NIVELLS.map((n) => n.label), 'Avaluats'],
+        ...files.map((f) => [f.classe, ...NIVELLS.map((n) => f.comptes[n.id]), f.avaluats]),
+        ['TOTAL', ...NIVELLS.map((n) => total[n.id]), avaluatsTotal],
+      ],
+    }))
+  }
+
+  const nomFitxerResum = `Notes-per-area-${cursEscolarId}-${trimestre.replace(/\s+/g, '_')}`
 
   return (
     <div>
@@ -377,6 +397,7 @@ export default function NotesGenerals() {
             <table style={{ borderCollapse: 'collapse', fontSize: 13, width: '100%', marginTop: 12 }}>
               <thead>
                 <tr style={{ textAlign: 'left', borderBottom: '2px solid var(--line)' }}>
+                  <th style={{ padding: '6px 8px', minWidth: 44 }}>Núm.</th>
                   <th style={{ padding: '6px 8px', minWidth: 180, position: 'sticky', left: 0, background: 'var(--bg)' }}>Alumne</th>
                   {areesClasse.map((a) => (
                     <th key={a.id} style={{ padding: '6px 4px', minWidth: 70, fontSize: 11 }}>{a.label}</th>
@@ -386,6 +407,7 @@ export default function NotesGenerals() {
               <tbody>
                 {alumnesClasse.map((alumne) => (
                   <tr key={alumne.id} style={{ borderBottom: '1px solid var(--line)' }}>
+                    <td style={{ padding: '6px 8px', color: 'var(--ink-soft)' }}>{alumne.numLlista ?? '—'}</td>
                     <td style={{ padding: '6px 8px', fontWeight: 500, position: 'sticky', left: 0, background: 'var(--bg)' }}>{alumne.nom}</td>
                     {areesClasse.map((a) => {
                       const nota = notaAlumne(alumne.id, a.id)
@@ -425,15 +447,31 @@ export default function NotesGenerals() {
             perd res encara que es tanqui la pestanya sense voler.
           </p>
 
-          <div style={{ display: 'flex', gap: 10, marginTop: 12, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 10, marginTop: 12, flexWrap: 'wrap', alignItems: 'center' }}>
             <button
               className="btn-ghost"
               style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
               onClick={iniciaDictat}
               type="button"
             >
-              🎤 Dicta notes ("Alumne 3 català notable matemàtiques excel·lent...")
+              🎤 Dicta notes
             </button>
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 6, lineHeight: 1.6 }}>
+            <p>
+              Format: "Alumne [número] [àrea] [nivell], [àrea] [nivell]..., alumne [número] [àrea] [nivell]...".
+              Es poden dictar diverses àrees seguides per al mateix alumne, i tants alumnes com calgui d'un cop.
+            </p>
+            <p style={{ marginTop: 4 }}>
+              <strong>Nivells:</strong> excel·lent (9,5) · notable (8) · satisfactori (6) · no assoliment o insuficient (4)
+            </p>
+            <p style={{ marginTop: 4 }}>
+              <strong>Àrees:</strong> català · castellà · anglès · matemàtiques (o mates) · medi · science ·
+              plàstica · música · educació física (o ed. física / gimnàstica) · religió (o valors)
+            </p>
+            <p style={{ marginTop: 4 }}>
+              Exemple: "Alumne 3 català notable matemàtiques excel·lent, alumne 7 castellà satisfactori"
+            </p>
           </div>
 
           {dictat && (
@@ -486,33 +524,55 @@ export default function NotesGenerals() {
         <>
           <h3 style={{ marginTop: 8, fontSize: 15 }}>Resum global de tot el centre</h3>
           <p className="module-note" style={{ marginTop: 4 }}>
-            Totes les classes juntes, igual que al full "Resum" de l'Excel — en dues variants,
-            amb 1r i sense 1r.
+            Igual que al full "Resum" de l'Excel: una taula per àrea, amb totes les classes
+            per separat i una fila de TOTAL a baix.
           </p>
 
-          {[{ label: 'TOTAL — amb 1r', dades: resumGlobalAmb1r }, { label: 'TOTAL — sense 1r', dades: resumGlobalSense1r }].map(({ label, dades }) => (
-            <div key={label} style={{ marginTop: 12 }}>
-              <p style={{ fontSize: 13, fontWeight: 600 }}>{label}</p>
+          <div style={{ display: 'flex', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
+            <button
+              className="btn-ghost"
+              style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
+              onClick={() => exportaExcel(nomFitxerResum, taulesResumGlobalExportables())}
+              type="button"
+            >
+              📥 Descarrega Excel
+            </button>
+            <button
+              className="btn-ghost"
+              style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
+              onClick={() => exportaPDF(`Notes per àrea — Resum global (${trimestre})`, taulesResumGlobalExportables())}
+              type="button"
+            >
+              📄 Descarrega PDF
+            </button>
+          </div>
+
+          {resumGlobalPerArea.length === 0 ? (
+            <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 12 }}>Encara no hi ha cap nota d'aquest trimestre.</p>
+          ) : resumGlobalPerArea.map(({ area: a, files, total, avaluatsTotal }) => (
+            <div key={a.id} style={{ marginTop: 16 }}>
+              <p style={{ fontSize: 13, fontWeight: 600 }}>{a.label}</p>
               <table style={{ borderCollapse: 'collapse', fontSize: 13, width: '100%', marginTop: 6 }}>
                 <thead>
                   <tr style={{ textAlign: 'left', borderBottom: '2px solid var(--line)' }}>
-                    <th style={{ padding: '6px 8px', minWidth: 140 }}>Àrea</th>
+                    <th style={{ padding: '6px 8px', minWidth: 80 }}>Classe</th>
                     {NIVELLS.map((n) => <th key={n.id} style={{ padding: '6px 8px', color: n.color }}>{n.curt}</th>)}
                     <th style={{ padding: '6px 8px' }}>Avaluats</th>
-                    <th style={{ padding: '6px 8px' }}>Sense nota</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {dades.length === 0 ? (
-                    <tr><td colSpan={7} style={{ padding: '6px 8px', color: 'var(--ink-soft)' }}>Encara no hi ha cap nota d'aquest trimestre.</td></tr>
-                  ) : dades.map(({ area: a, avaluats, comptes, sense }) => (
-                    <tr key={a.id} style={{ borderBottom: '1px solid var(--line)' }}>
-                      <td style={{ padding: '6px 8px', fontWeight: 500 }}>{a.label}</td>
-                      {NIVELLS.map((n) => <td key={n.id} style={{ padding: '6px 8px' }}>{comptes[n.id]}</td>)}
-                      <td style={{ padding: '6px 8px' }}>{avaluats}</td>
-                      <td style={{ padding: '6px 8px', color: 'var(--ink-soft)' }}>{sense}</td>
+                  {files.map((f) => (
+                    <tr key={f.classe} style={{ borderBottom: '1px solid var(--line)' }}>
+                      <td style={{ padding: '6px 8px', fontWeight: 500 }}>{f.classe}</td>
+                      {NIVELLS.map((n) => <td key={n.id} style={{ padding: '6px 8px' }}>{f.comptes[n.id]}</td>)}
+                      <td style={{ padding: '6px 8px' }}>{f.avaluats}</td>
                     </tr>
                   ))}
+                  <tr style={{ background: 'var(--bg-soft, #f5f5f0)' }}>
+                    <td style={{ padding: '6px 8px', fontWeight: 700 }}>TOTAL</td>
+                    {NIVELLS.map((n) => <td key={n.id} style={{ padding: '6px 8px', fontWeight: 700 }}>{total[n.id]}</td>)}
+                    <td style={{ padding: '6px 8px', fontWeight: 700 }}>{avaluatsTotal}</td>
+                  </tr>
                 </tbody>
               </table>
             </div>
@@ -553,6 +613,7 @@ export default function NotesGenerals() {
             <table style={{ borderCollapse: 'collapse', fontSize: 13, width: '100%', marginTop: 10 }}>
               <thead>
                 <tr style={{ textAlign: 'left', borderBottom: '2px solid var(--line)' }}>
+                  <th style={{ padding: '6px 8px', width: 44 }}>Núm.</th>
                   <th style={{ padding: '6px 8px' }}>Alumne</th>
                   <th style={{ padding: '6px 8px' }}>Àrees no superades</th>
                 </tr>
@@ -560,6 +621,7 @@ export default function NotesGenerals() {
               <tbody>
                 {alumnesAmbSuspeses.map((a) => (
                   <tr key={a.nom} style={{ borderBottom: '1px solid var(--line)' }}>
+                    <td style={{ padding: '6px 8px', color: 'var(--ink-soft)' }}>{a.numLlista ?? '—'}</td>
                     <td style={{ padding: '6px 8px', fontWeight: 500 }}>{a.nom}</td>
                     <td style={{ padding: '6px 8px', color: 'var(--red)' }}>{a.arees.join(', ')}</td>
                   </tr>

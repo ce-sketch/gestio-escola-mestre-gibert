@@ -5,6 +5,7 @@ import { redueixVigents } from '../../../lib/avaluacioCatala'
 import { NIVELLS_PER_CICLE, cicleDe, aEscalaComuna } from '../../../lib/rubricaTEE'
 import { MOMENTS_LECTURA, vlAEscalaComuna, grauPrimaria } from '../../../lib/rubricaLectura'
 import { cursEscolarActual } from '../../../lib/cursEscolar'
+import { exportaExcel, exportaPDF } from '../../../lib/exportTaula'
 
 const TRIMESTRES = ['1r trimestre', '2n trimestre', '3r trimestre']
 const COLUMNES_COMUNES = [
@@ -137,6 +138,35 @@ export default function Resum() {
 
   if (carregant) return <p>Carregant…</p>
 
+  /** Converteix una taula (files amb .curs/.comptadors/.total) al format
+   *  "array de files" que fan servir exportaExcel/exportaPDF, incloent les
+   *  dues files de TOTAL (amb 1r i sense 1r). */
+  function taulaExportable(capçalera, files, columnes) {
+    const ids = columnes.map((c) => c.id ?? c)
+    const labels = columnes.map((c) => c.label ?? c)
+    const files_ = files.map((f) => [f.curs, ...ids.map((id) => f.comptadors[id]), f.total])
+    const ambPrimer = totalGlobal(files, columnes, false)
+    const sensePrimer = totalGlobal(files, columnes, true)
+    files_.push(['TOTAL (amb 1r)', ...ids.map((id) => ambPrimer.comptadors[id]), ambPrimer.total])
+    files_.push(['TOTAL (sense 1r)', ...ids.map((id) => sensePrimer.comptadors[id]), sensePrimer.total])
+    return [[capçalera, ...labels, 'Total avaluats'], ...files_]
+  }
+
+  function totesLesTaules() {
+    const fulls = [
+      { nom: `TEE ${trimestre}`, files: taulaExportable('Classe', resumTee, COLUMNES_COMUNES) },
+    ]
+    resumCl.forEach(({ label, files }) => {
+      fulls.push({ nom: `CL ${label}`, files: taulaExportable('Classe', files, COLUMNES_CL) })
+    })
+    resumVl.forEach(({ moment, files }) => {
+      fulls.push({ nom: `VL ${moment.label}`, files: taulaExportable('Classe', files, COLUMNES_COMUNES) })
+    })
+    return fulls
+  }
+
+  const nomFitxer = `Resum-TEE-CL-VL-${cursEscolarId}-${trimestre.replace(/\s+/g, '_')}`
+
   return (
     <div>
       <p className="module-lead">
@@ -146,6 +176,25 @@ export default function Resum() {
         altra sense 1r (que fa servir un criteri diferent, sense curs inferior amb què
         comparar-se) — igual que es distingia al full de càlcul original.
       </p>
+
+      <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap' }}>
+        <button
+          className="btn-ghost"
+          style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
+          onClick={() => exportaExcel(nomFitxer, totesLesTaules())}
+          type="button"
+        >
+          📥 Descarrega Excel
+        </button>
+        <button
+          className="btn-ghost"
+          style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
+          onClick={() => exportaPDF(`Resum TEE, CL i VL — ${trimestre}`, totesLesTaules())}
+          type="button"
+        >
+          📄 Descarrega PDF
+        </button>
+      </div>
 
       <div style={{ display: 'flex', gap: 16, marginTop: 16, flexWrap: 'wrap' }}>
         <label className="field" style={{ maxWidth: 140 }}>
