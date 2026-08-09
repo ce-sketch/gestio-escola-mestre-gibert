@@ -98,6 +98,12 @@ service cloud.firestore {
       allow read, write: if esAdmin();
     }
 
+    // Economia: aportacions econòmiques de les famílies. Només accessible
+    // per l'administrador (ce@escolamestregibert.cat) — dades sensibles.
+    match /economia/{cursEscolarId} {
+      allow read, write: if esAdmin();
+    }
+
     // Per defecte, tot el que no s'hagi definit explícitament queda bloquejat.
     match /{document=**} {
       allow read, write: if false;
