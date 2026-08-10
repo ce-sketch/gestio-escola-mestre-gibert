@@ -13,6 +13,11 @@ import * as XLSX from 'xlsx'
 // l'enllaç" (lector) perquè el botó d'actualització el pugui llegir.
 const DOC_QUOTES_OFICIAL_ID = '11d6iuGeB3MhBuy_fzAJJQSXDxom8x4cVtDk4FqTq-U0'
 
+// ID del document consolidat "Activitats_Complementaries_..._I3_a_6e" a
+// Google Sheets, amb el full "Resum" ja calculat. Ha d'estar compartit com
+// "Qualsevol persona amb l'enllaç" (lector).
+const DOC_SORTIDES_OFICIAL_ID = '1BjWwDFbFqlfjn1DQ-RT1WsO-mkqg9LM_x-f-WxCem08'
+
 // Conceptes on la reducció NESE (situació socioeconòmica) és del 100%,
 // segons el criteri del centre: material escolar i activitats
 // complementàries — no s'aplica a la resta de conceptes.
@@ -190,9 +195,51 @@ export default function Economia() {
     onBlurDesa(actualitzaFila(index, { numAlumnes: String(n) }))
   }
 
+  /** Llegeix automàticament el document de sortides des de l'exportació
+   *  pública de Google Sheets (equivalent a fetchDocText, però per a fulls
+   *  de càlcul en comptes de documents de text). */
+  async function actualitzaSortidesDesDelDocument() {
+    setCarregantSortides(true)
+    setMissatge(null)
+    setSortidesTrobades(null)
+    try {
+      const url = `https://docs.google.com/spreadsheets/d/${DOC_SORTIDES_OFICIAL_ID}/export?format=xlsx`
+      const res = await fetch(url)
+      if (!res.ok) {
+        throw new Error(
+          `No s'ha pogut llegir el document (codi ${res.status}). Comprova que està compartit ` +
+          `com "Qualsevol persona amb l'enllaç" pot veure.`
+        )
+      }
+      const buffer = await res.arrayBuffer()
+      const workbook = XLSX.read(buffer, { type: 'array' })
+      processaWorkbookSortides(workbook)
+    } catch (err) {
+      setMissatge({ type: 'error', text: err.message })
+    } finally {
+      setCarregantSortides(false)
+    }
+  }
+
+  function processaWorkbookSortides(workbook) {
+    const nomFull = workbook.SheetNames.find((n) => n.toLowerCase().includes('resum'))
+    if (!nomFull) {
+      setMissatge({ type: 'error', text: 'No he trobat cap full "Resum" en aquest Excel. Comprova que és el document consolidat correcte.' })
+      return
+    }
+    const files_ = XLSX.utils.sheet_to_json(workbook.Sheets[nomFull], { header: 1, raw: false })
+    const resultats = parseResumSortides(files_)
+    if (resultats.length === 0) {
+      setMissatge({ type: 'error', text: 'No he trobat cap fila amb un total vàlid al full "Resum".' })
+    } else {
+      setSortidesTrobades(resultats)
+    }
+  }
+
   /** Puja el document consolidat "Activitats_Complementaries_XX-XX_I3_a_6e"
    *  (un sol Excel amb un full per curs i un full "Resum" ja calculat), i
-   *  en llegeix el full "Resum" directament. */
+   *  en llegeix el full "Resum" directament. Alternativa manual per si la
+   *  lectura automàtica de dalt falla algun dia. */
   function pujaResumSortides(e) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -204,19 +251,7 @@ export default function Economia() {
     reader.onload = (event) => {
       try {
         const workbook = XLSX.read(event.target.result, { type: 'binary' })
-        const nomFull = workbook.SheetNames.find((n) => n.toLowerCase().includes('resum'))
-        if (!nomFull) {
-          setMissatge({ type: 'error', text: 'No he trobat cap full "Resum" en aquest Excel. Comprova que és el document consolidat correcte.' })
-          setCarregantSortides(false)
-          return
-        }
-        const files_ = XLSX.utils.sheet_to_json(workbook.Sheets[nomFull], { header: 1, raw: false })
-        const resultats = parseResumSortides(files_)
-        if (resultats.length === 0) {
-          setMissatge({ type: 'error', text: 'No he trobat cap fila amb un total vàlid al full "Resum".' })
-        } else {
-          setSortidesTrobades(resultats)
-        }
+        processaWorkbookSortides(workbook)
       } catch (err) {
         setMissatge({ type: 'error', text: `No s'ha pogut llegir l'Excel: ${err.message}` })
       } finally {
@@ -493,19 +528,43 @@ export default function Economia() {
       </p>
 
       <div style={{ marginTop: 20, borderTop: '1px solid var(--line)', paddingTop: 16 }}>
-        <p style={{ fontSize: 13, fontWeight: 600 }}>Activitats complementàries (sortides) per curs</p>
+        <p style={{ fontSize: 13, fontWeight: 600 }}>Activitats complementàries per curs</p>
         <p className="module-note" style={{ marginTop: 4 }}>
-          Puja el document consolidat "Activitats_Complementaries_..._I3_a_6e" (baixat des de
-          Google Sheets amb "Arxiu → Baixa → Microsoft Excel (.xlsx)") — es llegeix directament
-          el full "Resum", que ja té el total calculat de cada curs.
+          Es llegeix directament el full "Resum" del document consolidat, que ja té el total
+          calculat de cada curs.
         </p>
-        <label
-          className="btn-ghost"
-          style={{ color: 'var(--navy)', borderColor: 'var(--navy)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', marginTop: 8 }}
-        >
-          {carregantSortides ? 'Llegint el document…' : '📤 Puja el document de sortides (Excel)'}
-          <input type="file" accept=".xlsx,.xls" onChange={pujaResumSortides} style={{ display: 'none' }} disabled={carregantSortides} />
-        </label>
+        <div style={{ display: 'flex', gap: 10, marginTop: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <button
+            className="btn-ghost"
+            style={{ color: 'var(--green)', borderColor: 'var(--green)' }}
+            onClick={actualitzaSortidesDesDelDocument}
+            disabled={carregantSortides}
+            type="button"
+          >
+            {carregantSortides ? 'Llegint el document…' : '↻ Actualitza activitats complementàries des del document oficial'}
+          </button>
+          <a
+            href={`https://docs.google.com/spreadsheets/d/${DOC_SORTIDES_OFICIAL_ID}/edit`}
+            target="_blank"
+            rel="noreferrer"
+            className="btn-ghost"
+            style={{ color: 'var(--ink-soft)', borderColor: 'var(--line)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', fontSize: 12 }}
+          >
+            👁 Obre el document per consultar-lo
+          </a>
+          <label
+            className="btn-ghost"
+            style={{ color: 'var(--navy)', borderColor: 'var(--navy)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center' }}
+          >
+            📤 Puja el document manualment
+            <input type="file" accept=".xlsx,.xls" onChange={pujaResumSortides} style={{ display: 'none' }} disabled={carregantSortides} />
+          </label>
+        </div>
+        <p className="module-note" style={{ marginTop: 4 }}>
+          Si algun dia el botó "Actualitza" de dalt deixa de funcionar, baixa el document
+          manualment des de Google Sheets amb "Arxiu → Baixa → Microsoft Excel (.xlsx)" i
+          puja'l aquí — s'interpretarà exactament igual.
+        </p>
 
         {sortidesTrobades && (
           <div className="placeholder-box" style={{ borderStyle: 'solid', marginTop: 12 }}>
