@@ -5,7 +5,9 @@ import { cursEscolarActual } from '../../lib/cursEscolar'
 import { FESTES, mitjanaValoracio, mitjanaObjectiu, objectiuBuit, actuacioBuida } from '../../lib/valoracions'
 import { exportaValoracionsExcel, exportaValoracionsPDF } from '../../lib/valoracionsExport'
 import { carregaConfigValoracions, desaConfigValoracions } from '../../lib/valoracionsConfig'
-import { interpretaResum, interpretaFullObjectiu } from '../../lib/comissioTemplateParser'
+import { interpretaResum, interpretaFullObjectiu, interpretaResumCicle, interpretaResumFesta, interpretaFullGrupFesta } from '../../lib/comissioTemplateParser'
+import { CICLES } from '../../lib/valoracions'
+import { GRUPS, festaBuida, objectiuFestaBuit, activitatBuida } from '../../lib/festesDetall'
 import { slug } from '../../lib/slug'
 import * as XLSX from 'xlsx'
 
@@ -151,6 +153,161 @@ export default function MatriuGeneral() {
     e.target.value = ''
   }
 
+  const [pujantCicle, setPujantCicle] = useState(false)
+  const [resultatCicle, setResultatCicle] = useState(null)
+
+  /** Puja una plantilla senzilla de CICLE (un sol full, sense fulls
+   *  d'objectiu separats) i crea/actualitza la valoració d'aquest curs. */
+  function pujaPlantillaCicle(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setPujantCicle(true)
+    setMissatge(null)
+    setResultatCicle(null)
+
+    const reader = new FileReader()
+    reader.onload = async (event) => {
+      try {
+        const workbook = XLSX.read(event.target.result, { type: 'binary' })
+        const nomFull = workbook.SheetNames.find((n) => n.toLowerCase().includes('valoraci')) ?? workbook.SheetNames[0]
+        const files_ = XLSX.utils.sheet_to_json(workbook.Sheets[nomFull], { header: 1, raw: false })
+        const { nom, responsable, membres, objectius: textosObjectius, metodologies } = interpretaResumCicle(files_)
+
+        const nomCicle = CICLES.find((c) => c.toLowerCase() === nom.toLowerCase()) ?? nom
+        if (!nomCicle || textosObjectius.length === 0) {
+          setMissatge({ type: 'error', text: 'No he pogut interpretar aquesta plantilla de cicle — comprova que és el fitxer correcte.' })
+          setPujantCicle(false)
+          return
+        }
+
+        const objectius = textosObjectius.map((text) => {
+          const o = objectiuBuit()
+          o.text = text
+          return o
+        })
+
+        const id = `${cursEscolarId}__${slug(nomCicle)}`
+        await setDoc(doc(db, 'valoracions', id), {
+          nom: nomCicle,
+          responsable,
+          membres,
+          objectius,
+          valoracioRevisio: '',
+          valoracioFinal: '',
+          metodologies,
+          propostesMillora: '',
+          cursEscolar: cursEscolarId,
+          actualitzatEl: serverTimestamp(),
+          actualitzatPer: auth.currentUser?.email ?? null,
+        })
+
+        setResultatCicle({ nom: nomCicle, numObjectius: objectius.length })
+        await carrega()
+      } catch (err) {
+        setMissatge({ type: 'error', text: `No s'ha pogut llegir la plantilla: ${err.message}` })
+      } finally {
+        setPujantCicle(false)
+      }
+    }
+    reader.onerror = () => {
+      setMissatge({ type: 'error', text: 'No s\'ha pogut llegir el fitxer.' })
+      setPujantCicle(false)
+    }
+    reader.readAsBinaryString(file)
+    e.target.value = ''
+  }
+
+  const [pujantFesta, setPujantFesta] = useState(false)
+  const [resultatFesta, setResultatFesta] = useState(null)
+
+  /** Puja una plantilla de FESTA (full "Resum" + un full per cada grup:
+   *  Educació Infantil, Cicle Inicial...) i crea/actualitza la valoració
+   *  detallada d'aquesta festa per aquest curs. */
+  function pujaPlantillaFesta(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setPujantFesta(true)
+    setMissatge(null)
+    setResultatFesta(null)
+
+    const reader = new FileReader()
+    reader.onload = async (event) => {
+      try {
+        const workbook = XLSX.read(event.target.result, { type: 'binary' })
+        const nomFullResum = workbook.SheetNames.find((n) => n.toLowerCase().includes('resum')) ?? workbook.SheetNames[0]
+        const filesResum = XLSX.utils.sheet_to_json(workbook.Sheets[nomFullResum], { header: 1, raw: false })
+        const resumFesta = interpretaResumFesta(filesResum)
+
+        if (!resumFesta.activitat || resumFesta.objectius.length === 0) {
+          setMissatge({ type: 'error', text: 'No he pogut interpretar aquesta plantilla de festa — comprova que és el fitxer correcte (amb un full "Resum").' })
+          setPujantFesta(false)
+          return
+        }
+
+        const festival = FESTES.find((f) => resumFesta.activitat.toLowerCase().includes(f.label.toLowerCase()) || f.label.toLowerCase().includes(resumFesta.activitat.toLowerCase().replace(/^festa (de |del |la )?/i, '')))
+        if (!festival) {
+          setMissatge({ type: 'error', text: `No he pogut identificar quina festa és "${resumFesta.activitat}" — comprova que el nom coincideix amb una de la llista.` })
+          setPujantFesta(false)
+          return
+        }
+
+        const nova = festaBuida(festival.label)
+        nova.data = resumFesta.data
+        nova.pesCicles = resumFesta.pesCicles
+        nova.pesEquipDirectiu = resumFesta.pesEquipDirectiu
+        nova.objectius = resumFesta.objectius.map(({ num, text, pes }) => {
+          const o = objectiuFestaBuit(pes)
+          o.text = text
+          o._num = num // temporal, per emparellar amb els grups
+          return o
+        })
+
+        const grups = {}
+        for (const g of GRUPS) {
+          grups[g] = {}
+          const nomFullGrup = workbook.SheetNames.find((n) => n.trim().toLowerCase() === g.toLowerCase())
+          const activitatsPerObjectiu = nomFullGrup
+            ? interpretaFullGrupFesta(XLSX.utils.sheet_to_json(workbook.Sheets[nomFullGrup], { header: 1, raw: false }), resumFesta.objectius)
+            : {}
+          nova.objectius.forEach((o) => {
+            const textos = activitatsPerObjectiu[o._num] ?? []
+            grups[g][o.id] = {
+              activitats: textos.map(({ text }) => { const a = activitatBuida(); a.text = text; return a }),
+              comentaris: '',
+            }
+          })
+        }
+        nova.grups = grups
+        nova.objectius.forEach((o) => { delete o._num })
+
+        const id = `${cursEscolarId}__festa-${festival.id}`
+        await setDoc(doc(db, 'festesDetall', id), {
+          festa: nova,
+          cursEscolar: cursEscolarId,
+          actualitzatEl: serverTimestamp(),
+          actualitzatPer: auth.currentUser?.email ?? null,
+        })
+
+        if (!config.festes.find((f) => f.id === festival.id)?.activa) {
+          await desaConfig({ ...config, festes: config.festes.map((f) => f.id === festival.id ? { ...f, activa: true } : f) })
+        }
+
+        const totalActivitats = Object.values(grups).reduce((acc, g) => acc + Object.values(g).reduce((a2, o) => a2 + o.activitats.length, 0), 0)
+        setResultatFesta({ nom: festival.label, numObjectius: nova.objectius.length, numActivitats: totalActivitats })
+      } catch (err) {
+        setMissatge({ type: 'error', text: `No s'ha pogut llegir la plantilla: ${err.message}` })
+      } finally {
+        setPujantFesta(false)
+      }
+    }
+    reader.onerror = () => {
+      setMissatge({ type: 'error', text: 'No s\'ha pogut llegir el fitxer.' })
+      setPujantFesta(false)
+    }
+    reader.readAsBinaryString(file)
+    e.target.value = ''
+  }
+
 
   async function carrega() {
     setCarregant(true)
@@ -194,7 +351,22 @@ export default function MatriuGeneral() {
           <p style={{ marginTop: 10, fontSize: 13, color: 'var(--ink-soft)' }}>Carregant…</p>
         ) : (
           <div className="placeholder-box" style={{ borderStyle: 'solid', marginTop: 10 }}>
-            <p style={{ fontSize: 13, fontWeight: 600 }}>Comissions i equips</p>
+            <p style={{ fontSize: 13, fontWeight: 600 }}>Cicles</p>
+            <p style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 2 }}>
+              Els 4 cicles sempre estan disponibles per als docents — aquí només pots pujar-hi
+              una plantilla ja omplerta per a un curs concret.
+            </p>
+            <label className="btn-ghost" style={{ fontSize: 12, padding: '5px 10px', cursor: 'pointer', display: 'inline-flex', marginTop: 6 }}>
+              {pujantCicle ? 'Llegint la plantilla…' : '📤 Puja una plantilla de cicle (Excel)'}
+              <input type="file" accept=".xlsx,.xls" onChange={pujaPlantillaCicle} style={{ display: 'none' }} disabled={pujantCicle} />
+            </label>
+            {resultatCicle && (
+              <p style={{ fontSize: 12, color: 'var(--green)', marginTop: 6 }}>
+                ✓ "{resultatCicle.nom}" actualitzat amb {resultatCicle.numObjectius} objectius.
+              </p>
+            )}
+
+            <p style={{ fontSize: 13, fontWeight: 600, marginTop: 20 }}>Comissions i equips</p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 6 }}>
               {config.comissions.map((c) => (
                 <label key={c.nom} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, opacity: c.activa ? 1 : 0.5 }}>
@@ -237,6 +409,15 @@ export default function MatriuGeneral() {
                 )
               })}
             </div>
+            <label className="btn-ghost" style={{ fontSize: 12, padding: '5px 10px', cursor: 'pointer', display: 'inline-flex', marginTop: 10 }}>
+              {pujantFesta ? 'Llegint la plantilla…' : '📤 Puja una plantilla de festa (Excel, amb tots els fulls de grup)'}
+              <input type="file" accept=".xlsx,.xls" onChange={pujaPlantillaFesta} style={{ display: 'none' }} disabled={pujantFesta} />
+            </label>
+            {resultatFesta && (
+              <p style={{ fontSize: 12, color: 'var(--green)', marginTop: 6 }}>
+                ✓ "{resultatFesta.nom}" actualitzada amb {resultatFesta.numObjectius} objectius i {resultatFesta.numActivitats} activitats. Ja està activa per als docents.
+              </p>
+            )}
             <p style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 10 }}>
               Es desa sol. El professorat, des de "Documentació", només veurà com a opció el que
               estigui marcat aquí — desmarcar-ne una no esborra les dades que ja s'hi hagin
