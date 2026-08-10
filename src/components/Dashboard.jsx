@@ -21,7 +21,7 @@ const MODULES = [
   { id: 'avaluacio', label: 'Avaluació', component: Avaluacio },
   { id: 'assistencia', label: 'Assistència', component: Assistencia },
   { id: 'absentisme', label: 'Absentisme', component: Absentisme },
-  { id: 'documentacio', label: 'Documentació', component: Documentacio },
+  { id: 'documentacio', label: 'Valoracions', component: Documentacio },
   { id: 'economia', label: 'Economia', component: Economia, nomesAdmin: true },
   { id: 'pgac', label: 'PGAC', component: Pgac, nomesAdmin: true },
   { id: 'matriu', label: 'Quadre de comandament', component: MatriuGeneral, nomesAdmin: true },
