@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react'
-import { collection, getDocs, query, where } from 'firebase/firestore'
-import { db } from '../../firebase'
+import { collection, doc, getDocs, query, setDoc, serverTimestamp, where } from 'firebase/firestore'
+import { db, auth } from '../../firebase'
 import { cursEscolarActual } from '../../lib/cursEscolar'
-import { FESTES, mitjanaValoracio, mitjanaObjectiu } from '../../lib/valoracions'
+import { FESTES, mitjanaValoracio, mitjanaObjectiu, objectiuBuit, actuacioBuida } from '../../lib/valoracions'
 import { exportaValoracionsExcel, exportaValoracionsPDF } from '../../lib/valoracionsExport'
+import { carregaConfigValoracions, desaConfigValoracions } from '../../lib/valoracionsConfig'
+import { interpretaResum, interpretaFullObjectiu } from '../../lib/comissioTemplateParser'
+import { slug } from '../../lib/slug'
+import * as XLSX from 'xlsx'
 
 function colorPer(valor) {
   if (valor === null || valor === undefined) return 'var(--ink-soft)'
@@ -20,10 +24,133 @@ export default function MatriuGeneral() {
   const [missatge, setMissatge] = useState(null)
   const [obert, setObert] = useState(null)
 
+  const [config, setConfig] = useState(null)
+  const [nomNouComissio, setNomNouComissio] = useState('')
+  const [desantConfig, setDesantConfig] = useState(false)
+
   useEffect(() => {
     carrega()
+    carregaConfig()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cursEscolarId])
+
+  async function carregaConfig() {
+    try {
+      setConfig(await carregaConfigValoracions(cursEscolarId))
+    } catch (err) {
+      setMissatge({ type: 'error', text: `No s'ha pogut carregar la configuració: ${err.message}` })
+    }
+  }
+
+  async function desaConfig(configNova) {
+    setConfig(configNova)
+    setDesantConfig(true)
+    try {
+      await desaConfigValoracions(cursEscolarId, configNova)
+    } catch (err) {
+      setMissatge({ type: 'error', text: `No s'ha pogut desar la configuració: ${err.message}` })
+    } finally {
+      setDesantConfig(false)
+    }
+  }
+
+  function toggleComissio(nom) {
+    desaConfig({ ...config, comissions: config.comissions.map((c) => c.nom === nom ? { ...c, activa: !c.activa } : c) })
+  }
+
+  function toggleFesta(id) {
+    desaConfig({ ...config, festes: config.festes.map((f) => f.id === id ? { ...f, activa: !f.activa } : f) })
+  }
+
+  function afegeixComissio() {
+    const nom = nomNouComissio.trim()
+    if (!nom || config.comissions.some((c) => c.nom === nom)) return
+    desaConfig({ ...config, comissions: [...config.comissions, { nom, activa: true }] })
+    setNomNouComissio('')
+  }
+
+  const [pujantPlantilla, setPujantPlantilla] = useState(false)
+  const [resultatPlantilla, setResultatPlantilla] = useState(null)
+
+  /** Puja una plantilla "Valoració [Comissió/Equip]" (Excel amb un full
+   *  "Resum" i un full "Objectiu N" per cada objectiu), la interpreta, i
+   *  crea directament la valoració d'aquest curs escolar ja omplerta amb
+   *  el text real — a més d'activar-la a la llista de comissions. */
+  function pujaPlantillaComissio(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setPujantPlantilla(true)
+    setMissatge(null)
+    setResultatPlantilla(null)
+
+    const reader = new FileReader()
+    reader.onload = async (event) => {
+      try {
+        const workbook = XLSX.read(event.target.result, { type: 'binary' })
+        const nomFullResum = workbook.SheetNames.find((n) => n.toLowerCase().includes('resum')) ?? workbook.SheetNames[0]
+        const filesResum = XLSX.utils.sheet_to_json(workbook.Sheets[nomFullResum], { header: 1, raw: false })
+        const { nom, responsable, membres, objectius: objectiusResum } = interpretaResum(filesResum)
+
+        if (!nom || objectiusResum.length === 0) {
+          setMissatge({ type: 'error', text: 'No he pogut interpretar aquesta plantilla — comprova que és el fitxer correcte (amb un full "Resum").' })
+          setPujantPlantilla(false)
+          return
+        }
+
+        const objectius = objectiusResum.map(({ num, text }) => {
+          const o = objectiuBuit()
+          o.text = text
+          const nomFullObjectiu = workbook.SheetNames.find((n) => new RegExp(`^objectiu\\s*${num}$`, 'i').test(n.trim()))
+          if (nomFullObjectiu) {
+            const filesObjectiu = XLSX.utils.sheet_to_json(workbook.Sheets[nomFullObjectiu], { header: 1, raw: false })
+            const actuacionsText = interpretaFullObjectiu(filesObjectiu)
+            o.actuacions = actuacionsText.map(({ text, indicador }) => {
+              const a = actuacioBuida()
+              a.text = text
+              a.indicador = indicador
+              return a
+            })
+          }
+          return o
+        })
+
+        // Creem/actualitzem la valoració d'aquest curs amb el que hem trobat.
+        const id = `${cursEscolarId}__${slug(nom)}`
+        await setDoc(doc(db, 'valoracions', id), {
+          nom,
+          responsable,
+          membres,
+          objectius,
+          valoracioRevisio: '',
+          valoracioFinal: '',
+          metodologies: '',
+          propostesMillora: '',
+          cursEscolar: cursEscolarId,
+          actualitzatEl: serverTimestamp(),
+          actualitzatPer: auth.currentUser?.email ?? null,
+        })
+
+        // I l'activem a la llista de comissions perquè els docents ja la vegin.
+        if (!config.comissions.some((c) => c.nom === nom)) {
+          await desaConfig({ ...config, comissions: [...config.comissions, { nom, activa: true }] })
+        }
+
+        setResultatPlantilla({ nom, numObjectius: objectius.length, numActuacions: objectius.reduce((a, o) => a + o.actuacions.length, 0) })
+        await carrega()
+      } catch (err) {
+        setMissatge({ type: 'error', text: `No s'ha pogut llegir la plantilla: ${err.message}` })
+      } finally {
+        setPujantPlantilla(false)
+      }
+    }
+    reader.onerror = () => {
+      setMissatge({ type: 'error', text: 'No s\'ha pogut llegir el fitxer.' })
+      setPujantPlantilla(false)
+    }
+    reader.readAsBinaryString(file)
+    e.target.value = ''
+  }
+
 
   async function carrega() {
     setCarregant(true)
@@ -58,6 +185,66 @@ export default function MatriuGeneral() {
       </label>
 
       {missatge && <p style={{ marginTop: 12, fontSize: 13, color: 'var(--red)' }}>{missatge.text}</p>}
+
+      <details style={{ marginTop: 20 }}>
+        <summary style={{ cursor: 'pointer', fontWeight: 600 }}>
+          ⚙ Quines comissions i festes surten activades per als docents {desantConfig && <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--ink-soft)' }}>(desant…)</span>}
+        </summary>
+        {!config ? (
+          <p style={{ marginTop: 10, fontSize: 13, color: 'var(--ink-soft)' }}>Carregant…</p>
+        ) : (
+          <div className="placeholder-box" style={{ borderStyle: 'solid', marginTop: 10 }}>
+            <p style={{ fontSize: 13, fontWeight: 600 }}>Comissions i equips</p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 6 }}>
+              {config.comissions.map((c) => (
+                <label key={c.nom} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, opacity: c.activa ? 1 : 0.5 }}>
+                  <input type="checkbox" checked={c.activa} onChange={() => toggleComissio(c.nom)} />
+                  {c.nom}
+                </label>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+              <input
+                type="text"
+                value={nomNouComissio}
+                onChange={(e) => setNomNouComissio(e.target.value)}
+                placeholder="Nom d'una comissió/equip nova"
+                style={{ border: '1px solid var(--line)', borderRadius: 6, padding: '6px 8px', fontSize: 12 }}
+              />
+              <button type="button" onClick={afegeixComissio} className="btn-ghost" style={{ fontSize: 12, padding: '5px 10px' }}>
+                + Afegeix en blanc
+              </button>
+              <label className="btn-ghost" style={{ fontSize: 12, padding: '5px 10px', cursor: 'pointer' }}>
+                {pujantPlantilla ? 'Llegint la plantilla…' : '📤 O puja una plantilla (Excel) ja omplerta'}
+                <input type="file" accept=".xlsx,.xls" onChange={pujaPlantillaComissio} style={{ display: 'none' }} disabled={pujantPlantilla} />
+              </label>
+            </div>
+            {resultatPlantilla && (
+              <p style={{ fontSize: 12, color: 'var(--green)', marginTop: 6 }}>
+                ✓ "{resultatPlantilla.nom}" creada amb {resultatPlantilla.numObjectius} objectius i {resultatPlantilla.numActuacions} actuacions. Ja està activa per als docents.
+              </p>
+            )}
+
+            <p style={{ fontSize: 13, fontWeight: 600, marginTop: 16 }}>Festes</p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 6 }}>
+              {config.festes.map((f) => {
+                const label = FESTES.find((ff) => ff.id === f.id)?.label ?? f.id
+                return (
+                  <label key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, opacity: f.activa ? 1 : 0.5 }}>
+                    <input type="checkbox" checked={f.activa} onChange={() => toggleFesta(f.id)} />
+                    {label}
+                  </label>
+                )
+              })}
+            </div>
+            <p style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 10 }}>
+              Es desa sol. El professorat, des de "Documentació", només veurà com a opció el que
+              estigui marcat aquí — desmarcar-ne una no esborra les dades que ja s'hi hagin
+              introduït, només l'amaga de la llista.
+            </p>
+          </div>
+        )}
+      </details>
 
       {valoracions.length > 0 && (
         <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap' }}>
