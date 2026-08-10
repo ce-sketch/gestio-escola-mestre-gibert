@@ -5,6 +5,7 @@ import { redueixVigents } from '../../../lib/avaluacioCatala'
 import { CRITERIS_TEE, NIVELLS_PER_CICLE, cicleDe } from '../../../lib/rubricaTEE'
 import { MOMENTS_LECTURA } from '../../../lib/rubricaLectura'
 import { cursEscolarActual } from '../../../lib/cursEscolar'
+import { generaInformeQualitatiu } from '../../../lib/informeQualitatiu'
 
 const TRIMESTRES = ['1r trimestre', '2n trimestre', '3r trimestre']
 
@@ -18,6 +19,8 @@ export default function InformeCatala() {
   const [lecturaRegistres, setLecturaRegistres] = useState([])
   const [carregantInforme, setCarregantInforme] = useState(false)
   const [missatge, setMissatge] = useState(null)
+  const [textInforme, setTextInforme] = useState('')
+  const [copiat, setCopiat] = useState(false)
 
   useEffect(() => {
     async function carrega() {
@@ -84,6 +87,43 @@ export default function InformeCatala() {
   )
 
   const alumneActual = alumnesClasse.find((a) => a.id === alumneId)
+
+  function generaText() {
+    if (!alumneActual) return
+    const nivellsCicle = NIVELLS_PER_CICLE[cicleDe(curs)]
+    const teePerTrimestre = {}
+    for (const t of TRIMESTRES) {
+      const reg = teeAlumne.find((r) => r.trimestre === t)
+      if (reg) teePerTrimestre[t] = reg
+    }
+    const lecturaPerMoment = {}
+    for (const m of MOMENTS_LECTURA) {
+      const reg = lecturaAlumne.find((r) => r.moment === m.id)
+      if (reg) lecturaPerMoment[m.id] = reg
+    }
+    const text = generaInformeQualitatiu({
+      nom: alumneActual.nom.split(',').reverse().join(' ').trim(), // "Cognoms, Nom" -> "Nom Cognoms"
+      trimestres: TRIMESTRES,
+      teePerTrimestre,
+      criterisTee: CRITERIS_TEE,
+      nivellsCicle,
+      momentsLectura: MOMENTS_LECTURA,
+      lecturaPerMoment,
+    })
+    setTextInforme(text)
+  }
+
+  useEffect(() => {
+    generaText()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [alumneId, teeAlumne, lecturaAlumne])
+
+  function copiaText() {
+    navigator.clipboard.writeText(textInforme).then(() => {
+      setCopiat(true)
+      setTimeout(() => setCopiat(false), 2000)
+    })
+  }
 
   if (carregant) return <p>Carregant…</p>
 
@@ -207,6 +247,31 @@ export default function InformeCatala() {
               als apartats "TEE" o "Lectura" d'aquest mateix mòdul.
             </div>
           )}
+
+          <p className="module-note" style={{ marginTop: 28, fontStyle: 'normal', fontWeight: 600, color: 'var(--ink)' }}>
+            Informe qualitatiu (per enganxar a l'acta d'avaluació)
+          </p>
+          <p className="module-note" style={{ marginTop: 4 }}>
+            Redactat automàticament a partir de les notes de dalt. Revisa-ho i retoca-ho al teu
+            gust — és un punt de partida, no un text definitiu.
+          </p>
+          <textarea
+            value={textInforme}
+            onChange={(e) => setTextInforme(e.target.value)}
+            rows={8}
+            style={{
+              width: '100%', marginTop: 10, border: '1px solid var(--line)', borderRadius: 8,
+              padding: 12, fontSize: 14, fontFamily: 'inherit', lineHeight: 1.5, resize: 'vertical',
+            }}
+          />
+          <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
+            <button type="button" className="btn-primary" style={{ maxWidth: 160 }} onClick={copiaText}>
+              {copiat ? '✓ Copiat' : '📋 Copia el text'}
+            </button>
+            <button type="button" className="btn-ghost" style={{ maxWidth: 180 }} onClick={generaText}>
+              ↻ Torna a generar
+            </button>
+          </div>
         </>
       )}
 
