@@ -1,5 +1,6 @@
 import { useState, lazy, Suspense } from 'react'
 import { esAdmin } from '../lib/roles'
+import ModuleErrorBoundary from './ModuleErrorBoundary.jsx'
 
 const Inici = lazy(() => import('./modules/Inici.jsx'))
 const Alumnes = lazy(() => import('./modules/Alumnes.jsx'))
@@ -67,9 +68,11 @@ export default function Dashboard({ user, onSignOut }) {
         </nav>
 
         <main className="content">
-          <Suspense fallback={<div className="loader" style={{ marginTop: 40 }} />}>
-            <ActiveModule />
-          </Suspense>
+          <ModuleErrorBoundary key={activeId}>
+            <Suspense fallback={<div className="loader" style={{ marginTop: 40 }} />}>
+              <ActiveModule />
+            </Suspense>
+          </ModuleErrorBoundary>
         </main>
       </div>
     </div>
