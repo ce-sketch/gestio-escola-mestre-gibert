@@ -70,23 +70,48 @@ export default function Economia() {
   /** Llegeix el document oficial de preus i mostra tots els imports en
    *  euros que hi troba — no s'apliquen sols, perquè el mestre triï a
    *  quina fila i concepte correspon cadascun. */
+  function aplicaTextPreus(text) {
+    const trobats = parseOfficialQuotesText(text)
+    if (trobats.length === 0) {
+      setMissatge({ type: 'error', text: 'No he trobat cap import en euros al document. Comprova que és el document correcte.' })
+    } else {
+      setPreusTrobats(trobats)
+    }
+  }
+
   async function actualitzaPreusDesDelDocument() {
     setActualitzantPreus(true)
     setMissatge(null)
     setPreusTrobats(null)
     try {
       const text = await fetchDocText(DOC_QUOTES_OFICIAL_ID)
-      const trobats = parseOfficialQuotesText(text)
-      if (trobats.length === 0) {
-        setMissatge({ type: 'error', text: 'No he trobat cap import en euros al document. Comprova que és el document correcte.' })
-      } else {
-        setPreusTrobats(trobats)
-      }
+      aplicaTextPreus(text)
     } catch (err) {
       setMissatge({ type: 'error', text: err.message })
     } finally {
       setActualitzantPreus(false)
     }
+  }
+
+  /** Alternativa manual per si l'enllaç automàtic falla algun dia: puja una
+   *  còpia del document (baixada com a "Text pla (.txt)" des de Google
+   *  Docs) i s'interpreta amb exactament la mateixa lògica. */
+  function pujaFitxerPreusManualment(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setMissatge(null)
+    setPreusTrobats(null)
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      try {
+        aplicaTextPreus(event.target.result)
+      } catch (err) {
+        setMissatge({ type: 'error', text: `No s'ha pogut interpretar el fitxer: ${err.message}` })
+      }
+    }
+    reader.onerror = () => setMissatge({ type: 'error', text: 'No s\'ha pogut llegir el fitxer.' })
+    reader.readAsText(file, 'UTF-8')
+    e.target.value = ''
   }
 
   /** Desa TOT el document d'aquest curs escolar — es crida sola en sortir
@@ -283,11 +308,23 @@ export default function Economia() {
           target="_blank"
           rel="noreferrer"
           className="btn-ghost"
-          style={{ color: 'var(--navy)', borderColor: 'var(--navy)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}
+          style={{ color: 'var(--ink-soft)', borderColor: 'var(--line)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', fontSize: 12 }}
         >
-          📄 Descarrega el document manualment
+          👁 Obre el document per consultar-lo
         </a>
+        <label
+          className="btn-ghost"
+          style={{ color: 'var(--navy)', borderColor: 'var(--navy)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center' }}
+        >
+          📤 Puja el document manualment
+          <input type="file" accept=".txt" onChange={pujaFitxerPreusManualment} style={{ display: 'none' }} />
+        </label>
       </div>
+      <p className="module-note" style={{ marginTop: 4 }}>
+        Si algun dia el botó "Actualitza" de dalt deixa de funcionar (per exemple perquè es
+        trenca el permís de compartició), baixa el document manualment des de Google Docs amb
+        "Arxiu → Baixa → Text pla (.txt)" i puja'l aquí — s'interpretarà exactament igual.
+      </p>
 
       {preusTrobats && (
         <div className="placeholder-box" style={{ borderStyle: 'solid', marginTop: 12 }}>
