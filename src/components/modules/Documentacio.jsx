@@ -13,6 +13,7 @@ import {
   mitjanaObjectiuGrup, mitjanaGrup, mitjanaGeneralFesta,
 } from '../../lib/festesDetall'
 import { CURS_AMB_PLANTILLA as CURS_FESTES, FESTES_PLANTILLES_26_27, construeixFestaAmbPlantilla } from '../../lib/festesPlantilles26_27'
+import { carregaConfigValoracions } from '../../lib/valoracionsConfig'
 
 function inputPercent(valor, onChange, onBlur) {
   return (
@@ -39,6 +40,11 @@ export default function Documentacio() {
   const [festaId, setFestaId] = useState('')
   const [festa, setFesta] = useState(null)
   const [grupObert, setGrupObert] = useState(GRUPS[0])
+  const [configActiva, setConfigActiva] = useState(null)
+
+  useEffect(() => {
+    carregaConfigValoracions(cursEscolarId).then(setConfigActiva).catch(() => setConfigActiva(null))
+  }, [cursEscolarId])
 
   useEffect(() => {
     carregaNomsExistents()
@@ -294,19 +300,21 @@ export default function Documentacio() {
 
   return (
     <div className="module">
-      <p className="module-eyebrow">Mòdul en construcció</p>
-      <h2>Documentació</h2>
-      <p className="module-lead">
-        Aquí es guardaran els documents de cada alumne (autoritzacions, informes, certificats).
-        Els fitxers s'emmagatzemaran a Cloudflare R2, i cada document quedarà enllaçat a
-        l'alumne corresponent sense afectar la resta de mòduls.
-      </p>
-      <div className="placeholder-box">
-        Properament: pujada de documents, categorització per tipus i cerca per alumne.
+      <h2>Valoracions</h2>
+
+      <div style={{ marginTop: 8 }}>
+        <p className="module-eyebrow">Mòdul en construcció</p>
+        <p className="module-lead">
+          Aquí es guardaran també els documents de cada alumne (autoritzacions, informes,
+          certificats). Els fitxers s'emmagatzemaran a Cloudflare R2, i cada document quedarà
+          enllaçat a l'alumne corresponent sense afectar la resta del mòdul.
+        </p>
+        <div className="placeholder-box">
+          Properament: pujada de documents, categorització per tipus i cerca per alumne.
+        </div>
       </div>
 
       <div style={{ marginTop: 32, borderTop: '1px solid var(--line)', paddingTop: 20 }}>
-        <p className="module-eyebrow" style={{ marginTop: 0 }}>Valoracions</p>
         <h3 style={{ marginTop: 4, fontSize: 18 }}>Valoració de cicle / comissió / equip</h3>
         <p className="module-lead">
           Mateixa estructura que els fulls "Valoració ..." de sempre: Responsable, Membres,
@@ -378,7 +386,10 @@ export default function Documentacio() {
                 style={{ border: '1px solid var(--line)', borderRadius: 8, padding: '8px 10px' }}
               />
               <datalist id="noms-valoracio">
-                {[...new Set([...NOMS_SUGGERITS, ...nomsExistents.filter((n) => !CICLES.includes(n))])].map((n) => <option key={n} value={n} />)}
+                {[...new Set([
+                  ...(configActiva?.comissions.filter((c) => c.activa).map((c) => c.nom) ?? NOMS_SUGGERITS),
+                  ...nomsExistents.filter((n) => !CICLES.includes(n)),
+                ])].map((n) => <option key={n} value={n} />)}
               </datalist>
             </label>
           ) : (
@@ -390,7 +401,8 @@ export default function Documentacio() {
                 style={{ border: '1px solid var(--line)', borderRadius: 8, padding: '10px 12px' }}
               >
                 <option value="">Tria una festa…</option>
-                {FESTES.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
+                {FESTES.filter((f) => configActiva ? configActiva.festes.find((cf) => cf.id === f.id)?.activa !== false : true)
+                  .map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
               </select>
             </label>
           )}
