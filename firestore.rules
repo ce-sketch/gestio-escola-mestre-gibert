@@ -117,6 +117,12 @@ service cloud.firestore {
       allow read, write: if esComptePersonal();
     }
 
+    // Valoracions detallades de festes (objectius + desglossament per
+    // cicle/equip amb activitats i grau d'assoliment) — mateix accés.
+    match /festesDetall/{festaId} {
+      allow read, write: if esComptePersonal();
+    }
+
     // Per defecte, tot el que no s'hagi definit explícitament queda bloquejat.
     match /{document=**} {
       allow read, write: if false;
