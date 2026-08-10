@@ -5,7 +5,8 @@ import { cursEscolarActual } from '../../lib/cursEscolar'
 import { ENSENYAMENTS, CURSOS, CONCEPTES, conceptaBuit, filaBuida, totalConcepte, totalFila } from '../../lib/economia'
 import { exportaExcelOficial } from '../../lib/economiaExcelOficial'
 import { fetchDocText } from '../../lib/officialCalendarDoc'
-import { parseOfficialQuotesText } from '../../lib/officialQuotesDoc'
+import { parseOfficialQuotesText, parseResumSortides } from '../../lib/officialQuotesDoc'
+import * as XLSX from 'xlsx'
 
 // ID del document "Recull informatiu de les famílies" a Google Docs, amb
 // els preus de quotes. Ha d'estar compartit com "Qualsevol persona amb
@@ -23,6 +24,8 @@ export default function Economia() {
   const [codiCentre, setCodiCentre] = useState('')
   const [preusTrobats, setPreusTrobats] = useState(null)
   const [actualitzantPreus, setActualitzantPreus] = useState(false)
+  const [sortidesTrobades, setSortidesTrobades] = useState(null)
+  const [carregantSortides, setCarregantSortides] = useState(false)
   const [carregant, setCarregant] = useState(true)
   const [desant, setDesant] = useState(false)
   const [missatge, setMissatge] = useState(null)
@@ -185,6 +188,63 @@ export default function Economia() {
     onBlurDesa(actualitzaFila(index, { numAlumnes: String(n) }))
   }
 
+  /** Puja el document consolidat "Activitats_Complementaries_XX-XX_I3_a_6e"
+   *  (un sol Excel amb un full per curs i un full "Resum" ja calculat), i
+   *  en llegeix el full "Resum" directament. */
+  function pujaResumSortides(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setCarregantSortides(true)
+    setMissatge(null)
+    setSortidesTrobades(null)
+
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      try {
+        const workbook = XLSX.read(event.target.result, { type: 'binary' })
+        const nomFull = workbook.SheetNames.find((n) => n.toLowerCase().includes('resum'))
+        if (!nomFull) {
+          setMissatge({ type: 'error', text: 'No he trobat cap full "Resum" en aquest Excel. Comprova que és el document consolidat correcte.' })
+          setCarregantSortides(false)
+          return
+        }
+        const files_ = XLSX.utils.sheet_to_json(workbook.Sheets[nomFull], { header: 1, raw: false })
+        const resultats = parseResumSortides(files_)
+        if (resultats.length === 0) {
+          setMissatge({ type: 'error', text: 'No he trobat cap fila amb un total vàlid al full "Resum".' })
+        } else {
+          setSortidesTrobades(resultats)
+        }
+      } catch (err) {
+        setMissatge({ type: 'error', text: `No s'ha pogut llegir l'Excel: ${err.message}` })
+      } finally {
+        setCarregantSortides(false)
+      }
+    }
+    reader.onerror = () => {
+      setMissatge({ type: 'error', text: 'No s\'ha pogut llegir el fitxer.' })
+      setCarregantSortides(false)
+    }
+    reader.readAsBinaryString(file)
+    e.target.value = ''
+  }
+
+  /** Aplica el total de sortides trobat a l'"Import unitari" del concepte
+   *  "Activitats complementàries" de la fila que coincideixi amb el curs. */
+  function aplicaTotalSortides(curs, total) {
+    const index = files.findIndex((f) => f.curs === curs)
+    if (index === -1) {
+      setMissatge({ type: 'error', text: `No hi ha cap fila amb el curs "${curs}" — afegeix-la primer amb "+ Afegeix fila".` })
+      return
+    }
+    const noves = files.map((f, i) => {
+      if (i !== index) return f
+      return { ...f, conceptes: { ...f.conceptes, activitatsComplementaries: { ...f.conceptes.activitatsComplementaries, importUnitari: String(total) } } }
+    })
+    setFiles(noves)
+    desaTot(noves)
+  }
+
   /** Compta alumnes amb reducció NESE (situació socioeconòmica) que
    *  coincideixen amb el curs genèric d'una fila (per exemple "1r" agafa
    *  tant "1r A" com "1r B"). */
@@ -325,6 +385,55 @@ export default function Economia() {
         trenca el permís de compartició), baixa el document manualment des de Google Docs amb
         "Arxiu → Baixa → Text pla (.txt)" i puja'l aquí — s'interpretarà exactament igual.
       </p>
+
+      <div style={{ marginTop: 20, borderTop: '1px solid var(--line)', paddingTop: 16 }}>
+        <p style={{ fontSize: 13, fontWeight: 600 }}>Activitats complementàries (sortides) per curs</p>
+        <p className="module-note" style={{ marginTop: 4 }}>
+          Puja el document consolidat "Activitats_Complementaries_..._I3_a_6e" (baixat des de
+          Google Sheets amb "Arxiu → Baixa → Microsoft Excel (.xlsx)") — es llegeix directament
+          el full "Resum", que ja té el total calculat de cada curs.
+        </p>
+        <label
+          className="btn-ghost"
+          style={{ color: 'var(--navy)', borderColor: 'var(--navy)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', marginTop: 8 }}
+        >
+          {carregantSortides ? 'Llegint el document…' : '📤 Puja el document de sortides (Excel)'}
+          <input type="file" accept=".xlsx,.xls" onChange={pujaResumSortides} style={{ display: 'none' }} disabled={carregantSortides} />
+        </label>
+
+        {sortidesTrobades && (
+          <div className="placeholder-box" style={{ borderStyle: 'solid', marginTop: 12 }}>
+            <ul className="roster" style={{ marginTop: 0 }}>
+              {sortidesTrobades.map((s, i) => (
+                <li key={i} className="roster-row" style={{ display: 'block', paddingBottom: 8 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                    <span>
+                      <strong>{s.curs}</strong>
+                      {s.numActivitats !== null && (
+                        <span style={{ fontSize: 12, color: 'var(--ink-soft)', marginLeft: 8 }}>({s.numActivitats} activitats)</span>
+                      )}
+                    </span>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <strong>{s.total.toLocaleString('ca-ES', { style: 'currency', currency: 'EUR' })}</strong>
+                      <button
+                        type="button"
+                        onClick={() => aplicaTotalSortides(s.curs, s.total)}
+                        className="btn-ghost"
+                        style={{ fontSize: 12, padding: '4px 10px' }}
+                      >
+                        Aplica a la fila de {s.curs}
+                      </button>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <button type="button" onClick={() => setSortidesTrobades(null)} className="btn-ghost" style={{ marginTop: 8, maxWidth: 100 }}>
+              Tanca
+            </button>
+          </div>
+        )}
+      </div>
 
       {preusTrobats && (
         <div className="placeholder-box" style={{ borderStyle: 'solid', marginTop: 12 }}>
