@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { doc, getDoc, setDoc, serverTimestamp, collection, getDocs } from 'firebase/firestore'
-import ExcelJS from 'exceljs'
 import { db, auth } from '../../firebase'
 import { cursEscolarActual } from '../../lib/cursEscolar'
 import { ENSENYAMENTS, CURSOS, CONCEPTES, conceptaBuit, filaBuida, totalConcepte, totalFila } from '../../lib/economia'
+import { exportaExcelOficial } from '../../lib/economiaExcelOficial'
 
 // Conceptes on la reducció NESE (situació socioeconòmica) és del 100%,
 // segons el criteri del centre: material escolar i activitats
@@ -13,6 +13,7 @@ const CONCEPTES_REDUCCIO_NESE = ['materialEscolar', 'activitatsComplementaries']
 export default function Economia() {
   const [cursEscolarId, setCursEscolarId] = useState(cursEscolarActual())
   const [files, setFiles] = useState([])
+  const [codiCentre, setCodiCentre] = useState('')
   const [carregant, setCarregant] = useState(true)
   const [desant, setDesant] = useState(false)
   const [missatge, setMissatge] = useState(null)
@@ -40,10 +41,20 @@ export default function Economia() {
     try {
       const snap = await getDoc(doc(db, 'economia', cursEscolarId))
       setFiles(snap.exists() ? (snap.data().files ?? []) : [])
+      setCodiCentre(snap.exists() ? (snap.data().codiCentre ?? '') : '')
     } catch (err) {
       setMissatge({ type: 'error', text: `No s'han pogut carregar les dades: ${err.message}` })
     } finally {
       setCarregant(false)
+    }
+  }
+
+  async function desaCodiCentre(valor) {
+    setCodiCentre(valor)
+    try {
+      await setDoc(doc(db, 'economia', cursEscolarId), { codiCentre: valor }, { merge: true })
+    } catch (err) {
+      setMissatge({ type: 'error', text: `No s'ha pogut desar el codi de centre: ${err.message}` })
     }
   }
 
@@ -180,142 +191,12 @@ export default function Economia() {
   const totalAlumnes = files.reduce((acc, f) => acc + (Number(f.numAlumnes) || 0), 0)
 
   async function exportaExcelPlantilla() {
-    const wb = new ExcelJS.Workbook()
-    wb.creator = 'Gestió Escola Mestre Enric Gibert i Camins'
-    wb.created = new Date()
-
-    const BLAU = 'FF1E3A5F'
-    const GRIS = 'FFF2F0EA'
-    const VORA = { style: 'thin', color: { argb: 'FFCCCCCC' } }
-    const totesVores = { top: VORA, left: VORA, bottom: VORA, right: VORA }
-
-    // --- Full principal: una fila per Ensenyament/Curs ---
-    const nomFullPrincipal = cursEscolarId.slice(0, 31)
-    const ws = wb.addWorksheet(nomFullPrincipal, { views: [{ state: 'frozen', ySplit: 2, xSplit: 4 }] })
-
-    const capçalera1 = ['Ensenyament', 'Curs', 'Detall', "Núm. alumnes"]
-    const capçalera2 = ['', '', '', '']
-    CONCEPTES.forEach((c) => {
-      capçalera1.push(c.label, '', '', '', '')
-      capçalera2.push('Import unitari', 'Reducció', 'Cobrat any 1', 'Cobrat any 2', 'Total')
+    await exportaExcelOficial({
+      nomCentre: 'Escola Mestre Enric Gibert i Camins',
+      codiCentre,
+      cursEscolarId,
+      files,
     })
-    capçalera1.push('TOTAL FILA')
-    capçalera2.push('')
-
-    const filaCap1 = ws.addRow(capçalera1)
-    const filaCap2 = ws.addRow(capçalera2)
-    ;[filaCap1, filaCap2].forEach((f) => {
-      f.eachCell({ includeEmpty: true }, (cell) => {
-        cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: BLAU } }
-        cell.border = totesVores
-        cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true }
-      })
-    })
-    // Fusiona la capçalera de cada concepte (5 columnes) i les 4 primeres columnes verticalment.
-    ;[0, 1, 2, 3].forEach((c) => ws.mergeCells(1, c + 1, 2, c + 1))
-    CONCEPTES.forEach((c, ci) => {
-      const colBase = 5 + ci * 5 // 1-indexat: E=5
-      ws.mergeCells(1, colBase, 1, colBase + 4)
-    })
-    ws.mergeCells(1, 5 + CONCEPTES.length * 5, 2, 5 + CONCEPTES.length * 5)
-
-    const colLletra = (n) => {
-      // Convertidor de número de columna (0-indexat) a lletres d'Excel,
-      // vàlid per a qualsevol quantitat de columnes (A, B... Z, AA, AB...).
-      let num = n + 1
-      let lletres = ''
-      while (num > 0) {
-        const resta = (num - 1) % 26
-        lletres = String.fromCharCode(65 + resta) + lletres
-        num = Math.floor((num - 1) / 26)
-      }
-      return lletres
-    }
-    files.forEach((f, i) => {
-      const filaExcel = i + 3
-      const valors = [f.ensenyament, f.curs, f.detall, Number(f.numAlumnes) || 0]
-      CONCEPTES.forEach((c) => {
-        const concepte = f.conceptes[c.id] ?? conceptaBuit()
-        valors.push(
-          Number(concepte.importUnitari) || 0,
-          Number(concepte.reduccio) || 0,
-          Number(concepte.cobratAny1) || 0,
-          Number(concepte.cobratAny2) || 0,
-          null // s'omple amb fórmula tot seguit
-        )
-      })
-      valors.push(null) // TOTAL FILA, també amb fórmula
-      const fila = ws.addRow(valors)
-
-      const colsTotalFila = []
-      CONCEPTES.forEach((c, ci) => {
-        const colBase = 4 + ci * 5 // 0-indexat: E=4
-        const colImport = colLletra(colBase)
-        const colReduccio = colLletra(colBase + 1)
-        const colTotal = colLletra(colBase + 4)
-        fila.getCell(colBase + 5).value = { formula: `D${filaExcel}*${colImport}${filaExcel}-${colReduccio}${filaExcel}` }
-        colsTotalFila.push(`${colTotal}${filaExcel}`)
-      })
-      fila.getCell(5 + CONCEPTES.length * 5).value = { formula: colsTotalFila.join('+') }
-
-      fila.eachCell({ includeEmpty: true }, (cell) => {
-        cell.border = totesVores
-        if (i % 2 === 0) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFAFAF7' } }
-      })
-    })
-
-    ws.getColumn(1).width = 12
-    ws.getColumn(2).width = 8
-    ws.getColumn(3).width = 20
-    ws.getColumn(4).width = 11
-    for (let i = 5; i <= 4 + CONCEPTES.length * 5 + 1; i++) ws.getColumn(i).width = 12
-
-    // --- Full "Total Centre": subtotal per Ensenyament, amb SUMIF real ---
-    const wsTotal = wb.addWorksheet('Total Centre')
-    const capTotal = wsTotal.addRow(['Ensenyament', "Núm. alumnes", 'Total aportacions'])
-    capTotal.eachCell((cell) => {
-      cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }
-      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: BLAU } }
-      cell.border = totesVores
-    })
-
-    const colTotalFilaLletra = colLletra(4 + CONCEPTES.length * 5)
-    const ultimaFilaDades = files.length + 2
-    ENSENYAMENTS.forEach((ens, i) => {
-      const filaExcel = i + 2
-      const fila = wsTotal.addRow([
-        ens,
-        { formula: `SUMIF('${nomFullPrincipal}'!A3:A${ultimaFilaDades},A${filaExcel},'${nomFullPrincipal}'!D3:D${ultimaFilaDades})` },
-        { formula: `SUMIF('${nomFullPrincipal}'!A3:A${ultimaFilaDades},A${filaExcel},'${nomFullPrincipal}'!${colTotalFilaLletra}3:${colTotalFilaLletra}${ultimaFilaDades})` },
-      ])
-      fila.eachCell((cell) => { cell.border = totesVores })
-    })
-    const filaTotalCentre = ENSENYAMENTS.length + 2
-    const filaFinal = wsTotal.addRow([
-      'TOTAL CENTRE',
-      { formula: `SUM(B2:B${filaTotalCentre - 1})` },
-      { formula: `SUM(C2:C${filaTotalCentre - 1})` },
-    ])
-    filaFinal.eachCell((cell) => {
-      cell.font = { bold: true }
-      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: GRIS } }
-      cell.border = totesVores
-    })
-    wsTotal.getColumn(1).width = 14
-    wsTotal.getColumn(2).width = 12
-    wsTotal.getColumn(3).width = 16
-
-    const buffer = await wb.xlsx.writeBuffer()
-    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `Aportacions-families-${cursEscolarId}.xlsx`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
   }
 
   if (carregant) return <p>Carregant…</p>
@@ -337,11 +218,21 @@ export default function Economia() {
             style={{ border: '1px solid var(--line)', borderRadius: 8, padding: '8px 10px', fontWeight: 600 }}
           />
         </label>
+        <label className="field" style={{ maxWidth: 140 }}>
+          <span>Codi del Centre</span>
+          <input
+            type="text"
+            value={codiCentre}
+            onChange={(e) => desaCodiCentre(e.target.value)}
+            placeholder="p. ex. 08012345"
+            style={{ border: '1px solid var(--line)', borderRadius: 8, padding: '8px 10px' }}
+          />
+        </label>
         <button className="btn-ghost" style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }} onClick={afegeixFila} type="button">
           + Afegeix fila
         </button>
         <button className="btn-ghost" style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }} onClick={exportaExcelPlantilla} type="button">
-          📥 Descarrega Excel (mateixa estructura i fórmules)
+          📥 Descarrega Excel oficial (plantilla CEB)
         </button>
         {desant && <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>Desant…</span>}
       </div>
