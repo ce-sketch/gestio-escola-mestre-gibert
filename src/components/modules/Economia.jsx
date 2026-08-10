@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { doc, getDoc, setDoc, serverTimestamp, collection, getDocs } from 'firebase/firestore'
-import * as XLSX from 'xlsx'
+import ExcelJS from 'exceljs'
 import { db, auth } from '../../firebase'
 import { cursEscolarActual } from '../../lib/cursEscolar'
 import { ENSENYAMENTS, CURSOS, CONCEPTES, conceptaBuit, filaBuida, totalConcepte, totalFila } from '../../lib/economia'
@@ -110,11 +110,41 @@ export default function Economia() {
     return alumnesTots.filter((a) => a.neseEconomic && a.curs?.trim().toLowerCase().startsWith(cg)).length
   }
 
+  /** Nomès informatiu: quants alumnes NESE d'aquest curs tenen cada tipus
+   *  d'ajut (Motxilles Escolars / Pla de Xoc), per portar-ne el seguiment
+   *  de cara a qui el finança (CEB o Generalitat). No afecta el càlcul. */
+  function desglossamentAjut(cursGeneric) {
+    if (!cursGeneric) return []
+    const cg = cursGeneric.trim().toLowerCase()
+    const alumnesNese = alumnesTots.filter((a) => a.neseEconomic && a.curs?.trim().toLowerCase().startsWith(cg))
+    const comptes = {}
+    for (const a of alumnesNese) {
+      const programa = a.ajutNese || 'Sense etiquetar'
+      comptes[programa] = (comptes[programa] ?? 0) + 1
+    }
+    return Object.entries(comptes).map(([programa, n]) => ({ programa, n }))
+  }
+
+  /** L'escola està retirant aquesta reducció progressivament:
+   *  - Curs 26-27: només la conserva l'alumnat de 6è (últim curs, per no
+   *    tallar-los-hi de cop a mitja etapa).
+   *  - A partir del curs 27-28: ja no s'aplica a ningú.
+   *  (Cursos anteriors, si mai calgués consultar-los, mantenen el criteri
+   *  antic — reducció per a tothom.) */
+  function teDretReduccioNese(cursGeneric) {
+    const anyInici = Number(cursEscolarId.split('-')[0])
+    if (Number.isNaN(anyInici)) return true
+    if (anyInici >= 2027) return false
+    if (anyInici === 2026) return cursGeneric === '6è'
+    return true
+  }
+
   /** Aplica la reducció del 100% (Material escolar + Activitats
    *  complementàries) pels alumnes NESE trobats en aquesta fila — sobre
    *  l'import unitari ja introduït. Es pot desfer/ajustar a mà després. */
   function aplicaReduccioNese(index) {
     const fila = files[index]
+    if (!teDretReduccioNese(fila.curs)) return
     const n = numAlumnesNese(fila.curs)
     if (n === 0) return
     let noves = files
@@ -132,10 +162,20 @@ export default function Economia() {
   const totalCentre = files.reduce((acc, f) => acc + totalFila(f), 0)
   const totalAlumnes = files.reduce((acc, f) => acc + (Number(f.numAlumnes) || 0), 0)
 
-  function exportaExcelPlantilla() {
-    const wb = XLSX.utils.book_new()
+  async function exportaExcelPlantilla() {
+    const wb = new ExcelJS.Workbook()
+    wb.creator = 'Gestió Escola Mestre Enric Gibert i Camins'
+    wb.created = new Date()
+
+    const BLAU = 'FF1E3A5F'
+    const GRIS = 'FFF2F0EA'
+    const VORA = { style: 'thin', color: { argb: 'FFCCCCCC' } }
+    const totesVores = { top: VORA, left: VORA, bottom: VORA, right: VORA }
 
     // --- Full principal: una fila per Ensenyament/Curs ---
+    const nomFullPrincipal = cursEscolarId.slice(0, 31)
+    const ws = wb.addWorksheet(nomFullPrincipal, { views: [{ state: 'frozen', ySplit: 2, xSplit: 4 }] })
+
     const capçalera1 = ['Ensenyament', 'Curs', 'Detall', "Núm. alumnes"]
     const capçalera2 = ['', '', '', '']
     CONCEPTES.forEach((c) => {
@@ -145,66 +185,120 @@ export default function Economia() {
     capçalera1.push('TOTAL FILA')
     capçalera2.push('')
 
-    const aoa = [capçalera1, capçalera2]
-    files.forEach((f) => {
-      const fila = [f.ensenyament, f.curs, f.detall, Number(f.numAlumnes) || 0]
+    const filaCap1 = ws.addRow(capçalera1)
+    const filaCap2 = ws.addRow(capçalera2)
+    ;[filaCap1, filaCap2].forEach((f) => {
+      f.eachCell({ includeEmpty: true }, (cell) => {
+        cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: BLAU } }
+        cell.border = totesVores
+        cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true }
+      })
+    })
+    // Fusiona la capçalera de cada concepte (5 columnes) i les 4 primeres columnes verticalment.
+    ;[0, 1, 2, 3].forEach((c) => ws.mergeCells(1, c + 1, 2, c + 1))
+    CONCEPTES.forEach((c, ci) => {
+      const colBase = 5 + ci * 5 // 1-indexat: E=5
+      ws.mergeCells(1, colBase, 1, colBase + 4)
+    })
+    ws.mergeCells(1, 5 + CONCEPTES.length * 5, 2, 5 + CONCEPTES.length * 5)
+
+    const colLletra = (n) => {
+      // Convertidor de número de columna (0-indexat) a lletres d'Excel,
+      // vàlid per a qualsevol quantitat de columnes (A, B... Z, AA, AB...).
+      let num = n + 1
+      let lletres = ''
+      while (num > 0) {
+        const resta = (num - 1) % 26
+        lletres = String.fromCharCode(65 + resta) + lletres
+        num = Math.floor((num - 1) / 26)
+      }
+      return lletres
+    }
+    files.forEach((f, i) => {
+      const filaExcel = i + 3
+      const valors = [f.ensenyament, f.curs, f.detall, Number(f.numAlumnes) || 0]
       CONCEPTES.forEach((c) => {
         const concepte = f.conceptes[c.id] ?? conceptaBuit()
-        fila.push(
+        valors.push(
           Number(concepte.importUnitari) || 0,
           Number(concepte.reduccio) || 0,
           Number(concepte.cobratAny1) || 0,
           Number(concepte.cobratAny2) || 0,
-          0 // placeholder, s'omple amb fórmula real després
+          null // s'omple amb fórmula tot seguit
         )
       })
-      fila.push(0) // placeholder TOTAL FILA
-      aoa.push(fila)
-    })
+      valors.push(null) // TOTAL FILA, també amb fórmula
+      const fila = ws.addRow(valors)
 
-    const ws = XLSX.utils.aoa_to_sheet(aoa)
-
-    // Fórmules reals: Total de cada concepte = alumnes × import unitari − reducció.
-    // Columna D = núm. alumnes. Cada concepte ocupa 5 columnes a partir de E.
-    const colLletra = (n) => XLSX.utils.encode_col(n)
-    files.forEach((_, i) => {
-      const filaExcel = i + 3 // les dades comencen a la fila 3 (2 de capçalera)
       const colsTotalFila = []
       CONCEPTES.forEach((c, ci) => {
         const colBase = 4 + ci * 5 // 0-indexat: E=4
         const colImport = colLletra(colBase)
         const colReduccio = colLletra(colBase + 1)
         const colTotal = colLletra(colBase + 4)
-        ws[`${colTotal}${filaExcel}`] = { t: 'n', f: `D${filaExcel}*${colImport}${filaExcel}-${colReduccio}${filaExcel}` }
+        fila.getCell(colBase + 5).value = { formula: `D${filaExcel}*${colImport}${filaExcel}-${colReduccio}${filaExcel}` }
         colsTotalFila.push(`${colTotal}${filaExcel}`)
       })
-      const colTotalFilaLletra = colLletra(4 + CONCEPTES.length * 5)
-      ws[`${colTotalFilaLletra}${filaExcel}`] = { t: 'n', f: colsTotalFila.join('+') }
+      fila.getCell(5 + CONCEPTES.length * 5).value = { formula: colsTotalFila.join('+') }
+
+      fila.eachCell({ includeEmpty: true }, (cell) => {
+        cell.border = totesVores
+        if (i % 2 === 0) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFAFAF7' } }
+      })
     })
 
-    ws['!cols'] = [{ wch: 12 }, { wch: 8 }, { wch: 20 }, { wch: 10 }, ...Array(CONCEPTES.length * 5).fill({ wch: 12 })]
-    XLSX.utils.book_append_sheet(wb, ws, cursEscolarId.slice(0, 31))
+    ws.getColumn(1).width = 12
+    ws.getColumn(2).width = 8
+    ws.getColumn(3).width = 20
+    ws.getColumn(4).width = 11
+    for (let i = 5; i <= 4 + CONCEPTES.length * 5 + 1; i++) ws.getColumn(i).width = 12
 
     // --- Full "Total Centre": subtotal per Ensenyament, amb SUMIF real ---
-    const totalCentreAoa = [['Ensenyament', "Núm. alumnes", 'Total aportacions']]
-    ENSENYAMENTS.forEach((ens) => totalCentreAoa.push([ens, 0, 0]))
-    totalCentreAoa.push(['TOTAL CENTRE', 0, 0])
-    const wsTotal = XLSX.utils.aoa_to_sheet(totalCentreAoa)
-    const nomFullPrincipal = cursEscolarId.slice(0, 31)
+    const wsTotal = wb.addWorksheet('Total Centre')
+    const capTotal = wsTotal.addRow(['Ensenyament', "Núm. alumnes", 'Total aportacions'])
+    capTotal.eachCell((cell) => {
+      cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: BLAU } }
+      cell.border = totesVores
+    })
+
     const colTotalFilaLletra = colLletra(4 + CONCEPTES.length * 5)
     const ultimaFilaDades = files.length + 2
     ENSENYAMENTS.forEach((ens, i) => {
       const filaExcel = i + 2
-      wsTotal[`B${filaExcel}`] = { t: 'n', f: `SUMIF('${nomFullPrincipal}'!A3:A${ultimaFilaDades},A${filaExcel},'${nomFullPrincipal}'!D3:D${ultimaFilaDades})` }
-      wsTotal[`C${filaExcel}`] = { t: 'n', f: `SUMIF('${nomFullPrincipal}'!A3:A${ultimaFilaDades},A${filaExcel},'${nomFullPrincipal}'!${colTotalFilaLletra}3:${colTotalFilaLletra}${ultimaFilaDades})` }
+      const fila = wsTotal.addRow([
+        ens,
+        { formula: `SUMIF('${nomFullPrincipal}'!A3:A${ultimaFilaDades},A${filaExcel},'${nomFullPrincipal}'!D3:D${ultimaFilaDades})` },
+        { formula: `SUMIF('${nomFullPrincipal}'!A3:A${ultimaFilaDades},A${filaExcel},'${nomFullPrincipal}'!${colTotalFilaLletra}3:${colTotalFilaLletra}${ultimaFilaDades})` },
+      ])
+      fila.eachCell((cell) => { cell.border = totesVores })
     })
     const filaTotalCentre = ENSENYAMENTS.length + 2
-    wsTotal[`B${filaTotalCentre}`] = { t: 'n', f: `SUM(B2:B${filaTotalCentre - 1})` }
-    wsTotal[`C${filaTotalCentre}`] = { t: 'n', f: `SUM(C2:C${filaTotalCentre - 1})` }
-    wsTotal['!cols'] = [{ wch: 14 }, { wch: 12 }, { wch: 16 }]
-    XLSX.utils.book_append_sheet(wb, wsTotal, 'Total Centre')
+    const filaFinal = wsTotal.addRow([
+      'TOTAL CENTRE',
+      { formula: `SUM(B2:B${filaTotalCentre - 1})` },
+      { formula: `SUM(C2:C${filaTotalCentre - 1})` },
+    ])
+    filaFinal.eachCell((cell) => {
+      cell.font = { bold: true }
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: GRIS } }
+      cell.border = totesVores
+    })
+    wsTotal.getColumn(1).width = 14
+    wsTotal.getColumn(2).width = 12
+    wsTotal.getColumn(3).width = 16
 
-    XLSX.writeFile(wb, `Aportacions-families-${cursEscolarId}.xlsx`)
+    const buffer = await wb.xlsx.writeBuffer()
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `Aportacions-families-${cursEscolarId}.xlsx`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
   }
 
   if (carregant) return <p>Carregant…</p>
@@ -315,12 +409,17 @@ export default function Economia() {
 
               {oberta && (
                 <div style={{ padding: '4px 14px 14px', borderTop: '1px solid var(--line)' }}>
-                  {numAlumnesNese(fila.curs) > 0 && (
+                  {numAlumnesNese(fila.curs) > 0 && teDretReduccioNese(fila.curs) && (
                     <div className="placeholder-box" style={{ borderStyle: 'solid', borderColor: 'var(--amber-dark)', marginBottom: 12 }}>
                       <span style={{ fontSize: 12 }}>
                         <strong>{numAlumnesNese(fila.curs)} alumnes</strong> d'aquest curs tenen reducció NESE per
                         situació socioeconòmica (100% en Material escolar i Activitats complementàries).
                       </span>
+                      {desglossamentAjut(fila.curs).length > 0 && (
+                        <p style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 4 }}>
+                          Seguiment de finançament: {desglossamentAjut(fila.curs).map((d) => `${d.programa} (${d.n})`).join(' · ')}
+                        </p>
+                      )}
                       <button
                         type="button"
                         onClick={() => aplicaReduccioNese(index)}
@@ -328,6 +427,15 @@ export default function Economia() {
                       >
                         Aplica la reducció automàticament (calcula sobre l'import unitari ja escrit)
                       </button>
+                    </div>
+                  )}
+                  {numAlumnesNese(fila.curs) > 0 && !teDretReduccioNese(fila.curs) && (
+                    <div className="placeholder-box" style={{ marginBottom: 12 }}>
+                      <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
+                        Hi ha {numAlumnesNese(fila.curs)} alumnes NESE en aquest curs, però aquest any ja no els
+                        correspon la reducció (l'escola l'està retirant progressivament: curs 26-27 només 6è,
+                        i a partir de 27-28 ja no s'aplica a ningú).
+                      </span>
                     </div>
                   )}
                   {CONCEPTES.map((c) => {
