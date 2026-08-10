@@ -104,6 +104,19 @@ service cloud.firestore {
       allow read, write: if esAdmin();
     }
 
+    // PGAC: seguiment de la Programació General Anual de Centre. Només
+    // accessible per l'administrador.
+    match /pgac/{cursEscolarId} {
+      allow read, write: if esAdmin();
+    }
+
+    // Valoracions de cicle/comissió/equip i festes: qualsevol docent pot
+    // llegir-les i escriure-hi (les omplen ells mateixos); el mòdul
+    // "Matriu General" (nomès admin) les llegeix totes juntes.
+    match /valoracions/{valoracioId} {
+      allow read, write: if esComptePersonal();
+    }
+
     // Per defecte, tot el que no s'hagi definit explícitament queda bloquejat.
     match /{document=**} {
       allow read, write: if false;
