@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Fragment } from 'react'
 import { doc, getDoc, setDoc, serverTimestamp, collection, getDocs } from 'firebase/firestore'
 import { db, auth } from '../../firebase'
 import { cursEscolarActual } from '../../lib/cursEscolar'
@@ -30,6 +30,8 @@ export default function Economia() {
   const [desant, setDesant] = useState(false)
   const [missatge, setMissatge] = useState(null)
   const [filaOberta, setFilaOberta] = useState(null) // índex de la fila expandida
+  const [mostraPreview, setMostraPreview] = useState(false)
+  const [filtrePreview, setFiltrePreview] = useState('') // '' = totes les promocions
   const [alumnesTots, setAlumnesTots] = useState([])
 
   useEffect(() => {
@@ -350,8 +352,112 @@ export default function Economia() {
         <button className="btn-ghost" style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }} onClick={exportaExcelPlantilla} type="button">
           📥 Descarrega Excel oficial (plantilla CEB)
         </button>
+        <button
+          className="btn-ghost"
+          style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
+          onClick={() => setMostraPreview((v) => !v)}
+          type="button"
+        >
+          {mostraPreview ? '✕ Amaga la previsualització' : '👁 Previsualitza l\'Excel oficial'}
+        </button>
         {desant && <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>Desant…</span>}
       </div>
+
+      {mostraPreview && (
+        <div style={{ marginTop: 16 }}>
+          <p className="module-note" style={{ marginTop: 0 }}>
+            Així quedarà l'Excel amb el que ja tens introduït. Les caselles en blanc (amb fons
+            vermellós) són el que encara falta per omplir.
+          </p>
+          <label className="field" style={{ maxWidth: 220, marginBottom: 10 }}>
+            <span>Promoció</span>
+            <select
+              value={filtrePreview}
+              onChange={(e) => setFiltrePreview(e.target.value)}
+              style={{ padding: '8px 10px', border: '1px solid var(--line)', borderRadius: 8 }}
+            >
+              <option value="">Totes les promocions</option>
+              {CURSOS.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </label>
+          <div style={{ overflowX: 'auto', border: '1px solid var(--line)', borderRadius: 8 }}>
+            <table style={{ borderCollapse: 'collapse', fontSize: 11, whiteSpace: 'nowrap' }}>
+              <thead>
+                <tr style={{ background: 'var(--navy)', color: '#fff' }}>
+                  <th style={{ padding: '6px 8px', position: 'sticky', left: 0, background: 'var(--navy)' }}>Ensenyament</th>
+                  <th style={{ padding: '6px 8px' }}>Curs</th>
+                  <th style={{ padding: '6px 8px' }}>Alumnes</th>
+                  {CONCEPTES.map((c) => (
+                    <th key={c.id} colSpan={5} style={{ padding: '6px 8px', textAlign: 'center', borderLeft: '2px solid #fff' }}>
+                      {c.label}
+                    </th>
+                  ))}
+                  <th style={{ padding: '6px 8px', borderLeft: '2px solid #fff' }}>TOTAL FILA</th>
+                </tr>
+                <tr style={{ background: 'var(--bg-soft, #f5f5f0)' }}>
+                  <th style={{ padding: '4px 8px', position: 'sticky', left: 0, background: 'var(--bg-soft, #f5f5f0)' }} />
+                  <th />
+                  <th />
+                  {CONCEPTES.map((c) => (
+                    <Fragment key={c.id}>
+                      <th style={{ padding: '4px 6px', fontWeight: 400, borderLeft: '2px solid var(--line)' }}>Import unit.</th>
+                      <th style={{ padding: '4px 6px', fontWeight: 400 }}>Reducció</th>
+                      <th style={{ padding: '4px 6px', fontWeight: 400 }}>Total</th>
+                      <th style={{ padding: '4px 6px', fontWeight: 400 }}>Cobrat 1</th>
+                      <th style={{ padding: '4px 6px', fontWeight: 400 }}>Cobrat 2</th>
+                    </Fragment>
+                  ))}
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {(() => {
+                  const filesFiltrades = filtrePreview ? files.filter((f) => f.curs === filtrePreview) : files
+                  if (filesFiltrades.length === 0) {
+                    return <tr><td colSpan={4 + CONCEPTES.length * 5 + 1} style={{ padding: 12, color: 'var(--ink-soft)' }}>
+                      {files.length === 0 ? 'Encara no hi ha cap fila.' : `Cap fila amb el curs "${filtrePreview}".`}
+                    </td></tr>
+                  }
+                  return filesFiltrades.map((fila, i) => (
+                  <tr key={i} style={{ borderBottom: '1px solid var(--line)' }}>
+                    <td style={{ padding: '4px 8px', position: 'sticky', left: 0, background: i % 2 === 0 ? '#fff' : 'var(--bg-soft, #fafaf7)' }}>{fila.ensenyament}</td>
+                    <td style={{ padding: '4px 8px' }}>{fila.curs}</td>
+                    <td style={{ padding: '4px 8px', background: fila.numAlumnes ? undefined : 'rgba(200,60,60,0.08)' }}>{fila.numAlumnes || '—'}</td>
+                    {CONCEPTES.map((c) => {
+                      const concepte = fila.conceptes[c.id] ?? conceptaBuit()
+                      const total = totalConcepte(fila.numAlumnes, concepte)
+                      const buit = (v) => v === '' || v === undefined || v === null
+                      return (
+                        <Fragment key={c.id}>
+                          <td style={{ padding: '4px 6px', borderLeft: '2px solid var(--line)', background: buit(concepte.importUnitari) ? 'rgba(200,60,60,0.08)' : undefined }}>
+                            {buit(concepte.importUnitari) ? '—' : concepte.importUnitari}
+                          </td>
+                          <td style={{ padding: '4px 6px' }}>{buit(concepte.reduccio) ? '—' : concepte.reduccio}</td>
+                          <td style={{ padding: '4px 6px', fontWeight: 600 }}>{total.toLocaleString('ca-ES', { minimumFractionDigits: 2 })}</td>
+                          <td style={{ padding: '4px 6px', background: buit(concepte.cobratAny1) ? 'rgba(200,60,60,0.08)' : undefined }}>
+                            {buit(concepte.cobratAny1) ? '—' : concepte.cobratAny1}
+                          </td>
+                          <td style={{ padding: '4px 6px', background: buit(concepte.cobratAny2) ? 'rgba(200,60,60,0.08)' : undefined }}>
+                            {buit(concepte.cobratAny2) ? '—' : concepte.cobratAny2}
+                          </td>
+                        </Fragment>
+                      )
+                    })}
+                    <td style={{ padding: '4px 8px', fontWeight: 700, borderLeft: '2px solid var(--line)' }}>
+                      {totalFila(fila).toLocaleString('ca-ES', { minimumFractionDigits: 2 })} €
+                    </td>
+                  </tr>
+                  ))
+                })()}
+              </tbody>
+            </table>
+          </div>
+          <p style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 6 }}>
+            🟥 Casella en blanc amb fons vermellós = encara sense omplir. La columna "Total" i
+            "TOTAL FILA" ja es calculen soles a partir del que hi hagi.
+          </p>
+        </div>
+      )}
 
       <div style={{ display: 'flex', gap: 10, marginTop: 12, flexWrap: 'wrap', alignItems: 'center' }}>
         <button
