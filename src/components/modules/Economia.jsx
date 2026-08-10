@@ -101,6 +101,23 @@ export default function Economia() {
     desaTot(noves)
   }
 
+  /** Compta TOTS els alumnes (independentment de NESE) que coincideixen amb
+   *  el curs genèric d'una fila — per omplir el "Núm. alumnes" sol. */
+  function numAlumnesClasse(cursGeneric) {
+    if (!cursGeneric) return 0
+    const cg = cursGeneric.trim().toLowerCase()
+    return alumnesTots.filter((a) => a.curs?.trim().toLowerCase().startsWith(cg)).length
+  }
+
+  /** Omple el "Núm. alumnes" d'una fila amb el recompte real de la llista
+   *  d'alumnes — no cal escriure'l a mà ni mantenir-lo actualitzat. */
+  function autoemplenaAlumnes(index) {
+    const fila = files[index]
+    const n = numAlumnesClasse(fila.curs)
+    if (n === 0) return
+    onBlurDesa(actualitzaFila(index, { numAlumnes: String(n) }))
+  }
+
   /** Compta alumnes amb reducció NESE (situació socioeconòmica) que
    *  coincideixen amb el curs genèric d'una fila (per exemple "1r" agafa
    *  tant "1r A" com "1r B"). */
@@ -393,6 +410,16 @@ export default function Economia() {
                     onBlur={() => onBlurDesa(files)}
                     style={{ border: '1px solid var(--line)', borderRadius: 6, padding: '4px 6px', fontSize: 13, width: 90 }}
                   />
+                  {numAlumnesClasse(fila.curs) > 0 && (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); autoemplenaAlumnes(index) }}
+                      title={`Omple amb els ${numAlumnesClasse(fila.curs)} alumnes reals d'aquest curs`}
+                      style={{ background: 'none', border: '1px solid var(--navy)', color: 'var(--navy)', borderRadius: 6, padding: '4px 8px', fontSize: 11, cursor: 'pointer' }}
+                    >
+                      ↻ {numAlumnesClasse(fila.curs)}
+                    </button>
+                  )}
                 </div>
                 <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
                   <strong>{total.toLocaleString('ca-ES', { style: 'currency', currency: 'EUR' })}</strong>
