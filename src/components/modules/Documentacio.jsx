@@ -4,7 +4,7 @@ import { db, auth } from '../../firebase'
 import { cursEscolarActual } from '../../lib/cursEscolar'
 import { slug } from '../../lib/slug'
 import {
-  NOMS_SUGGERITS, FESTES, valoracioBuida, objectiuBuit, actuacioBuida, festesBuides,
+  CICLES, NOMS_SUGGERITS, FESTES, valoracioBuida, objectiuBuit, actuacioBuida, festesBuides,
   mitjanaObjectiu, mitjanaValoracio,
 } from '../../lib/valoracions'
 import { CURS_AMB_PLANTILLA, PLANTILLES_26_27 } from '../../lib/valoracionsPlantilles26_27'
@@ -23,6 +23,7 @@ function inputPercent(valor, onChange, onBlur) {
 
 export default function Documentacio() {
   const [cursEscolarId, setCursEscolarId] = useState(cursEscolarActual())
+  const [tipus, setTipus] = useState('cicle') // 'cicle' o 'comissio'
   const [nomsExistents, setNomsExistents] = useState([])
   const [nom, setNom] = useState('')
   const [valoracio, setValoracio] = useState(valoracioBuida())
@@ -193,21 +194,69 @@ export default function Documentacio() {
               style={{ border: '1px solid var(--line)', borderRadius: 8, padding: '8px 10px', fontWeight: 600 }}
             />
           </label>
-          <label className="field" style={{ maxWidth: 320 }}>
-            <span>Nom del cicle / comissió / equip</span>
-            <input
-              type="text"
-              list="noms-valoracio"
-              value={nom}
-              onChange={(e) => setNom(e.target.value)}
-              placeholder="p. ex. Cicle Superior, Comissió TAC..."
-              style={{ border: '1px solid var(--line)', borderRadius: 8, padding: '8px 10px' }}
-            />
-            <datalist id="noms-valoracio">
-              {[...new Set([...NOMS_SUGGERITS, ...nomsExistents])].map((n) => <option key={n} value={n} />)}
-            </datalist>
-          </label>
-          {desant && <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>Desant…</span>}
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            onClick={() => { setTipus('cicle'); setNom('') }}
+            className={tipus === 'cicle' ? 'btn-primary' : 'btn-ghost'}
+            style={{ maxWidth: 200 }}
+          >
+            Cicles
+          </button>
+          <button
+            type="button"
+            onClick={() => { setTipus('comissio'); setNom('') }}
+            className={tipus === 'comissio' ? 'btn-primary' : 'btn-ghost'}
+            style={{ maxWidth: 240 }}
+          >
+            Comissions i equips
+          </button>
+          <button
+            type="button"
+            onClick={() => { setTipus('festes'); setNom('Festes i celebracions') }}
+            className={tipus === 'festes' ? 'btn-primary' : 'btn-ghost'}
+            style={{ maxWidth: 240 }}
+          >
+            Festes i celebracions
+          </button>
+        </div>
+
+        <div style={{ marginTop: 12 }}>
+          {tipus === 'cicle' ? (
+            <label className="field" style={{ maxWidth: 320 }}>
+              <span>Cicle</span>
+              <select
+                value={nom}
+                onChange={(e) => setNom(e.target.value)}
+                style={{ border: '1px solid var(--line)', borderRadius: 8, padding: '10px 12px' }}
+              >
+                <option value="">Tria un cicle…</option>
+                {CICLES.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </label>
+          ) : tipus === 'comissio' ? (
+            <label className="field" style={{ maxWidth: 320 }}>
+              <span>Nom de la comissió / equip</span>
+              <input
+                type="text"
+                list="noms-valoracio"
+                value={nom}
+                onChange={(e) => setNom(e.target.value)}
+                placeholder="p. ex. Comissió TAC, Equip LIC..."
+                style={{ border: '1px solid var(--line)', borderRadius: 8, padding: '8px 10px' }}
+              />
+              <datalist id="noms-valoracio">
+                {[...new Set([...NOMS_SUGGERITS, ...nomsExistents.filter((n) => !CICLES.includes(n))])].map((n) => <option key={n} value={n} />)}
+              </datalist>
+            </label>
+          ) : (
+            <p style={{ fontSize: 13, color: 'var(--ink-soft)' }}>
+              Una sola valoració de festes per a tot el centre, comuna per a tothom.
+            </p>
+          )}
+          {desant && <span style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 8, display: 'block' }}>Desant…</span>}
         </div>
 
         {!nom.trim() ? (
@@ -216,6 +265,39 @@ export default function Documentacio() {
           </p>
         ) : carregant ? (
           <p style={{ marginTop: 16 }}>Carregant…</p>
+        ) : tipus === 'festes' ? (
+          <>
+            <p style={{ fontSize: 13, fontWeight: 600, marginTop: 20 }}>Valoració de cada festa (%)</p>
+            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginTop: 8 }}>
+              {FESTES.map((f) => (
+                <label key={f.id} style={{ fontSize: 12 }}>
+                  {f.label}
+                  <input
+                    type="number" min={0} max={100}
+                    value={festesValoracio[f.id]}
+                    onChange={(e) => actualitzaFesta(f.id, e.target.value)}
+                    onBlur={() => desa(valoracio, festesValoracio)}
+                    style={{ display: 'block', width: 90, marginTop: 4, border: '1px solid var(--line)', borderRadius: 6, padding: '6px 8px' }}
+                  />
+                </label>
+              ))}
+            </div>
+            <label style={{ display: 'block', marginTop: 20, fontSize: 13, fontWeight: 600 }}>
+              Comentaris (opcional)
+              <textarea
+                value={valoracio.propostesMillora}
+                onChange={(e) => actualitza({ propostesMillora: e.target.value })}
+                onBlur={() => desa(valoracio, festesValoracio)}
+                rows={3}
+                style={{ display: 'block', width: '100%', marginTop: 6, border: '1px solid var(--line)', borderRadius: 8, padding: 10, fontFamily: 'inherit', fontSize: 13 }}
+              />
+            </label>
+            {missatge && (
+              <p style={{ marginTop: 12, fontSize: 13, color: missatge.type === 'error' ? 'var(--red)' : 'var(--green)' }}>
+                {missatge.text}
+              </p>
+            )}
+          </>
         ) : (
           <>
             <div style={{ display: 'flex', gap: 16, marginTop: 20, flexWrap: 'wrap' }}>
@@ -365,22 +447,6 @@ export default function Documentacio() {
                   style={{ display: 'block', width: '100%', marginTop: 6, border: '1px solid var(--line)', borderRadius: 8, padding: 10, fontFamily: 'inherit', fontSize: 13 }}
                 />
               </label>
-            </div>
-
-            <p style={{ fontSize: 13, fontWeight: 600, marginTop: 24 }}>Valoració de cada festa (%)</p>
-            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginTop: 8 }}>
-              {FESTES.map((f) => (
-                <label key={f.id} style={{ fontSize: 12 }}>
-                  {f.label}
-                  <input
-                    type="number" min={0} max={100}
-                    value={festesValoracio[f.id]}
-                    onChange={(e) => actualitzaFesta(f.id, e.target.value)}
-                    onBlur={() => desa(valoracio, festesValoracio)}
-                    style={{ display: 'block', width: 90, marginTop: 4, border: '1px solid var(--line)', borderRadius: 6, padding: '6px 8px' }}
-                  />
-                </label>
-              ))}
             </div>
 
             {missatge && (
