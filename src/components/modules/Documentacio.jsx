@@ -595,16 +595,16 @@ export default function Documentacio() {
 
             <p style={{ fontSize: 13, fontWeight: 600, marginTop: 24 }}>Objectius</p>
             {valoracio.objectius.map((objectiu, oi) => (
-              <div key={objectiu.id} className="placeholder-box" style={{ marginTop: 10 }}>
+              <div key={objectiu.id} style={{ marginTop: 10, padding: '12px 14px', border: '1px solid var(--line)', borderRadius: 10 }}>
                 <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: 12, color: 'var(--ink-soft)', minWidth: 20 }}>{oi + 1}.</span>
+                  <span style={{ fontSize: 12, color: 'var(--ink-soft)', minWidth: 20, marginTop: 8 }}>{oi + 1}.</span>
                   <textarea
                     value={objectiu.text}
                     onChange={(e) => actualitzaObjectiu(objectiu.id, { text: e.target.value })}
                     onBlur={() => desa(valoracio)}
-                    rows={2}
+                    rows={4}
                     placeholder="Text de l'objectiu"
-                    style={{ flex: 1, minWidth: 220, border: '1px solid var(--line)', borderRadius: 6, padding: '6px 8px', fontSize: 13, fontFamily: 'inherit' }}
+                    style={{ flex: 1, minWidth: 220, minHeight: 90, border: '1px solid var(--line)', borderRadius: 6, padding: '8px 10px', fontSize: 13, lineHeight: 1.4, fontFamily: 'inherit' }}
                   />
                   {objectiu.actuacions.length === 0 && (
                     <>
