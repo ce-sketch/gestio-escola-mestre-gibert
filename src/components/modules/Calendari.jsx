@@ -269,15 +269,26 @@ export default function Calendari() {
         festius, que no cauen sempre el mateix dia.
       </p>
 
-      <button
-        className="btn-ghost"
-        style={{ color: 'var(--green)', borderColor: 'var(--green)', marginTop: 4 }}
-        onClick={actualitzaDesDelDocument}
-        type="button"
-        disabled={actualitzant}
-      >
-        {actualitzant ? 'Llegint el document…' : '↻ Actualitza des del document oficial'}
-      </button>
+      <div style={{ display: 'flex', gap: 10, marginTop: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+        <button
+          className="btn-ghost"
+          style={{ color: 'var(--green)', borderColor: 'var(--green)' }}
+          onClick={actualitzaDesDelDocument}
+          type="button"
+          disabled={actualitzant}
+        >
+          {actualitzant ? 'Llegint el document…' : '↻ Actualitza des del document oficial'}
+        </button>
+        <a
+          href={`https://docs.google.com/document/d/${DOC_CALENDARI_OFICIAL_ID}/export?format=pdf`}
+          target="_blank"
+          rel="noreferrer"
+          className="btn-ghost"
+          style={{ color: 'var(--navy)', borderColor: 'var(--navy)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}
+        >
+          📄 Descarrega el document manualment
+        </a>
+      </div>
       <p className="module-note" style={{ marginTop: 6 }}>
         Omple el formulari a partir del document "HORARI I CALENDARI ESCOLAR" — no desa res
         automàticament, revisa-ho i clica "Desa el calendari" tu mateix.
