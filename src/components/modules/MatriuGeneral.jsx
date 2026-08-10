@@ -3,6 +3,7 @@ import { collection, getDocs, query, where } from 'firebase/firestore'
 import { db } from '../../firebase'
 import { cursEscolarActual } from '../../lib/cursEscolar'
 import { FESTES, mitjanaValoracio, mitjanaObjectiu } from '../../lib/valoracions'
+import { exportaValoracionsExcel, exportaValoracionsPDF } from '../../lib/valoracionsExport'
 
 function colorPer(valor) {
   if (valor === null || valor === undefined) return 'var(--ink-soft)'
@@ -57,6 +58,27 @@ export default function MatriuGeneral() {
       </label>
 
       {missatge && <p style={{ marginTop: 12, fontSize: 13, color: 'var(--red)' }}>{missatge.text}</p>}
+
+      {valoracions.length > 0 && (
+        <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap' }}>
+          <button
+            className="btn-ghost"
+            style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
+            onClick={() => exportaValoracionsExcel(valoracions, cursEscolarId)}
+            type="button"
+          >
+            📥 Descarrega totes en Excel (amb totes les pestanyes)
+          </button>
+          <button
+            className="btn-ghost"
+            style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
+            onClick={() => exportaValoracionsPDF(valoracions, cursEscolarId)}
+            type="button"
+          >
+            📄 Descarrega totes en PDF
+          </button>
+        </div>
+      )}
 
       {valoracions.length === 0 ? (
         <p style={{ marginTop: 20, fontSize: 13, color: 'var(--ink-soft)' }}>
