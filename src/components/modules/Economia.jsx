@@ -4,6 +4,13 @@ import { db, auth } from '../../firebase'
 import { cursEscolarActual } from '../../lib/cursEscolar'
 import { ENSENYAMENTS, CURSOS, CONCEPTES, conceptaBuit, filaBuida, totalConcepte, totalFila } from '../../lib/economia'
 import { exportaExcelOficial } from '../../lib/economiaExcelOficial'
+import { fetchDocText } from '../../lib/officialCalendarDoc'
+import { parseOfficialQuotesText } from '../../lib/officialQuotesDoc'
+
+// ID del document "Recull informatiu de les famílies" a Google Docs, amb
+// els preus de quotes. Ha d'estar compartit com "Qualsevol persona amb
+// l'enllaç" (lector) perquè el botó d'actualització el pugui llegir.
+const DOC_QUOTES_OFICIAL_ID = '11d6iuGeB3MhBuy_fzAJJQSXDxom8x4cVtDk4FqTq-U0'
 
 // Conceptes on la reducció NESE (situació socioeconòmica) és del 100%,
 // segons el criteri del centre: material escolar i activitats
@@ -14,6 +21,8 @@ export default function Economia() {
   const [cursEscolarId, setCursEscolarId] = useState(cursEscolarActual())
   const [files, setFiles] = useState([])
   const [codiCentre, setCodiCentre] = useState('')
+  const [preusTrobats, setPreusTrobats] = useState(null)
+  const [actualitzantPreus, setActualitzantPreus] = useState(false)
   const [carregant, setCarregant] = useState(true)
   const [desant, setDesant] = useState(false)
   const [missatge, setMissatge] = useState(null)
@@ -55,6 +64,28 @@ export default function Economia() {
       await setDoc(doc(db, 'economia', cursEscolarId), { codiCentre: valor }, { merge: true })
     } catch (err) {
       setMissatge({ type: 'error', text: `No s'ha pogut desar el codi de centre: ${err.message}` })
+    }
+  }
+
+  /** Llegeix el document oficial de preus i mostra tots els imports en
+   *  euros que hi troba — no s'apliquen sols, perquè el mestre triï a
+   *  quina fila i concepte correspon cadascun. */
+  async function actualitzaPreusDesDelDocument() {
+    setActualitzantPreus(true)
+    setMissatge(null)
+    setPreusTrobats(null)
+    try {
+      const text = await fetchDocText(DOC_QUOTES_OFICIAL_ID)
+      const trobats = parseOfficialQuotesText(text)
+      if (trobats.length === 0) {
+        setMissatge({ type: 'error', text: 'No he trobat cap import en euros al document. Comprova que és el document correcte.' })
+      } else {
+        setPreusTrobats(trobats)
+      }
+    } catch (err) {
+      setMissatge({ type: 'error', text: err.message })
+    } finally {
+      setActualitzantPreus(false)
     }
   }
 
@@ -236,6 +267,52 @@ export default function Economia() {
         </button>
         {desant && <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>Desant…</span>}
       </div>
+
+      <div style={{ display: 'flex', gap: 10, marginTop: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+        <button
+          className="btn-ghost"
+          style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
+          onClick={actualitzaPreusDesDelDocument}
+          disabled={actualitzantPreus}
+          type="button"
+        >
+          {actualitzantPreus ? 'Llegint el document…' : '↻ Actualitza preus des del document oficial'}
+        </button>
+        <a
+          href={`https://docs.google.com/document/d/${DOC_QUOTES_OFICIAL_ID}/export?format=pdf`}
+          target="_blank"
+          rel="noreferrer"
+          className="btn-ghost"
+          style={{ color: 'var(--navy)', borderColor: 'var(--navy)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}
+        >
+          📄 Descarrega el document manualment
+        </a>
+      </div>
+
+      {preusTrobats && (
+        <div className="placeholder-box" style={{ borderStyle: 'solid', marginTop: 12 }}>
+          <p style={{ fontSize: 13, fontWeight: 600 }}>
+            Imports trobats al document ({preusTrobats.length}) — copia'l manualment a la casella
+            d'"Import unitari" de la fila i concepte que correspongui:
+          </p>
+          <ul className="roster" style={{ marginTop: 8 }}>
+            {preusTrobats.map((p, i) => (
+              <li key={i} className="roster-row">
+                <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>{p.context}</span>
+                <strong>{p.import.toLocaleString('ca-ES', { style: 'currency', currency: 'EUR' })}</strong>
+              </li>
+            ))}
+          </ul>
+          <button
+            type="button"
+            onClick={() => setPreusTrobats(null)}
+            className="btn-ghost"
+            style={{ marginTop: 8, maxWidth: 100 }}
+          >
+            Tanca
+          </button>
+        </div>
+      )}
 
       <div style={{ display: 'flex', gap: 24, marginTop: 16, fontSize: 13 }}>
         <span><strong>{totalAlumnes}</strong> alumnes en total</span>
