@@ -26,8 +26,9 @@ export function valoracioBuida() {
 
 // Alguns noms habituals, com a suggeriment ràpid — el camp és de text
 // lliure, no un desplegable tancat, perquè cada curs poden variar.
+export const CICLES = ['Educació Infantil', 'Cicle Inicial', 'Cicle Mitjà', 'Cicle Superior']
+
 export const NOMS_SUGGERITS = [
-  'Educació Infantil', 'Cicle Inicial', 'Cicle Mitjà', 'Cicle Superior',
   'Comissió TAC', 'Comissió Material', 'Comissió Anglès', 'Comissió Biblioteca',
   'Comissió Torns de Patis', 'Comissió Espais', 'Comissió Comunicació',
   'Comissió Espai de migdia', 'Comissió de Transformem els Patis',
