@@ -31,13 +31,12 @@ export const CICLES = ['Educació Infantil', 'Cicle Inicial', 'Cicle Mitjà', 'C
 export const NOMS_SUGGERITS = [
   'Comissió TAC', 'Comissió Material', 'Comissió Anglès', 'Comissió Biblioteca',
   'Comissió Espais',
-  'Comissió de Transformem els Patis',
   "Equip d'Atenció a la Diversitat", 'Coordinació de Riscos Laborals', 'Equip LIC',
 ]
 
-// Comissions que tenen relació directa amb l'AFA — es mostren en un botó a
-// part dins de Valoracions, en comptes de barrejar-se amb la resta.
-export const NOMS_AFA = ['Comissió Comunicació', 'Comissió Espai de migdia']
+// Comissions mixtes (amb participació de famílies/AFA) — es mostren en un
+// botó a part dins de Valoracions, en comptes de barrejar-se amb la resta.
+export const NOMS_AFA = ['Comissió Comunicació', 'Comissió Espai de migdia', 'Comissió de Transformem els Patis']
 
 /** Mitjana de Gener/Juny d'un objectiu — si té actuacions, la mitjana és
  *  de les actuacions; si no, es fa servir el valor introduït directament
