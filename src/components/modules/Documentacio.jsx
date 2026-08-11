@@ -500,7 +500,7 @@ export default function Documentacio() {
             className={tipus === 'afa' ? 'btn-primary' : 'btn-ghost'}
             style={tipus === 'afa' ? { maxWidth: 220 } : { maxWidth: 220, color: 'var(--navy)', borderColor: 'var(--navy)' }}
           >
-            AFA, Comunicació i Migdia
+            Comissions mixtes
           </button>
           <button
             type="button"
