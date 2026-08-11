@@ -14,6 +14,7 @@ import {
 } from '../../lib/festesDetall'
 import { CURS_AMB_PLANTILLA as CURS_FESTES, FESTES_PLANTILLES_26_27, construeixFestaAmbPlantilla } from '../../lib/festesPlantilles26_27'
 import { carregaConfigValoracions } from '../../lib/valoracionsConfig'
+import { ESTATS_EXECUCIO, estatDe } from '../../lib/estatsExecucio'
 
 function inputPercent(valor, onChange, onBlur) {
   return (
@@ -24,6 +25,43 @@ function inputPercent(valor, onChange, onBlur) {
       onBlur={onBlur}
       style={{ width: 64, border: '1px solid var(--line)', borderRadius: 6, padding: '4px 6px', fontSize: 12 }}
     />
+  )
+}
+
+/** Selector de 3 estats (No fet / En procés / Fet), tal com surt a la
+ *  plantilla oficial — a més d'un camp numèric per si l'indicador té una
+ *  escala pròpia (per exemple "2 Cicles = 66%"). `onCanvi` rep el valor
+ *  numèric ja calculat (0/40/100, o el que s'escrigui a mà). */
+function SelectorEstat({ etiqueta, valor, onCanvi }) {
+  const estatActual = estatDe(valor)
+  return (
+    <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+      <span style={{ fontSize: 11, color: 'var(--ink-soft)', minWidth: 40 }}>{etiqueta}</span>
+      {ESTATS_EXECUCIO.map((e) => (
+        <button
+          key={e.id}
+          type="button"
+          onClick={() => onCanvi(e.valor)}
+          style={{
+            fontSize: 11, padding: '4px 10px', borderRadius: 6,
+            border: `1px solid ${estatActual?.id === e.id ? 'var(--navy)' : 'var(--line)'}`,
+            background: estatActual?.id === e.id ? 'var(--navy)' : 'transparent',
+            color: estatActual?.id === e.id ? '#fff' : 'var(--ink)',
+            cursor: 'pointer',
+          }}
+        >
+          {e.label}
+        </button>
+      ))}
+      <input
+        type="number" min={0} max={100}
+        value={valor}
+        onChange={(e) => onCanvi(e.target.value)}
+        title="Si l'indicador té una escala pròpia, escriu aquí el número exacte"
+        style={{ width: 56, border: '1px solid var(--line)', borderRadius: 6, padding: '4px 6px', fontSize: 11 }}
+      />
+      <span style={{ fontSize: 10, color: 'var(--ink-soft)' }}>%</span>
+    </div>
   )
 }
 
@@ -339,7 +377,7 @@ export default function Documentacio() {
             type="button"
             onClick={() => { setTipus('cicle'); setNom('') }}
             className={tipus === 'cicle' ? 'btn-primary' : 'btn-ghost'}
-            style={{ maxWidth: 200 }}
+            style={tipus === 'cicle' ? { maxWidth: 200 } : { maxWidth: 200, color: 'var(--navy)', borderColor: 'var(--navy)' }}
           >
             Cicles
           </button>
@@ -347,7 +385,7 @@ export default function Documentacio() {
             type="button"
             onClick={() => { setTipus('comissio'); setNom('') }}
             className={tipus === 'comissio' ? 'btn-primary' : 'btn-ghost'}
-            style={{ maxWidth: 240 }}
+            style={tipus === 'comissio' ? { maxWidth: 240 } : { maxWidth: 240, color: 'var(--navy)', borderColor: 'var(--navy)' }}
           >
             Comissions i equips
           </button>
@@ -355,7 +393,7 @@ export default function Documentacio() {
             type="button"
             onClick={() => { setTipus('festa'); setNom(''); setFestaId('') }}
             className={tipus === 'festa' ? 'btn-primary' : 'btn-ghost'}
-            style={{ maxWidth: 240 }}
+            style={tipus === 'festa' ? { maxWidth: 240 } : { maxWidth: 240, color: 'var(--navy)', borderColor: 'var(--navy)' }}
           >
             Festes i celebracions
           </button>
@@ -492,7 +530,7 @@ export default function Documentacio() {
                     type="button"
                     onClick={() => setGrupObert(g)}
                     className={grupObert === g ? 'btn-primary' : 'btn-ghost'}
-                    style={{ fontSize: 12, padding: '6px 12px' }}
+                    style={grupObert === g ? { fontSize: 12, padding: '6px 12px' } : { fontSize: 12, padding: '6px 12px', color: 'var(--navy)', borderColor: 'var(--navy)' }}
                   >
                     {g} {mitjanaGrup(festa, g) !== null ? `(${Math.round(mitjanaGrup(festa, g))}%)` : ''}
                   </button>
@@ -606,18 +644,22 @@ export default function Documentacio() {
                     placeholder="Text de l'objectiu"
                     style={{ flex: 1, minWidth: 220, minHeight: 90, border: '1px solid var(--line)', borderRadius: 6, padding: '8px 10px', fontSize: 13, lineHeight: 1.4, fontFamily: 'inherit' }}
                   />
-                  {objectiu.actuacions.length === 0 && (
-                    <>
-                      <label style={{ fontSize: 11, color: 'var(--ink-soft)' }}>
-                        Gener
-                        {inputPercent(objectiu.gener, (e) => actualitzaObjectiu(objectiu.id, { gener: e.target.value }), () => desa(valoracio))}
-                      </label>
-                      <label style={{ fontSize: 11, color: 'var(--ink-soft)' }}>
-                        Juny
-                        {inputPercent(objectiu.juny, (e) => actualitzaObjectiu(objectiu.id, { juny: e.target.value }), () => desa(valoracio))}
-                      </label>
-                    </>
-                  )}
+                </div>
+                {objectiu.actuacions.length === 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10, marginLeft: 30 }}>
+                    <SelectorEstat
+                      etiqueta="Gener"
+                      valor={objectiu.gener}
+                      onCanvi={(v) => { const nova = actualitzaObjectiu(objectiu.id, { gener: v }); desa(nova) }}
+                    />
+                    <SelectorEstat
+                      etiqueta="Juny"
+                      valor={objectiu.juny}
+                      onCanvi={(v) => { const nova = actualitzaObjectiu(objectiu.id, { juny: v }); desa(nova) }}
+                    />
+                  </div>
+                )}
+                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', flexWrap: 'wrap', marginTop: 6 }}>
                   {objectiu.actuacions.length > 0 && (
                     <div style={{ fontSize: 12, fontWeight: 600 }}>
                       Gener {mitjanaObjectiu(objectiu, 'gener') !== null ? `${Math.round(mitjanaObjectiu(objectiu, 'gener'))}%` : '—'} · Juny {mitjanaObjectiu(objectiu, 'juny') !== null ? `${Math.round(mitjanaObjectiu(objectiu, 'juny'))}%` : '—'}
@@ -629,28 +671,40 @@ export default function Documentacio() {
                 </div>
 
                 {objectiu.actuacions.map((actuacio) => (
-                  <div key={actuacio.id} style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8, marginLeft: 28, flexWrap: 'wrap' }}>
-                    <input
-                      type="text"
-                      value={actuacio.text}
-                      placeholder="Actuació/Activitat"
-                      onChange={(e) => actualitzaActuacio(objectiu.id, actuacio.id, { text: e.target.value })}
-                      onBlur={() => desa(valoracio)}
-                      style={{ flex: 1, minWidth: 160, border: '1px solid var(--line)', borderRadius: 6, padding: '5px 8px', fontSize: 12 }}
-                    />
-                    <input
-                      type="text"
-                      value={actuacio.indicador}
-                      placeholder="Indicador d'avaluació"
-                      onChange={(e) => actualitzaActuacio(objectiu.id, actuacio.id, { indicador: e.target.value })}
-                      onBlur={() => desa(valoracio)}
-                      style={{ flex: 1, minWidth: 160, border: '1px solid var(--line)', borderRadius: 6, padding: '5px 8px', fontSize: 12 }}
-                    />
-                    {inputPercent(actuacio.gener, (e) => actualitzaActuacio(objectiu.id, actuacio.id, { gener: e.target.value }), () => desa(valoracio))}
-                    {inputPercent(actuacio.juny, (e) => actualitzaActuacio(objectiu.id, actuacio.id, { juny: e.target.value }), () => desa(valoracio))}
-                    <button type="button" onClick={() => esborraActuacio(objectiu.id, actuacio.id)} style={{ background: 'none', border: 'none', color: 'var(--red)', fontSize: 11 }}>
-                      ✕
-                    </button>
+                  <div key={actuacio.id} style={{ marginTop: 8, marginLeft: 28 }}>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                      <input
+                        type="text"
+                        value={actuacio.text}
+                        placeholder="Actuació/Activitat"
+                        onChange={(e) => actualitzaActuacio(objectiu.id, actuacio.id, { text: e.target.value })}
+                        onBlur={() => desa(valoracio)}
+                        style={{ flex: 1, minWidth: 160, border: '1px solid var(--line)', borderRadius: 6, padding: '5px 8px', fontSize: 12 }}
+                      />
+                      <input
+                        type="text"
+                        value={actuacio.indicador}
+                        placeholder="Indicador d'avaluació"
+                        onChange={(e) => actualitzaActuacio(objectiu.id, actuacio.id, { indicador: e.target.value })}
+                        onBlur={() => desa(valoracio)}
+                        style={{ flex: 1, minWidth: 160, border: '1px solid var(--line)', borderRadius: 6, padding: '5px 8px', fontSize: 12 }}
+                      />
+                      <button type="button" onClick={() => esborraActuacio(objectiu.id, actuacio.id)} style={{ background: 'none', border: 'none', color: 'var(--red)', fontSize: 11 }}>
+                        ✕
+                      </button>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 6 }}>
+                      <SelectorEstat
+                        etiqueta="Gener"
+                        valor={actuacio.gener}
+                        onCanvi={(v) => { const nova = actualitzaActuacio(objectiu.id, actuacio.id, { gener: v }); desa(nova) }}
+                      />
+                      <SelectorEstat
+                        etiqueta="Juny"
+                        valor={actuacio.juny}
+                        onCanvi={(v) => { const nova = actualitzaActuacio(objectiu.id, actuacio.id, { juny: v }); desa(nova) }}
+                      />
+                    </div>
                   </div>
                 ))}
                 <button
