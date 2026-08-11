@@ -74,7 +74,7 @@ export default function Dashboard({ user, onSignOut }) {
         <main className="content">
           <ModuleErrorBoundary key={activeId}>
             <Suspense fallback={<div className="loader" style={{ marginTop: 40 }} />}>
-              <ActiveModule />
+              <ActiveModule onNavigate={setActiveId} admin={admin} modulsVisibles={modulsVisibles} />
             </Suspense>
           </ModuleErrorBoundary>
         </main>
