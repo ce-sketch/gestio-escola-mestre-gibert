@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import * as XLSX from 'xlsx'
 import {
-  collection, doc, getDocs, writeBatch, serverTimestamp,
+  collection, doc, getDocs, query, where, writeBatch, serverTimestamp,
 } from 'firebase/firestore'
 import { db } from '../../firebase'
 import { slug } from '../../lib/slug'
+import { cursEscolarActual } from '../../lib/cursEscolar'
 
 const DEFAULT_CLASSES = ['1r A', '1r B']
 
@@ -36,6 +37,15 @@ export default function Alumnes() {
 
   const [confirmaEsborrat, setConfirmaEsborrat] = useState('')
   const [esborrant, setEsborrant] = useState(false)
+
+  const [cursProves, setCursProves] = useState(cursEscolarActual())
+  const [confirmaEsborratProves, setConfirmaEsborratProves] = useState('')
+  const [esborrantProves, setEsborrantProves] = useState(false)
+  const [resultatEsborratProves, setResultatEsborratProves] = useState(null)
+
+  const [ajutFitxer, setAjutFitxer] = useState(null)
+  const [ajutCarregant, setAjutCarregant] = useState(false)
+  const [ajutMissatge, setAjutMissatge] = useState(null)
 
   function updateClass(index, field, value) {
     setClasses((prev) => prev.map((c, i) => (i === index ? { ...c, [field]: value } : c)))
@@ -74,6 +84,66 @@ export default function Alumnes() {
     } finally {
       setImporting(false)
     }
+  }
+
+  /** Pujada opcional del fitxer "Motxilles i Pla de Xoc" — nomès afegeix
+   *  una etiqueta de seguiment (quin ajut i, per tant, qui el finança) als
+   *  alumnes que ja existeixen (fets coincidir per IDALU). No canvia qui té
+   *  dret a la reducció de les quotes — això ja es calcula a partir de
+   *  "Alumne NESE?" i el motiu, tal com sempre. */
+  function handleAjutFileChange(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setAjutMissatge(null)
+    setAjutCarregant(true)
+
+    const reader = new FileReader()
+    reader.onload = async (event) => {
+      try {
+        const workbook = XLSX.read(event.target.result, { type: 'binary' })
+        const primerFull = workbook.Sheets[workbook.SheetNames[0]]
+        const files = XLSX.utils.sheet_to_json(primerFull, { header: 1, raw: false })
+
+        // Columnes d'aquest fitxer (0-indexades): 0=IDALU, 7="Pla de Xoc /
+        // Motxilles Escolars" (text lliure amb el programa concret).
+        const actualitzacions = []
+        for (const fila of files) {
+          const idalu = fila[0]?.toString().replace(/[^\d]/g, '')
+          const programa = fila[7]?.toString().trim()
+          if (!idalu || !/^\d+$/.test(idalu) || !programa) continue
+          actualitzacions.push({ idalu, programa })
+        }
+
+        if (actualitzacions.length === 0) {
+          setAjutMissatge({ type: 'error', text: 'No s\'ha trobat cap fila amb IDALU i programa vàlids en aquest fitxer.' })
+          setAjutCarregant(false)
+          return
+        }
+
+        const alumnesRef = collection(db, 'alumnes')
+        let actualitzats = 0
+        let noTrobats = 0
+        for (let i = 0; i < actualitzacions.length; i += 500) {
+          const batch = writeBatch(db)
+          for (const { idalu, programa } of actualitzacions.slice(i, i + 500)) {
+            batch.set(doc(alumnesRef, idalu), { ajutNese: programa }, { merge: true })
+          }
+          await batch.commit()
+          actualitzats += actualitzacions.slice(i, i + 500).length
+        }
+
+        setAjutMissatge({ type: 'ok', text: `Etiqueta d'ajut (Motxilles/Pla de Xoc) actualitzada per ${actualitzats} alumnes.` })
+      } catch (err) {
+        setAjutMissatge({ type: 'error', text: `No s'ha pogut llegir el fitxer: ${err.message}` })
+      } finally {
+        setAjutCarregant(false)
+      }
+    }
+    reader.onerror = () => {
+      setAjutMissatge({ type: 'error', text: 'No s\'ha pogut llegir el fitxer.' })
+      setAjutCarregant(false)
+    }
+    reader.readAsBinaryString(file)
   }
 
   function handleFileChange(e) {
@@ -172,6 +242,55 @@ export default function Alumnes() {
       setLog([{ type: 'error', text: `No s'ha pogut esborrar: ${err.message}` }])
     } finally {
       setEsborrant(false)
+    }
+  }
+
+  /** Esborra de debò les notes (Avaluació) i les marques d'assistència
+   *  d'UN curs escolar concret — pensat només per netejar dades de proves,
+   *  no per a l'ús normal (per a un curs nou de debò no cal esborrar res:
+   *  les dades ja queden separades soles pel camp "cursEscolar"). */
+  async function esborraProvesDelCurs() {
+    setEsborrantProves(true)
+    setResultatEsborratProves(null)
+    try {
+      // Avaluació: es filtra pel camp "cursEscolar" que ja porta cada
+      // registre (amb el mateix "o cursEscolarActual()" de reserva que fa
+      // servir la resta de l'app, per si algun registre antic no el té).
+      const snapAvaluacio = await getDocs(collection(db, 'avaluacio'))
+      const docsAvaluacio = snapAvaluacio.docs.filter((d) => (d.data().cursEscolar ?? cursEscolarActual()) === cursProves)
+
+      // Assistència: no porta el camp "cursEscolar" directament, però sí
+      // una data — calculem el rang de dates d'aquell curs (de l'1 de
+      // setembre a el 31 d'agost).
+      const [anyIniciStr] = cursProves.split('-')
+      const anyInici = Number(anyIniciStr)
+      const dataInici = `${anyInici}-09-01`
+      const dataFi = `${anyInici + 1}-08-31`
+      const snapAssistencia = await getDocs(
+        query(collection(db, 'assistencia'), where('data', '>=', dataInici), where('data', '<=', dataFi))
+      )
+      const docsAssistencia = snapAssistencia.docs
+
+      const totsElsDocs = [
+        ...docsAvaluacio.map((d) => ({ ref: doc(db, 'avaluacio', d.id) })),
+        ...docsAssistencia.map((d) => ({ ref: doc(db, 'assistencia', d.id) })),
+      ]
+
+      for (let i = 0; i < totsElsDocs.length; i += 500) {
+        const batch = writeBatch(db)
+        for (const { ref } of totsElsDocs.slice(i, i + 500)) batch.delete(ref)
+        await batch.commit()
+      }
+
+      setResultatEsborratProves({
+        avaluacio: docsAvaluacio.length,
+        assistencia: docsAssistencia.length,
+      })
+      setConfirmaEsborratProves('')
+    } catch (err) {
+      setResultatEsborratProves({ error: err.message })
+    } finally {
+      setEsborrantProves(false)
     }
   }
 
@@ -315,6 +434,24 @@ export default function Alumnes() {
         </ul>
       )}
 
+      <div style={{ marginTop: 32, border: '1px solid var(--line)', borderRadius: 12, padding: 20 }}>
+        <p className="module-note" style={{ marginTop: 0, fontStyle: 'normal', fontWeight: 600, color: 'var(--ink)' }}>
+          Opcional: puja el fitxer "Motxilles i Pla de Xoc"
+        </p>
+        <p className="module-note" style={{ marginTop: 0 }}>
+          Nomès afegeix una etiqueta de seguiment (quin ajut té cada alumne — Motxilles
+          Escolars o Pla de Xoc — i per tant qui el finança, CEB o Generalitat segons la
+          promoció). No canvia qui té dret a la reducció de les quotes.
+        </p>
+        <input type="file" accept=".xlsx,.xls" onChange={handleAjutFileChange} style={{ marginTop: 8 }} disabled={ajutCarregant} />
+        {ajutCarregant && <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 8 }}>Actualitzant…</p>}
+        {ajutMissatge && (
+          <p style={{ fontSize: 13, marginTop: 8, color: ajutMissatge.type === 'error' ? 'var(--red)' : 'var(--green)' }}>
+            {ajutMissatge.text}
+          </p>
+        )}
+      </div>
+
       <details style={{ marginTop: 40 }}>
         <summary style={{ cursor: 'pointer', fontWeight: 600, color: 'var(--red)' }}>
           Zona perillosa: esborra tots els alumnes
@@ -351,6 +488,63 @@ export default function Alumnes() {
               {esborrant ? 'Esborrant…' : 'Esborra tots els alumnes'}
             </button>
           </div>
+        </div>
+      </details>
+
+      <details style={{ marginTop: 16 }}>
+        <summary style={{ cursor: 'pointer', fontWeight: 600, color: 'var(--red)' }}>
+          Zona perillosa: esborra notes i assistència de proves d'un curs escolar
+        </summary>
+        <div className="placeholder-box" style={{ borderStyle: 'solid', marginTop: 16, borderColor: 'var(--red)' }}>
+          <p>
+            <strong>Això esborra de debò totes les notes d'Avaluació i totes les marques
+            d'Assistència del curs escolar que triïs</strong> — no és reversible. Fes-ho servir
+            només per netejar dades de proves, mai amb dades reals d'alumnes.
+          </p>
+          <p style={{ marginTop: 8, fontSize: 13, color: 'var(--ink-soft)' }}>
+            Per començar un curs nou de debò <strong>no cal fer servir això</strong>: les notes
+            ja queden separades soles per curs escolar, sense esborrar res.
+          </p>
+          <label className="field" style={{ maxWidth: 160, marginTop: 10 }}>
+            <span>Curs escolar a netejar</span>
+            <input
+              type="text"
+              value={cursProves}
+              onChange={(e) => setCursProves(e.target.value)}
+              style={{ border: '1px solid var(--red)', borderRadius: 8, padding: '8px 10px', fontWeight: 600 }}
+            />
+          </label>
+          <p style={{ marginTop: 10 }}>
+            Per confirmar, escriu <strong>ESBORRA</strong> aquí sota i clica el botó:
+          </p>
+          <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <input
+              type="text"
+              value={confirmaEsborratProves}
+              onChange={(e) => setConfirmaEsborratProves(e.target.value)}
+              placeholder="ESBORRA"
+              style={{ border: '1px solid var(--red)', borderRadius: 8, padding: '8px 10px', maxWidth: 160 }}
+            />
+            <button
+              type="button"
+              onClick={esborraProvesDelCurs}
+              disabled={confirmaEsborratProves !== 'ESBORRA' || esborrantProves}
+              style={{
+                background: 'var(--red)', color: '#fff', border: 'none', borderRadius: 8,
+                padding: '10px 16px', fontWeight: 600, cursor: confirmaEsborratProves === 'ESBORRA' ? 'pointer' : 'not-allowed',
+                opacity: confirmaEsborratProves === 'ESBORRA' ? 1 : 0.5,
+              }}
+            >
+              {esborrantProves ? 'Esborrant…' : `Esborra Avaluació i Assistència de ${cursProves}`}
+            </button>
+          </div>
+          {resultatEsborratProves && (
+            <p style={{ marginTop: 10, fontSize: 13, color: resultatEsborratProves.error ? 'var(--red)' : 'var(--green)' }}>
+              {resultatEsborratProves.error
+                ? `No s'ha pogut esborrar: ${resultatEsborratProves.error}`
+                : `Esborrats ${resultatEsborratProves.avaluacio} registres d'avaluació i ${resultatEsborratProves.assistencia} d'assistència del curs ${cursProves}.`}
+            </p>
+          )}
         </div>
       </details>
     </div>
