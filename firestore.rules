@@ -123,6 +123,20 @@ service cloud.firestore {
       allow read, write: if esComptePersonal();
     }
 
+    // Valoració detallada de les activitats complementàries/sortides, per
+    // cicle — mateix accés que la resta de valoracions.
+    match /activitatsComplementariesDetall/{activitatId} {
+      allow read, write: if esComptePersonal();
+    }
+
+    // Configuració de quines comissions/equips i festes estan actives cada
+    // curs — nomès l'administrador la pot canviar, però tot el personal la
+    // pot llegir (per saber quines opcions els han de sortir).
+    match /valoracionsConfig/{cursEscolarId} {
+      allow read: if esComptePersonal();
+      allow write: if esAdmin();
+    }
+
     // Per defecte, tot el que no s'hagi definit explícitament queda bloquejat.
     match /{document=**} {
       allow read, write: if false;
