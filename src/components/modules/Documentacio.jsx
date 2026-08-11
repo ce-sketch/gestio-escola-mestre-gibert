@@ -4,7 +4,7 @@ import { db, auth } from '../../firebase'
 import { cursEscolarActual } from '../../lib/cursEscolar'
 import { slug } from '../../lib/slug'
 import {
-  CICLES, NOMS_SUGGERITS, FESTES, valoracioBuida, objectiuBuit, actuacioBuida,
+  CICLES, NOMS_SUGGERITS, NOMS_AFA, FESTES, valoracioBuida, objectiuBuit, actuacioBuida,
   mitjanaObjectiu, mitjanaValoracio,
 } from '../../lib/valoracions'
 import { CURS_AMB_PLANTILLA, PLANTILLES_26_27 } from '../../lib/valoracionsPlantilles26_27'
@@ -15,6 +15,12 @@ import {
 import { CURS_AMB_PLANTILLA as CURS_FESTES, FESTES_PLANTILLES_26_27, construeixFestaAmbPlantilla } from '../../lib/festesPlantilles26_27'
 import { carregaConfigValoracions } from '../../lib/valoracionsConfig'
 import { ESTATS_EXECUCIO, estatDe } from '../../lib/estatsExecucio'
+import {
+  CRITERIS_ACTIVITAT, activitatBuida as activitatSortidaBuida, mitjanaActivitat, grauSatisfaccioCicle,
+  percentValorades, totalRepetirSi,
+} from '../../lib/activitatsComplementariesDetall'
+import { activitatsDelCicle } from '../../lib/activitatsComplementariesParser'
+import * as XLSX from 'xlsx'
 
 function inputPercent(valor, onChange, onBlur) {
   return (
@@ -80,9 +86,108 @@ export default function Documentacio() {
   const [grupObert, setGrupObert] = useState(GRUPS[0])
   const [configActiva, setConfigActiva] = useState(null)
 
+  const [cicleActivitats, setCicleActivitats] = useState('')
+  const [activitats, setActivitats] = useState([])
+  const [activitatOberta, setActivitatOberta] = useState(null)
+  const [carregantActivitats, setCarregantActivitats] = useState(false)
+  const [pujantActivitats, setPujantActivitats] = useState(false)
+
   useEffect(() => {
     carregaConfigValoracions(cursEscolarId).then(setConfigActiva).catch(() => setConfigActiva(null))
   }, [cursEscolarId])
+
+  useEffect(() => {
+    if (tipus === 'activitats' && cicleActivitats) carregaActivitats()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tipus, cicleActivitats, cursEscolarId])
+
+  async function carregaActivitats() {
+    setCarregantActivitats(true)
+    setMissatge(null)
+    try {
+      const id = `${cursEscolarId}__activitats-${slug(cicleActivitats)}`
+      const snap = await getDoc(doc(db, 'activitatsComplementariesDetall', id))
+      setActivitats(snap.exists() ? (snap.data().activitats ?? []) : [])
+    } catch (err) {
+      setMissatge({ type: 'error', text: `No s'han pogut carregar les activitats: ${err.message}` })
+    } finally {
+      setCarregantActivitats(false)
+    }
+  }
+
+  async function desaActivitats(activitatsNoves) {
+    try {
+      const id = `${cursEscolarId}__activitats-${slug(cicleActivitats)}`
+      await setDoc(doc(db, 'activitatsComplementariesDetall', id), {
+        cicle: cicleActivitats,
+        cursEscolar: cursEscolarId,
+        activitats: activitatsNoves,
+        actualitzatEl: serverTimestamp(),
+        actualitzatPer: auth.currentUser?.email ?? null,
+      })
+    } catch (err) {
+      setMissatge({ type: 'error', text: `No s'ha pogut desar: ${err.message}` })
+    }
+  }
+
+  function actualitzaActivitat(activitatId, canvis) {
+    const noves = activitats.map((a) => a.id === activitatId ? { ...a, ...canvis } : a)
+    setActivitats(noves)
+    return noves
+  }
+
+  function actualitzaCriteriActivitat(activitatId, criteriId, valor) {
+    const noves = activitats.map((a) => a.id !== activitatId ? a : { ...a, valoracions: { ...a.valoracions, [criteriId]: valor } })
+    setActivitats(noves)
+    return noves
+  }
+
+  /** Puja el document consolidat de sortides (el mateix que Economia) i
+   *  n'extreu les activitats reals del cicle triat — sense esborrar cap
+   *  valoració que ja s'hagués introduït per a una activitat que coincideixi
+   *  de nom. */
+  function pujaActivitatsCicle(e) {
+    const file = e.target.files?.[0]
+    if (!file || !cicleActivitats) return
+    setPujantActivitats(true)
+    setMissatge(null)
+
+    const reader = new FileReader()
+    reader.onload = async (event) => {
+      try {
+        const workbook = XLSX.read(event.target.result, { type: 'binary' })
+        const trobades = activitatsDelCicle(workbook, XLSX, cicleActivitats)
+        if (trobades.length === 0) {
+          setMissatge({ type: 'error', text: `No he trobat cap activitat pel cicle "${cicleActivitats}" en aquest Excel.` })
+          setPujantActivitats(false)
+          return
+        }
+        const noves = trobades.map((t) => {
+          const existent = activitats.find((a) => a.nom === t.nom)
+          if (existent) return { ...existent, nivell: t.nivell, data: t.data, horari: t.horari, preu: t.preu }
+          const nova = activitatSortidaBuida(t.nom)
+          nova.nivell = t.nivell
+          nova.data = t.data
+          nova.horari = t.horari
+          nova.preu = t.preu
+          return nova
+        })
+        setActivitats(noves)
+        await desaActivitats(noves)
+        setMissatge({ type: 'ok', text: `${noves.length} activitats carregades per a ${cicleActivitats}.` })
+      } catch (err) {
+        setMissatge({ type: 'error', text: `No s'ha pogut llegir l'Excel: ${err.message}` })
+      } finally {
+        setPujantActivitats(false)
+      }
+    }
+    reader.onerror = () => {
+      setMissatge({ type: 'error', text: 'No s\'ha pogut llegir el fitxer.' })
+      setPujantActivitats(false)
+    }
+    reader.readAsBinaryString(file)
+    e.target.value = ''
+  }
 
   useEffect(() => {
     carregaNomsExistents()
@@ -391,11 +496,27 @@ export default function Documentacio() {
           </button>
           <button
             type="button"
+            onClick={() => { setTipus('afa'); setNom('') }}
+            className={tipus === 'afa' ? 'btn-primary' : 'btn-ghost'}
+            style={tipus === 'afa' ? { maxWidth: 220 } : { maxWidth: 220, color: 'var(--navy)', borderColor: 'var(--navy)' }}
+          >
+            AFA, Comunicació i Migdia
+          </button>
+          <button
+            type="button"
             onClick={() => { setTipus('festa'); setNom(''); setFestaId('') }}
             className={tipus === 'festa' ? 'btn-primary' : 'btn-ghost'}
             style={tipus === 'festa' ? { maxWidth: 240 } : { maxWidth: 240, color: 'var(--navy)', borderColor: 'var(--navy)' }}
           >
             Festes i celebracions
+          </button>
+          <button
+            type="button"
+            onClick={() => { setTipus('activitats'); setNom(''); setCicleActivitats('') }}
+            className={tipus === 'activitats' ? 'btn-primary' : 'btn-ghost'}
+            style={tipus === 'activitats' ? { maxWidth: 220 } : { maxWidth: 220, color: 'var(--navy)', borderColor: 'var(--navy)' }}
+          >
+            Activitats complementàries
           </button>
         </div>
 
@@ -406,6 +527,30 @@ export default function Documentacio() {
               <select
                 value={nom}
                 onChange={(e) => setNom(e.target.value)}
+                style={{ border: '1px solid var(--line)', borderRadius: 8, padding: '10px 12px' }}
+              >
+                <option value="">Tria un cicle…</option>
+                {CICLES.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </label>
+          ) : tipus === 'afa' ? (
+            <label className="field" style={{ maxWidth: 320 }}>
+              <span>Comissió</span>
+              <select
+                value={nom}
+                onChange={(e) => setNom(e.target.value)}
+                style={{ border: '1px solid var(--line)', borderRadius: 8, padding: '10px 12px' }}
+              >
+                <option value="">Tria una comissió…</option>
+                {NOMS_AFA.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </label>
+          ) : tipus === 'activitats' ? (
+            <label className="field" style={{ maxWidth: 320 }}>
+              <span>Cicle</span>
+              <select
+                value={cicleActivitats}
+                onChange={(e) => setCicleActivitats(e.target.value)}
                 style={{ border: '1px solid var(--line)', borderRadius: 8, padding: '10px 12px' }}
               >
                 <option value="">Tria un cicle…</option>
@@ -594,6 +739,123 @@ export default function Documentacio() {
               )}
             </>
           )
+        ) : tipus === 'activitats' ? (
+          !cicleActivitats ? (
+            <p style={{ marginTop: 16, fontSize: 13, color: 'var(--ink-soft)' }}>
+              Tria un cicle per començar (o continuar) la valoració d'activitats complementàries.
+            </p>
+          ) : carregantActivitats ? (
+            <p style={{ marginTop: 16 }}>Carregant…</p>
+          ) : (
+            <>
+              <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+                <label className="btn-ghost" style={{ color: 'var(--navy)', borderColor: 'var(--navy)', cursor: 'pointer', display: 'inline-flex' }}>
+                  {pujantActivitats ? 'Llegint el document…' : '📤 Puja el document de sortides (el mateix d\'Economia)'}
+                  <input type="file" accept=".xlsx,.xls" onChange={pujaActivitatsCicle} style={{ display: 'none' }} disabled={pujantActivitats} />
+                </label>
+              </div>
+              <p className="module-note" style={{ marginTop: 6 }}>
+                Puja el mateix Excel consolidat "Activitats_Complementaries_..._I3_a_6e" que ja
+                fas servir a Economia — es llegeixen els fulls dels nivells d'aquest cicle i
+                se n'agafen els noms de les activitats reals. Si ja havies valorat alguna
+                activitat amb aquest nom, la valoració es manté.
+              </p>
+
+              {activitats.length > 0 && (
+                <div style={{ display: 'flex', gap: 24, marginTop: 16, fontSize: 13, flexWrap: 'wrap' }}>
+                  <span>Grau de satisfacció: <strong>{grauSatisfaccioCicle(activitats) !== null ? `${Math.round(grauSatisfaccioCicle(activitats))}%` : '—'}</strong></span>
+                  <span>% de sortides valorades: <strong>{Math.round(percentValorades(activitats))}%</strong></span>
+                  <span>Total de "Sí" (repetir): <strong>{totalRepetirSi(activitats)}</strong></span>
+                </div>
+              )}
+
+              {missatge && (
+                <p style={{ marginTop: 12, fontSize: 13, color: missatge.type === 'error' ? 'var(--red)' : 'var(--green)' }}>
+                  {missatge.text}
+                </p>
+              )}
+
+              <div style={{ marginTop: 16 }}>
+                {activitats.length === 0 ? (
+                  <p style={{ fontSize: 13, color: 'var(--ink-soft)' }}>
+                    Encara no hi ha cap activitat carregada per a aquest cicle.
+                  </p>
+                ) : activitats.map((act) => {
+                  const oberta = activitatOberta === act.id
+                  const mitjana = mitjanaActivitat(act)
+                  return (
+                    <div key={act.id} className="placeholder-box" style={{ marginTop: 10, padding: 0, overflow: 'hidden' }}>
+                      <div
+                        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', cursor: 'pointer', flexWrap: 'wrap', gap: 8 }}
+                        onClick={() => setActivitatOberta(oberta ? null : act.id)}
+                      >
+                        <div>
+                          <strong>{act.nom}</strong>
+                          <span style={{ fontSize: 12, color: 'var(--ink-soft)', marginLeft: 8 }}>
+                            {act.nivell} {act.data && `· ${act.data}`}
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                          <strong>{mitjana !== null ? `${mitjana.toFixed(1)}/10` : '— /10'}</strong>
+                          <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>{oberta ? '▲' : '▼'}</span>
+                        </div>
+                      </div>
+
+                      {oberta && (
+                        <div style={{ padding: '4px 14px 14px', borderTop: '1px solid var(--line)' }}>
+                          <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 10 }}>
+                            {act.horari && `Horari: ${act.horari}`} {act.preu && `· Preu: ${act.preu}`}
+                          </p>
+
+                          <p style={{ fontSize: 13, fontWeight: 600, marginTop: 12 }}>Valoració (0-10)</p>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 8, marginTop: 8 }}>
+                            {CRITERIS_ACTIVITAT.map((c) => (
+                              <label key={c.id} style={{ fontSize: 11 }}>
+                                {c.label}
+                                <input
+                                  type="number" min={0} max={10} step={1}
+                                  value={act.valoracions[c.id]}
+                                  onChange={(e) => actualitzaCriteriActivitat(act.id, c.id, e.target.value)}
+                                  onBlur={() => desaActivitats(activitats)}
+                                  style={{ display: 'block', width: 70, marginTop: 3, border: '1px solid var(--line)', borderRadius: 6, padding: '4px 6px' }}
+                                />
+                              </label>
+                            ))}
+                          </div>
+
+                          <div style={{ display: 'flex', gap: 16, marginTop: 14, alignItems: 'center', flexWrap: 'wrap' }}>
+                            <label style={{ fontSize: 12 }}>
+                              Tornaríeu a fer la sortida?
+                              <select
+                                value={act.repetir}
+                                onChange={(e) => { const noves = actualitzaActivitat(act.id, { repetir: e.target.value }); desaActivitats(noves) }}
+                                style={{ display: 'block', marginTop: 3, border: '1px solid var(--line)', borderRadius: 6, padding: '5px 8px' }}
+                              >
+                                <option value="">—</option>
+                                <option value="Sí">Sí</option>
+                                <option value="No">No</option>
+                              </select>
+                            </label>
+                          </div>
+
+                          <label style={{ display: 'block', marginTop: 12, fontSize: 12 }}>
+                            Aspectes a considerar un altre curs
+                            <textarea
+                              value={act.aspectesConsiderar}
+                              onChange={(e) => actualitzaActivitat(act.id, { aspectesConsiderar: e.target.value })}
+                              onBlur={() => desaActivitats(activitats)}
+                              rows={2}
+                              style={{ display: 'block', width: '100%', marginTop: 4, border: '1px solid var(--line)', borderRadius: 6, padding: 8, fontFamily: 'inherit', fontSize: 12 }}
+                            />
+                          </label>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </>
+          )
         ) : !nom.trim() ? (
           <p style={{ marginTop: 16, fontSize: 13, color: 'var(--ink-soft)' }}>
             Escriu o tria un nom de cicle/comissió/equip per començar (o continuar) la valoració.
@@ -627,8 +889,8 @@ export default function Documentacio() {
             </div>
 
             <div style={{ display: 'flex', gap: 24, marginTop: 16, fontSize: 13 }}>
-              <span>Grau d'assoliment — Gener: <strong>{mitjanaValoracio(valoracio, 'gener') !== null ? `${Math.round(mitjanaValoracio(valoracio, 'gener'))}%` : '—'}</strong></span>
-              <span>Grau d'assoliment — Juny: <strong>{mitjanaValoracio(valoracio, 'juny') !== null ? `${Math.round(mitjanaValoracio(valoracio, 'juny'))}%` : '—'}</strong></span>
+              <span>TOTAL GENERAL — Gener: <strong>{mitjanaValoracio(valoracio, 'gener') !== null ? `${Math.round(mitjanaValoracio(valoracio, 'gener'))}%` : '—'}</strong></span>
+              <span>TOTAL GENERAL — Juny: <strong>{mitjanaValoracio(valoracio, 'juny') !== null ? `${Math.round(mitjanaValoracio(valoracio, 'juny'))}%` : '—'}</strong></span>
             </div>
 
             <p style={{ fontSize: 13, fontWeight: 600, marginTop: 24 }}>Objectius</p>
@@ -662,7 +924,7 @@ export default function Documentacio() {
                 <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', flexWrap: 'wrap', marginTop: 6 }}>
                   {objectiu.actuacions.length > 0 && (
                     <div style={{ fontSize: 12, fontWeight: 600 }}>
-                      Gener {mitjanaObjectiu(objectiu, 'gener') !== null ? `${Math.round(mitjanaObjectiu(objectiu, 'gener'))}%` : '—'} · Juny {mitjanaObjectiu(objectiu, 'juny') !== null ? `${Math.round(mitjanaObjectiu(objectiu, 'juny'))}%` : '—'}
+                      TOTAL objectiu — Gener {mitjanaObjectiu(objectiu, 'gener') !== null ? `${Math.round(mitjanaObjectiu(objectiu, 'gener'))}%` : '—'} · Juny {mitjanaObjectiu(objectiu, 'juny') !== null ? `${Math.round(mitjanaObjectiu(objectiu, 'juny'))}%` : '—'}
                     </div>
                   )}
                   <button type="button" onClick={() => esborraObjectiu(objectiu.id)} style={{ background: 'none', border: '1px solid var(--red)', color: 'var(--red)', borderRadius: 6, padding: '4px 8px', fontSize: 11 }}>
