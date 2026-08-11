@@ -3,6 +3,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'
 import { db, auth } from '../../firebase'
 import { cursEscolarActual } from '../../lib/cursEscolar'
 import { objectiusPerDefecte, operatiuBuit, indicadorBuit, mitjanaOperatiu, mitjanaObjectiu, mitjanaGeneral } from '../../lib/pgac'
+import { ESTATS_EXECUCIO, estatDe } from '../../lib/estatsExecucio'
 
 function Barra({ valor }) {
   if (valor === null) return <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>Sense dades</span>
@@ -183,42 +184,58 @@ export default function Pgac() {
                       <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 4 }}>{op.text}</p>
 
                       {op.indicadors.map((ind) => (
-                        <div key={ind.id} style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
-                          <input
-                            type="text"
-                            value={ind.text}
-                            placeholder="Text de l'indicador"
-                            onChange={(e) => canviaIndicador(objectiuIndex, op.id, ind.id, 'text', e.target.value)}
-                            onBlur={() => onBlurDesa(objectius)}
-                            style={{ flex: 1, minWidth: 220, border: '1px solid var(--line)', borderRadius: 6, padding: '6px 8px', fontSize: 12 }}
-                          />
-                          <label style={{ fontSize: 11, color: 'var(--ink-soft)' }}>
-                            Gener
+                        <div key={ind.id} style={{ marginTop: 10, padding: '10px 12px', border: '1px solid var(--line)', borderRadius: 8 }}>
+                          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', flexWrap: 'wrap' }}>
                             <input
-                              type="number" min={0} max={100}
-                              value={ind.gener}
-                              onChange={(e) => canviaIndicador(objectiuIndex, op.id, ind.id, 'gener', e.target.value)}
+                              type="text"
+                              value={ind.text}
+                              placeholder="Text de l'indicador"
+                              onChange={(e) => canviaIndicador(objectiuIndex, op.id, ind.id, 'text', e.target.value)}
                               onBlur={() => onBlurDesa(objectius)}
-                              style={{ display: 'block', width: 60, border: '1px solid var(--line)', borderRadius: 6, padding: '4px 6px', fontSize: 12, marginTop: 2 }}
+                              style={{ flex: 1, minWidth: 220, border: '1px solid var(--line)', borderRadius: 6, padding: '6px 8px', fontSize: 12 }}
                             />
-                          </label>
-                          <label style={{ fontSize: 11, color: 'var(--ink-soft)' }}>
-                            Juny
-                            <input
-                              type="number" min={0} max={100}
-                              value={ind.juny}
-                              onChange={(e) => canviaIndicador(objectiuIndex, op.id, ind.id, 'juny', e.target.value)}
-                              onBlur={() => onBlurDesa(objectius)}
-                              style={{ display: 'block', width: 60, border: '1px solid var(--line)', borderRadius: 6, padding: '4px 6px', fontSize: 12, marginTop: 2 }}
-                            />
-                          </label>
-                          <button
-                            type="button"
-                            onClick={() => esborraIndicador(objectiuIndex, op.id, ind.id)}
-                            style={{ background: 'none', border: '1px solid var(--red)', color: 'var(--red)', borderRadius: 6, padding: '4px 8px', fontSize: 11 }}
-                          >
-                            Esborra
-                          </button>
+                            <button
+                              type="button"
+                              onClick={() => esborraIndicador(objectiuIndex, op.id, ind.id)}
+                              style={{ background: 'none', border: '1px solid var(--red)', color: 'var(--red)', borderRadius: 6, padding: '4px 8px', fontSize: 11 }}
+                            >
+                              Esborra
+                            </button>
+                          </div>
+
+                          {[{ camp: 'gener', etiqueta: 'Gener' }, { camp: 'juny', etiqueta: 'Juny' }].map(({ camp, etiqueta }) => {
+                            const estatActual = estatDe(ind[camp])
+                            return (
+                              <div key={camp} style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
+                                <span style={{ fontSize: 11, color: 'var(--ink-soft)', minWidth: 40 }}>{etiqueta}</span>
+                                {ESTATS_EXECUCIO.map((e) => (
+                                  <button
+                                    key={e.id}
+                                    type="button"
+                                    onClick={() => { const nous = canviaIndicador(objectiuIndex, op.id, ind.id, camp, e.valor); onBlurDesa(nous) }}
+                                    style={{
+                                      fontSize: 11, padding: '4px 10px', borderRadius: 6,
+                                      border: `1px solid ${estatActual?.id === e.id ? 'var(--navy)' : 'var(--line)'}`,
+                                      background: estatActual?.id === e.id ? 'var(--navy)' : 'transparent',
+                                      color: estatActual?.id === e.id ? '#fff' : 'var(--ink)',
+                                      cursor: 'pointer',
+                                    }}
+                                  >
+                                    {e.label}
+                                  </button>
+                                ))}
+                                <input
+                                  type="number" min={0} max={100}
+                                  value={ind[camp]}
+                                  onChange={(e) => canviaIndicador(objectiuIndex, op.id, ind.id, camp, e.target.value)}
+                                  onBlur={() => onBlurDesa(objectius)}
+                                  title="Si l'indicador té una escala pròpia (per exemple '2 Cicles = 66%'), escriu aquí el número exacte"
+                                  style={{ width: 56, border: '1px solid var(--line)', borderRadius: 6, padding: '4px 6px', fontSize: 11, marginLeft: 4 }}
+                                />
+                                <span style={{ fontSize: 10, color: 'var(--ink-soft)' }}>%</span>
+                              </div>
+                            )
+                          })}
                         </div>
                       ))}
                       <button
