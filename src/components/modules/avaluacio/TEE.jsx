@@ -526,7 +526,7 @@ export default function TEE() {
             <button
               className="btn-ghost"
               style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
-              onClick={() => exportaExcel(nomFitxerClasse, taulaClasseActual())}
+              onClick={() => exportaExcel(nomFitxerClasse, { cursEscolarId, fulls: taulaClasseActual() })}
               type="button"
             >
               📥 Descarrega Excel ({curs})
@@ -534,7 +534,7 @@ export default function TEE() {
             <button
               className="btn-ghost"
               style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
-              onClick={() => exportaPDF(`TEE — ${curs} — ${trimestre}`, taulaClasseActual())}
+              onClick={() => exportaPDF(`TEE — ${curs} — ${trimestre}`, { cursEscolarId, fulls: taulaClasseActual() })}
               type="button"
             >
               📄 Descarrega PDF ({curs})

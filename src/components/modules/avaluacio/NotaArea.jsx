@@ -330,7 +330,7 @@ export default function NotaArea() {
         <button
           className="btn-ghost"
           style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
-          onClick={() => exportaExcel(`Nota-area-catala-${curs}-${trimestre.replace(/\s+/g, '_')}`, taulaClasseActual())}
+          onClick={() => exportaExcel(`Nota-area-catala-${curs}-${trimestre.replace(/\s+/g, '_')}`, { cursEscolarId, fulls: taulaClasseActual() })}
           type="button"
         >
           📥 Descarrega Excel ({curs})
@@ -338,7 +338,7 @@ export default function NotaArea() {
         <button
           className="btn-ghost"
           style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
-          onClick={() => exportaPDF(`Nota d'àrea Català — ${curs} — ${trimestre}`, taulaClasseActual())}
+          onClick={() => exportaPDF(`Nota d'àrea Català — ${curs} — ${trimestre}`, { cursEscolarId, fulls: taulaClasseActual() })}
           type="button"
         >
           📄 Descarrega PDF ({curs})

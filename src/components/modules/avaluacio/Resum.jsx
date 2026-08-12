@@ -152,10 +152,12 @@ export default function Resum() {
     return [[capçalera, ...labels, 'Total avaluats'], ...files_]
   }
 
-  function totesLesTaules() {
-    const fulls = [
-      { nom: `TEE ${trimestre}`, files: taulaExportable('Classe', resumTee, COLUMNES_COMUNES) },
-    ]
+  function taulesTEE() {
+    return [{ nom: `TEE ${trimestre}`, files: taulaExportable('Classe', resumTee, COLUMNES_COMUNES) }]
+  }
+
+  function taulesLectura() {
+    const fulls = []
     resumCl.forEach(({ label, files }) => {
       fulls.push({ nom: `CL ${label}`, files: taulaExportable('Classe', files, COLUMNES_CL) })
     })
@@ -165,7 +167,8 @@ export default function Resum() {
     return fulls
   }
 
-  const nomFitxer = `Resum-TEE-CL-VL-${cursEscolarId}-${trimestre.replace(/\s+/g, '_')}`
+  const nomFitxerTEE = `Resum-TEE-${cursEscolarId}-${trimestre.replace(/\s+/g, '_')}`
+  const nomFitxerLectura = `Resum-CL-VL-${cursEscolarId}`
 
   return (
     <div>
@@ -176,25 +179,6 @@ export default function Resum() {
         altra sense 1r (que fa servir un criteri diferent, sense curs inferior amb què
         comparar-se) — igual que es distingia al full de càlcul original.
       </p>
-
-      <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap' }}>
-        <button
-          className="btn-ghost"
-          style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
-          onClick={() => exportaExcel(nomFitxer, totesLesTaules())}
-          type="button"
-        >
-          📥 Descarrega Excel
-        </button>
-        <button
-          className="btn-ghost"
-          style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
-          onClick={() => exportaPDF(`Resum TEE, CL i VL — ${trimestre}`, totesLesTaules())}
-          type="button"
-        >
-          📄 Descarrega PDF
-        </button>
-      </div>
 
       <div style={{ display: 'flex', gap: 16, marginTop: 16, flexWrap: 'wrap' }}>
         <label className="field" style={{ maxWidth: 140 }}>
@@ -209,6 +193,24 @@ export default function Resum() {
       </div>
 
       <h3 style={{ marginTop: 28, fontSize: 16 }}>Resum TEE per classe</h3>
+      <div style={{ display: 'flex', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
+        <button
+          className="btn-ghost"
+          style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
+          onClick={() => exportaExcel(nomFitxerTEE, { cursEscolarId, fulls: taulesTEE() })}
+          type="button"
+        >
+          📥 Descarrega Excel (TEE)
+        </button>
+        <button
+          className="btn-ghost"
+          style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
+          onClick={() => exportaPDF(`Resum TEE — ${trimestre}`, { cursEscolarId, fulls: taulesTEE() })}
+          type="button"
+        >
+          📄 Descarrega PDF (TEE)
+        </button>
+      </div>
       <label className="field" style={{ maxWidth: 200, marginTop: 8 }}>
         <span>Trimestre</span>
         <select value={trimestre} onChange={(e) => setTrimestre(e.target.value)} style={{ padding: '8px 10px', border: '1px solid var(--line)', borderRadius: 8 }}>
@@ -235,7 +237,27 @@ export default function Resum() {
         </tbody>
       </table>
 
-      <h3 style={{ marginTop: 32, fontSize: 16 }}>Resum Comprensió Lectora (CL)</h3>
+      <h3 style={{ marginTop: 32, fontSize: 16 }}>Comprensió Lectora (CL) i Velocitat Lectora (VL)</h3>
+      <div style={{ display: 'flex', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
+        <button
+          className="btn-ghost"
+          style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
+          onClick={() => exportaExcel(nomFitxerLectura, { cursEscolarId, fulls: taulesLectura() })}
+          type="button"
+        >
+          📥 Descarrega Excel (CL i VL)
+        </button>
+        <button
+          className="btn-ghost"
+          style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
+          onClick={() => exportaPDF('Resum CL i VL', { cursEscolarId, fulls: taulesLectura() })}
+          type="button"
+        >
+          📄 Descarrega PDF (CL i VL)
+        </button>
+      </div>
+
+      <h4 style={{ marginTop: 20, fontSize: 14 }}>Comprensió Lectora (CL)</h4>
       {resumCl.map(({ momentId, label, files }) => (
         <div key={momentId} style={{ marginTop: 16 }}>
           <p className="module-note" style={{ fontStyle: 'normal', fontWeight: 600, color: 'var(--ink)' }}>{label}</p>
@@ -261,7 +283,7 @@ export default function Resum() {
         </div>
       ))}
 
-      <h3 style={{ marginTop: 32, fontSize: 16 }}>Resum Velocitat Lectora (VL)</h3>
+      <h4 style={{ marginTop: 32, fontSize: 14 }}>Velocitat Lectora (VL)</h4>
       {resumVl.map(({ moment, files }) => (
         <div key={moment.id} style={{ marginTop: 16 }}>
           <p className="module-note" style={{ fontStyle: 'normal', fontWeight: 600, color: 'var(--ink)' }}>{moment.label}</p>

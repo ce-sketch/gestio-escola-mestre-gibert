@@ -431,7 +431,7 @@ export default function NotesGenerals() {
             <button
               className="btn-ghost"
               style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
-              onClick={() => exportaExcel(`Notes-${classe}-${trimestre.replace(/\s+/g, '_')}`, taulaClasseActual())}
+              onClick={() => exportaExcel(`Notes-${classe}-${trimestre.replace(/\s+/g, '_')}`, { cursEscolarId, fulls: taulaClasseActual() })}
               type="button"
             >
               📥 Descarrega Excel ({classe})
@@ -439,7 +439,7 @@ export default function NotesGenerals() {
             <button
               className="btn-ghost"
               style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
-              onClick={() => exportaPDF(`Notes per àrea — ${classe} — ${trimestre}`, taulaClasseActual())}
+              onClick={() => exportaPDF(`Notes per àrea — ${classe} — ${trimestre}`, { cursEscolarId, fulls: taulaClasseActual() })}
               type="button"
             >
               📄 Descarrega PDF ({classe})
@@ -594,7 +594,7 @@ export default function NotesGenerals() {
             <button
               className="btn-ghost"
               style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
-              onClick={() => exportaExcel(nomFitxerResum, taulesResumGlobalExportables())}
+              onClick={() => exportaExcel(nomFitxerResum, { cursEscolarId, fulls: taulesResumGlobalExportables() })}
               type="button"
             >
               📥 Descarrega Excel
@@ -602,7 +602,7 @@ export default function NotesGenerals() {
             <button
               className="btn-ghost"
               style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
-              onClick={() => exportaPDF(`Notes per àrea — Resum global (${trimestre})`, taulesResumGlobalExportables())}
+              onClick={() => exportaPDF(`Notes per àrea — Resum global (${trimestre})`, { cursEscolarId, fulls: taulesResumGlobalExportables() })}
               type="button"
             >
               📄 Descarrega PDF
