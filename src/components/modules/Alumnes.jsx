@@ -42,6 +42,14 @@ export default function Alumnes() {
   const [confirmaEsborratProves, setConfirmaEsborratProves] = useState('')
   const [esborrantProves, setEsborrantProves] = useState(false)
   const [resultatEsborratProves, setResultatEsborratProves] = useState(null)
+  const [classeProves, setClasseProves] = useState('')
+  const [inventari, setInventari] = useState(null)
+  const [carregantInventari, setCarregantInventari] = useState(false)
+  const [confirmaEsborratTot, setConfirmaEsborratTot] = useState('')
+
+  // Només es poden esborrar dades del curs en marxa: les regles de
+  // Firestore protegeixen l'històric dels cursos ja tancats.
+  const esCursEnMarxa = cursProves.trim() === cursEscolarActual()
 
   const [ajutFitxer, setAjutFitxer] = useState(null)
   const [ajutCarregant, setAjutCarregant] = useState(false)
@@ -245,31 +253,81 @@ export default function Alumnes() {
     }
   }
 
-  /** Esborra de debò les notes (Avaluació) i les marques d'assistència
-   *  d'UN curs escolar concret — pensat només per netejar dades de proves,
-   *  no per a l'ús normal (per a un curs nou de debò no cal esborrar res:
-   *  les dades ja queden separades soles pel camp "cursEscolar"). */
-  async function esborraProvesDelCurs() {
+  /** Busca els registres d'un curs escolar. Es fa servir tant per ensenyar
+   *  què hi ha abans d'esborrar com per esborrar-ho.
+   *  Si es passa una classe, només retorna els d'aquella classe. */
+  async function buscaRegistres(curs, classe = '') {
+    // Avaluació: filtra pel camp "cursEscolar" que ja porta cada registre
+    // (amb el "o cursEscolarActual()" de reserva per si algun és antic).
+    const snapAvaluacio = await getDocs(collection(db, 'avaluacio'))
+    let docsAvaluacio = snapAvaluacio.docs.filter((d) => (d.data().cursEscolar ?? cursEscolarActual()) === curs)
+
+    // Assistència: no porta "cursEscolar", però sí una data — es calcula el
+    // rang del curs (de l'1 de setembre al 31 d'agost).
+    const [anyIniciStr] = curs.split('-')
+    const anyInici = Number(anyIniciStr)
+    const snapAssistencia = await getDocs(
+      query(collection(db, 'assistencia'), where('data', '>=', `${anyInici}-09-01`), where('data', '<=', `${anyInici + 1}-08-31`))
+    )
+    let docsAssistencia = snapAssistencia.docs
+
+    if (classe) {
+      docsAvaluacio = docsAvaluacio.filter((d) => d.data().curs === classe)
+      docsAssistencia = docsAssistencia.filter((d) => d.data().curs === classe)
+    }
+    return { docsAvaluacio, docsAssistencia }
+  }
+
+  /** Ensenya què hi ha desat, classe per classe, abans de tocar res. */
+  async function analitzaCurs() {
+    setCarregantInventari(true)
+    setInventari(null)
+    setResultatEsborratProves(null)
+    try {
+      const { docsAvaluacio, docsAssistencia } = await buscaRegistres(cursProves)
+      const perClasse = {}
+      const compta = (docs, clau) => {
+        for (const d of docs) {
+          const classe = d.data().curs ?? '(sense classe)'
+          perClasse[classe] = perClasse[classe] ?? { avaluacio: 0, assistencia: 0 }
+          perClasse[classe][clau]++
+        }
+      }
+      compta(docsAvaluacio, 'avaluacio')
+      compta(docsAssistencia, 'assistencia')
+      setInventari({
+        classes: Object.entries(perClasse)
+          .map(([classe, n]) => ({ classe, ...n }))
+          .sort((a, b) => a.classe.localeCompare(b.classe, 'ca')),
+        avaluacio: docsAvaluacio.length,
+        assistencia: docsAssistencia.length,
+      })
+      setClasseProves('')
+    } catch (err) {
+      setInventari({ error: err.message })
+    } finally {
+      setCarregantInventari(false)
+    }
+  }
+
+  /** Esborra de debò les notes (Avaluació) i les marques d'assistència d'un
+   *  curs escolar — de tot el curs o només d'una classe.
+   *  Pensat només per netejar dades de proves: per començar un curs nou de
+   *  debò no cal esborrar res, perquè les dades ja queden separades soles
+   *  pel camp "cursEscolar". */
+  async function esborraProvesDelCurs(classe = '') {
     setEsborrantProves(true)
     setResultatEsborratProves(null)
     try {
-      // Avaluació: es filtra pel camp "cursEscolar" que ja porta cada
-      // registre (amb el mateix "o cursEscolarActual()" de reserva que fa
-      // servir la resta de l'app, per si algun registre antic no el té).
-      const snapAvaluacio = await getDocs(collection(db, 'avaluacio'))
-      const docsAvaluacio = snapAvaluacio.docs.filter((d) => (d.data().cursEscolar ?? cursEscolarActual()) === cursProves)
+      const { docsAvaluacio: trobats, docsAssistencia } = await buscaRegistres(cursProves, classe)
 
-      // Assistència: no porta el camp "cursEscolar" directament, però sí
-      // una data — calculem el rang de dates d'aquell curs (de l'1 de
-      // setembre a el 31 d'agost).
-      const [anyIniciStr] = cursProves.split('-')
-      const anyInici = Number(anyIniciStr)
-      const dataInici = `${anyInici}-09-01`
-      const dataFi = `${anyInici + 1}-08-31`
-      const snapAssistencia = await getDocs(
-        query(collection(db, 'assistencia'), where('data', '>=', dataInici), where('data', '<=', dataFi))
-      )
-      const docsAssistencia = snapAssistencia.docs
+      // Les regles de Firestore només deixen esborrar avaluacions que
+      // portin el camp "cursEscolar" i que sigui el del curs en marxa. Els
+      // registres antics sense el camp els deixem fora a posta: si
+      // n'inclossim cap, Firestore rebutjaria el lot sencer i no
+      // s'esborraria res.
+      const docsAvaluacio = trobats.filter((d) => d.data().cursEscolar === cursProves)
+      const omesos = trobats.length - docsAvaluacio.length
 
       const totsElsDocs = [
         ...docsAvaluacio.map((d) => ({ ref: doc(db, 'avaluacio', d.id) })),
@@ -285,8 +343,12 @@ export default function Alumnes() {
       setResultatEsborratProves({
         avaluacio: docsAvaluacio.length,
         assistencia: docsAssistencia.length,
+        omesos,
+        classe,
       })
       setConfirmaEsborratProves('')
+      setInventari(null)
+      setClasseProves('')
     } catch (err) {
       setResultatEsborratProves({ error: err.message })
     } finally {
@@ -493,12 +555,12 @@ export default function Alumnes() {
 
       <details style={{ marginTop: 16 }}>
         <summary style={{ cursor: 'pointer', fontWeight: 600, color: 'var(--red)' }}>
-          Zona perillosa: esborra notes i assistència de proves d'un curs escolar
+          Zona perillosa: esborra notes i assistència de proves
         </summary>
         <div className="placeholder-box" style={{ borderStyle: 'solid', marginTop: 16, borderColor: 'var(--red)' }}>
           <p>
-            <strong>Això esborra de debò totes les notes d'Avaluació i totes les marques
-            d'Assistència del curs escolar que triïs</strong> — no és reversible. Fes-ho servir
+            <strong>Això esborra de debò notes d'Avaluació i marques d'Assistència</strong> — no
+            és reversible. Pots fer-ho d'una classe sola o de tot un curs escolar. Fes-ho servir
             només per netejar dades de proves, mai amb dades reals d'alumnes.
           </p>
           <p style={{ marginTop: 8, fontSize: 13, color: 'var(--ink-soft)' }}>
@@ -510,39 +572,148 @@ export default function Alumnes() {
             <input
               type="text"
               value={cursProves}
-              onChange={(e) => setCursProves(e.target.value)}
+              onChange={(e) => { setCursProves(e.target.value); setInventari(null); setClasseProves('') }}
               style={{ border: '1px solid var(--red)', borderRadius: 8, padding: '8px 10px', fontWeight: 600 }}
             />
           </label>
-          <p style={{ marginTop: 10 }}>
-            Per confirmar, escriu <strong>ESBORRA</strong> aquí sota i clica el botó:
-          </p>
-          <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-            <input
-              type="text"
-              value={confirmaEsborratProves}
-              onChange={(e) => setConfirmaEsborratProves(e.target.value)}
-              placeholder="ESBORRA"
-              style={{ border: '1px solid var(--red)', borderRadius: 8, padding: '8px 10px', maxWidth: 160 }}
-            />
-            <button
-              type="button"
-              onClick={esborraProvesDelCurs}
-              disabled={confirmaEsborratProves !== 'ESBORRA' || esborrantProves}
-              style={{
-                background: 'var(--red)', color: '#fff', border: 'none', borderRadius: 8,
-                padding: '10px 16px', fontWeight: 600, cursor: confirmaEsborratProves === 'ESBORRA' ? 'pointer' : 'not-allowed',
-                opacity: confirmaEsborratProves === 'ESBORRA' ? 1 : 0.5,
-              }}
-            >
-              {esborrantProves ? 'Esborrant…' : `Esborra Avaluació i Assistència de ${cursProves}`}
-            </button>
+
+          {!esCursEnMarxa && (
+            <p style={{ marginTop: 10, fontSize: 13, color: 'var(--amber-dark)' }}>
+              El curs {cursProves} no és el que corre ({cursEscolarActual()}). Pots mirar què hi
+              ha desat, però <strong>no esborrar-hi res</strong>: les regles de Firestore protegeixen
+              l'històric dels cursos tancats i rebutjarien l'operació.
+            </p>
+          )}
+
+          <button
+            type="button"
+            onClick={analitzaCurs}
+            disabled={carregantInventari || !cursProves.trim()}
+            className="btn-ghost"
+            style={{ marginTop: 10, color: 'var(--navy)', borderColor: 'var(--navy)', maxWidth: 260, fontSize: 13 }}
+          >
+            {carregantInventari ? 'Mirant…' : 'Mira què hi ha desat en aquest curs'}
+          </button>
+
+          {inventari?.error && (
+            <p style={{ marginTop: 10, fontSize: 13, color: 'var(--red)' }}>No s'ha pogut consultar: {inventari.error}</p>
+          )}
+
+          {inventari && !inventari.error && (
+            <div style={{ marginTop: 12 }}>
+              {inventari.classes.length === 0 ? (
+                <p style={{ fontSize: 13, color: 'var(--ink-soft)' }}>
+                  No hi ha cap registre desat del curs {cursProves}. No hi ha res a esborrar.
+                </p>
+              ) : (
+                <>
+                  <p style={{ fontSize: 13 }}>
+                    Al curs {cursProves} hi ha <strong>{inventari.avaluacio}</strong> registres
+                    d'avaluació i <strong>{inventari.assistencia}</strong> d'assistència,
+                    repartits així:
+                  </p>
+                  <table style={{ marginTop: 8, fontSize: 12, borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr>
+                        <th style={{ textAlign: 'left', padding: '4px 10px 4px 0' }}>Classe</th>
+                        <th style={{ textAlign: 'right', padding: '4px 10px' }}>Avaluació</th>
+                        <th style={{ textAlign: 'right', padding: '4px 10px' }}>Assistència</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {inventari.classes.map((c) => (
+                        <tr key={c.classe} style={{ background: classeProves === c.classe ? 'var(--sand)' : 'transparent' }}>
+                          <td style={{ padding: '4px 10px 4px 0' }}>
+                            <label style={{ display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer' }}>
+                              <input
+                                type="radio"
+                                name="classeProves"
+                                checked={classeProves === c.classe}
+                                onChange={() => { setClasseProves(c.classe); setConfirmaEsborratProves('') }}
+                              />
+                              {c.classe}
+                            </label>
+                          </td>
+                          <td style={{ textAlign: 'right', padding: '4px 10px' }}>{c.avaluacio}</td>
+                          <td style={{ textAlign: 'right', padding: '4px 10px' }}>{c.assistencia}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* ── Esborrar només una classe ── */}
+          <div style={{ marginTop: 20, paddingTop: 14, borderTop: '1px solid var(--line)' }}>
+            <strong style={{ fontSize: 13 }}>Esborra només una classe</strong>
+            <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 4 }}>
+              {classeProves
+                ? <>Esborrarà els registres de <strong>{classeProves}</strong> del curs {cursProves}. La resta de classes no es toca.</>
+                : 'Prem el botó de sobre i tria una classe de la llista.'}
+            </p>
+            <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <input
+                type="text"
+                value={confirmaEsborratProves}
+                onChange={(e) => setConfirmaEsborratProves(e.target.value)}
+                placeholder="ESBORRA"
+                disabled={!esCursEnMarxa || !classeProves}
+                style={{ border: '1px solid var(--red)', borderRadius: 8, padding: '8px 10px', maxWidth: 160 }}
+              />
+              <button
+                type="button"
+                onClick={() => esborraProvesDelCurs(classeProves)}
+                disabled={!esCursEnMarxa || !classeProves || confirmaEsborratProves !== 'ESBORRA' || esborrantProves}
+                style={{
+                  background: 'var(--red)', color: '#fff', border: 'none', borderRadius: 8,
+                  padding: '10px 16px', fontWeight: 600,
+                  cursor: esCursEnMarxa && classeProves && confirmaEsborratProves === 'ESBORRA' ? 'pointer' : 'not-allowed',
+                  opacity: esCursEnMarxa && classeProves && confirmaEsborratProves === 'ESBORRA' ? 1 : 0.5,
+                }}
+              >
+                {esborrantProves ? 'Esborrant…' : `Esborra ${classeProves || 'la classe triada'}`}
+              </button>
+            </div>
           </div>
+
+          {/* ── Esborrar el curs sencer ── */}
+          <div style={{ marginTop: 20, paddingTop: 14, borderTop: '1px solid var(--line)' }}>
+            <strong style={{ fontSize: 13, color: 'var(--red)' }}>Esborra tot el curs {cursProves}</strong>
+            <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 4 }}>
+              Totes les classes de cop. Com que no té volta enrere, aquí cal
+              escriure <strong>ESBORRA TOT</strong>, no només ESBORRA.
+            </p>
+            <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <input
+                type="text"
+                value={confirmaEsborratTot}
+                onChange={(e) => setConfirmaEsborratTot(e.target.value)}
+                placeholder="ESBORRA TOT"
+                style={{ border: '1px solid var(--red)', borderRadius: 8, padding: '8px 10px', maxWidth: 180 }}
+              />
+              <button
+                type="button"
+                onClick={() => { esborraProvesDelCurs(''); setConfirmaEsborratTot('') }}
+                disabled={!esCursEnMarxa || confirmaEsborratTot !== 'ESBORRA TOT' || esborrantProves}
+                style={{
+                  background: 'var(--red)', color: '#fff', border: 'none', borderRadius: 8,
+                  padding: '10px 16px', fontWeight: 600,
+                  cursor: esCursEnMarxa && confirmaEsborratTot === 'ESBORRA TOT' ? 'pointer' : 'not-allowed',
+                  opacity: esCursEnMarxa && confirmaEsborratTot === 'ESBORRA TOT' ? 1 : 0.5,
+                }}
+              >
+                {esborrantProves ? 'Esborrant…' : `Esborra-ho tot del curs ${cursProves}`}
+              </button>
+            </div>
+          </div>
+
           {resultatEsborratProves && (
-            <p style={{ marginTop: 10, fontSize: 13, color: resultatEsborratProves.error ? 'var(--red)' : 'var(--green)' }}>
+            <p style={{ marginTop: 14, fontSize: 13, color: resultatEsborratProves.error ? 'var(--red)' : 'var(--green)' }}>
               {resultatEsborratProves.error
                 ? `No s'ha pogut esborrar: ${resultatEsborratProves.error}`
-                : `Esborrats ${resultatEsborratProves.avaluacio} registres d'avaluació i ${resultatEsborratProves.assistencia} d'assistència del curs ${cursProves}.`}
+                : `Esborrats ${resultatEsborratProves.avaluacio} registres d'avaluació i ${resultatEsborratProves.assistencia} d'assistència ${resultatEsborratProves.classe ? `de ${resultatEsborratProves.classe}` : 'de totes les classes'} del curs ${cursProves}.` + (resultatEsborratProves.omesos > 0 ? ` ${resultatEsborratProves.omesos} registres antics sense el camp "cursEscolar" s'han deixat estar.` : '')}
             </p>
           )}
         </div>
