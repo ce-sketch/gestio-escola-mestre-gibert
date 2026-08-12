@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { collection, doc, getDoc, getDocs, setDoc, serverTimestamp } from 'firebase/firestore'
+import { collection, doc, getDoc, getDocs, query, where, setDoc, serverTimestamp } from 'firebase/firestore'
 import { db, auth } from '../../firebase'
 import { cursEscolarActual } from '../../lib/cursEscolar'
 import { slug } from '../../lib/slug'
@@ -348,11 +348,10 @@ export default function Documentacio() {
 
   async function carregaNomsExistents() {
     try {
-      const snap = await getDocs(collection(db, 'valoracions'))
-      const noms = snap.docs
-        .map((d) => d.data())
-        .filter((v) => v.cursEscolar === cursEscolarId)
-        .map((v) => v.nom)
+      // El filtre per curs es fa a Firestore, no aquí: així no es baixen
+      // les valoracions de tots els cursos per quedar-se'n amb un.
+      const snap = await getDocs(query(collection(db, 'valoracions'), where('cursEscolar', '==', cursEscolarId)))
+      const noms = snap.docs.map((d) => d.data().nom)
       setNomsExistents([...new Set(noms)])
     } catch {
       setNomsExistents([])

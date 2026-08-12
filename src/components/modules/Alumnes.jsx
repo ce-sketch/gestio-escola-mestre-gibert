@@ -257,10 +257,11 @@ export default function Alumnes() {
    *  què hi ha abans d'esborrar com per esborrar-ho.
    *  Si es passa una classe, només retorna els d'aquella classe. */
   async function buscaRegistres(curs, classe = '') {
-    // Avaluació: filtra pel camp "cursEscolar" que ja porta cada registre
-    // (amb el "o cursEscolarActual()" de reserva per si algun és antic).
-    const snapAvaluacio = await getDocs(collection(db, 'avaluacio'))
-    let docsAvaluacio = snapAvaluacio.docs.filter((d) => (d.data().cursEscolar ?? cursEscolarActual()) === curs)
+    // Avaluació: el filtre pel camp "cursEscolar" el fa Firestore. Els
+    // registres antics que no portin el camp no hi surten — i tampoc es
+    // podrien esborrar, perquè les regles demanen que el camp hi sigui.
+    const snapAvaluacio = await getDocs(query(collection(db, 'avaluacio'), where('cursEscolar', '==', curs)))
+    let docsAvaluacio = snapAvaluacio.docs
 
     // Assistència: no porta "cursEscolar", però sí una data — es calcula el
     // rang del curs (de l'1 de setembre al 31 d'agost).
