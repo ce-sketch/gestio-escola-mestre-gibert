@@ -6,7 +6,8 @@ import {
   objectiusPerDefecte, operatiuBuit, indicadorBuit, normalitzaObjectius,
   resultatOperatiu, resultatObjectiu, resultatGeneral,
 } from '../../lib/pgac'
-import { ESCALES, escalaDe, opcioDe } from '../../lib/escales'
+import { ESCALES, escalaDe, opcioDe, opcionsDe } from '../../lib/escales'
+import { llegeixPlantillaPgac } from '../../lib/pgacPlantillaParser'
 
 function Barra({ resultat, etiqueta }) {
   if (!resultat || resultat.valor === null) {
@@ -71,6 +72,9 @@ export default function Pgac() {
   const [desant, setDesant] = useState(false)
   const [missatge, setMissatge] = useState(null)
   const [objectiuObert, setObjectiuObert] = useState(0)
+  const [importacio, setImportacio] = useState(null)
+  const [cursOrigen, setCursOrigen] = useState('')
+  const [important, setImportant] = useState(false)
 
   useEffect(() => {
     carrega()
@@ -177,6 +181,70 @@ export default function Pgac() {
     desa(nous)
   }
 
+  async function pujaPlantilla(fitxer) {
+    if (!fitxer) return
+    setImportant(true)
+    setMissatge(null)
+    try {
+      const buffer = await fitxer.arrayBuffer()
+      const { objectius: llegits, avisos } = await llegeixPlantillaPgac(buffer)
+      setImportacio({ objectius: llegits, avisos, origen: fitxer.name })
+    } catch (err) {
+      setMissatge({ type: 'error', text: `No he pogut llegir la plantilla: ${err.message}` })
+    } finally {
+      setImportant(false)
+    }
+  }
+
+  async function copiaDeCurs() {
+    const origen = cursOrigen.trim()
+    if (!origen) return
+    if (origen === cursEscolarId) {
+      setMissatge({ type: 'error', text: 'El curs d\'origen i el de destí són el mateix.' })
+      return
+    }
+    setImportant(true)
+    setMissatge(null)
+    try {
+      const snap = await getDoc(doc(db, 'pgac', origen))
+      if (!snap.exists() || !snap.data().objectius) {
+        setMissatge({ type: 'error', text: `No hi ha cap PGAC desat del curs ${origen}.` })
+        return
+      }
+      // Es copia tota l'estructura (textos, pesos i escales) i es buiden les
+      // valoracions: el curs nou comença sense res marcat.
+      const copia = normalitzaObjectius(snap.data().objectius).map((o) => ({
+        ...o,
+        id: crypto.randomUUID(),
+        competencies: { ...o.competencies, gener: '', juny: '' },
+        operatius: o.operatius.map((op) => ({
+          ...op,
+          id: crypto.randomUUID(),
+          indicadors: op.indicadors.map((ind) => ({ ...ind, id: crypto.randomUUID(), gener: '', juny: '' })),
+        })),
+      }))
+      setImportacio({
+        objectius: copia,
+        avisos: [],
+        origen: `el curs ${origen}`,
+      })
+    } catch (err) {
+      setMissatge({ type: 'error', text: `No he pogut copiar: ${err.message}` })
+    } finally {
+      setImportant(false)
+    }
+  }
+
+  function aplicaImportacio() {
+    if (!importacio) return
+    const nous = normalitzaObjectius(importacio.objectius)
+    setObjectius(nous)
+    desa(nous)
+    setImportacio(null)
+    setObjectiuObert(0)
+    setMissatge({ type: 'ok', text: `Estructura carregada al curs ${cursEscolarId}.` })
+  }
+
   function afegeixOperatiu(objectiuIndex) {
     const nous = actualitza(objectiuIndex, (o) => ({
       ...o,
@@ -241,6 +309,115 @@ export default function Pgac() {
         <p style={{ marginTop: 12, fontSize: 13, color: missatge.type === 'error' ? 'var(--red)' : 'var(--green)' }}>
           {missatge.text}
         </p>
+      )}
+
+
+      {/* ── Carregar l'estructura: plantilla Excel o curs anterior ── */}
+      <div className="placeholder-box" style={{ marginTop: 16, padding: '14px 16px' }}>
+        <strong style={{ fontSize: 13 }}>Carrega l'estructura del curs</strong>
+        <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 4, maxWidth: '100%' }}>
+          Els objectius, operatius, indicadors, pesos i escales es poden treure de la plantilla
+          oficial o del curs anterior. En tots dos casos veuràs què s'ha llegit abans de desar res.
+        </p>
+
+        <div style={{ display: 'flex', gap: 24, marginTop: 12, flexWrap: 'wrap' }}>
+          <div>
+            <label
+              className="btn-ghost"
+              style={{ display: 'inline-block', color: 'var(--navy)', borderColor: 'var(--navy)', fontSize: 13, cursor: 'pointer', padding: '8px 14px', borderRadius: 8, border: '1px solid' }}
+            >
+              Puja la plantilla Excel
+              <input
+                type="file"
+                accept=".xlsx"
+                style={{ display: 'none' }}
+                onChange={(e) => { pujaPlantilla(e.target.files?.[0]); e.target.value = '' }}
+              />
+            </label>
+            <p style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 4, maxWidth: 280 }}>
+              L'Eina d'avaluació PGAC. Des del Google Sheets: Fitxer → Baixa → Microsoft Excel.
+            </p>
+          </div>
+
+          <div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <input
+                type="text"
+                value={cursOrigen}
+                placeholder="2026-27"
+                onChange={(e) => setCursOrigen(e.target.value)}
+                style={{ width: 100, border: '1px solid var(--line)', borderRadius: 8, padding: '8px 10px', fontSize: 13 }}
+              />
+              <button
+                type="button"
+                onClick={copiaDeCurs}
+                disabled={!cursOrigen.trim()}
+                className="btn-ghost"
+                style={{ color: 'var(--navy)', borderColor: 'var(--navy)', fontSize: 13, maxWidth: 220 }}
+              >
+                Copia d'aquest curs
+              </button>
+            </div>
+            <p style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 4, maxWidth: 280 }}>
+              Agafa l'estructura sencera i la deixa sense valorar, a punt per al curs nou.
+            </p>
+          </div>
+        </div>
+        {important && <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 8 }}>Llegint…</p>}
+      </div>
+
+      {importacio && (
+        <div className="placeholder-box" style={{ marginTop: 12, padding: '14px 16px' }}>
+          <strong style={{ fontSize: 13 }}>
+            Llegit de {importacio.origen} — {importacio.objectius.length} objectius
+          </strong>
+
+          {importacio.avisos.length > 0 && (
+            <ul style={{ fontSize: 12, color: 'var(--amber-dark)', marginTop: 8, paddingLeft: 18 }}>
+              {importacio.avisos.map((a, i) => <li key={i}>{a}</li>)}
+            </ul>
+          )}
+
+          <div style={{ marginTop: 10, maxHeight: 300, overflowY: 'auto', fontSize: 12 }}>
+            {importacio.objectius.map((o, i) => (
+              <div key={i} style={{ marginTop: 8 }}>
+                <div style={{ fontWeight: 600 }}>{o.titol}</div>
+                {o.competencies?.actiu && (
+                  <div style={{ color: 'var(--ink-soft)' }}>
+                    amb competències bàsiques: {100 - o.competencies.pes}/{o.competencies.pes}
+                  </div>
+                )}
+                {o.operatius.map((op, j) => (
+                  <div key={j} style={{ color: 'var(--ink-soft)', marginLeft: 12 }}>
+                    {op.titol} — pes {op.pes ?? '—'}% · {op.indicadors.length} indicadors
+                    {op.indicadors.some((ind) => ind.escala === 'propia') && ' · amb escala pròpia'}
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+
+          <p style={{ fontSize: 12, color: 'var(--red)', marginTop: 10 }}>
+            Això substituirà tot el que hi hagi ara al curs {cursEscolarId}, valoracions incloses.
+          </p>
+          <div style={{ display: 'flex', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              onClick={aplicaImportacio}
+              style={{ background: 'var(--navy)', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 14px', fontSize: 13, cursor: 'pointer' }}
+            >
+              Carrega-ho al curs {cursEscolarId}
+            </button>
+            <button
+              type="button"
+              onClick={() => setImportacio(null)}
+              className="btn-ghost"
+              style={{ color: 'var(--navy)', borderColor: 'var(--navy)', maxWidth: 140, fontSize: 13 }}
+            >
+              Cancel·la
+            </button>
+          </div>
+        </div>
       )}
 
       <div style={{ marginTop: 20 }}>
@@ -360,6 +537,7 @@ export default function Pgac() {
 
                         {op.indicadors.map((ind) => {
                           const escala = escalaDe(ind.escala)
+                          const opcions = opcionsDe(ind)
                           return (
                             <div key={ind.id} style={{ marginTop: 10, padding: '10px 12px', border: '1px solid var(--line)', borderRadius: 8 }}>
                               <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', flexWrap: 'wrap' }}>
@@ -393,6 +571,9 @@ export default function Pgac() {
                                   onChange={(e) => { const nous = canviaIndicador(objectiuIndex, op.id, ind.id, 'escala', e.target.value); desa(nous) }}
                                   style={{ border: '1px solid var(--line)', borderRadius: 6, padding: '4px 6px', fontSize: 11, maxWidth: 260 }}
                                 >
+                                  {ind.escala === 'propia' && (
+                                    <option value="propia">Escala pròpia de la plantilla</option>
+                                  )}
                                   {ESCALES.map((e) => <option key={e.id} value={e.id}>{e.nom}</option>)}
                                 </select>
                               </div>
@@ -403,11 +584,11 @@ export default function Pgac() {
                               )}
 
                               {[{ camp: 'gener', etiqueta: 'Gener' }, { camp: 'juny', etiqueta: 'Juny' }].map(({ camp, etiqueta }) => {
-                                const opcioActual = opcioDe(ind.escala, ind[camp])
+                                const opcioActual = opcions.find((o) => o.valor === Number(ind[camp])) ?? null
                                 return (
                                   <div key={camp} style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
                                     <span style={{ fontSize: 11, color: 'var(--ink-soft)', minWidth: 40 }}>{etiqueta}</span>
-                                    {escala.opcions.map((o) => (
+                                    {opcions.map((o) => (
                                       <button
                                         key={o.id}
                                         type="button"
