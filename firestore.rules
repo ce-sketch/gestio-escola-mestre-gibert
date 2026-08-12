@@ -32,18 +32,42 @@ service cloud.firestore {
         && !request.auth.token.email.matches('^00.*');
     }
 
+    // ── Curs escolar en marxa, calculat aquí mateix ──────────────────────
+    // Es fa servir per deixar netejar dades de proves del curs actual sense
+    // obrir la porta a esborrar l'històric d'anys anteriors. El tall és
+    // l'agost, igual que a cursEscolarActual() de l'app.
+    function anyIniciCurs() {
+      return request.time.month() >= 8 ? request.time.year() : request.time.year() - 1;
+    }
+
+    // "2026-27"
+    function cursEnMarxa() {
+      return string(anyIniciCurs()) + '-' + string(anyIniciCurs() + 1)[2:4];
+    }
+
     // Assistència: registres d'entrada per data, mai se sobreescriuen.
+    // L'administrador en pot esborrar, però NOMÉS els del curs en marxa
+    // (l'assistència no porta el camp "cursEscolar", així que es mira la
+    // data: de l'1 de setembre al 31 d'agost, com fa la consulta de l'app).
+    // L'històric de cursos tancats queda intocable per a tothom.
     match /assistencia/{registreId} {
       allow read: if esComptePersonal();
       allow create: if esComptePersonal();
-      allow update, delete: if false; // l'historial no es modifica ni s'esborra
+      allow update: if false; // un registre existent no es modifica mai
+      allow delete: if esAdmin()
+        && resource.data.data >= string(anyIniciCurs()) + '-09-01'
+        && resource.data.data <= string(anyIniciCurs() + 1) + '-08-31';
     }
 
-    // Avaluació: notes per alumne, àrea i trimestre.
+    // Avaluació: notes per alumne, àrea i trimestre. Mateix criteri, però
+    // aquí sí que hi ha el camp "cursEscolar" per comparar directament.
+    // Els registres antics que no el portin no es poden esborrar: si mai
+    // n'apareixen, s'hi afegeix el camp i llavors sí.
     match /avaluacio/{registreId} {
       allow read: if esComptePersonal();
       allow create: if esComptePersonal();
-      allow update, delete: if false;
+      allow update: if false;
+      allow delete: if esAdmin() && resource.data.cursEscolar == cursEnMarxa();
     }
 
     // Documentació: metadades de documents (els fitxers en si aniran a Cloudflare R2).
@@ -77,7 +101,7 @@ service cloud.firestore {
     }
     match /configuracio/contactes {
       allow read: if esComptePersonal();
-      allow write: if esComptePersonal();
+      allow write: if esAdmin();
     }
     match /configuracio/pesosTEE {
       allow read: if esComptePersonal();
