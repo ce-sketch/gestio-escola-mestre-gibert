@@ -15,6 +15,7 @@ import {
 import { CURS_AMB_PLANTILLA as CURS_FESTES, FESTES_PLANTILLES_26_27, construeixFestaAmbPlantilla } from '../../lib/festesPlantilles26_27'
 import { carregaConfigValoracions } from '../../lib/valoracionsConfig'
 import { ESCALES, opcionsDe } from '../../lib/escales'
+import { llegeixPlantillaValoracio } from '../../lib/valoracionsPlantillaParser'
 import {
   CRITERIS_ACTIVITAT, activitatBuida as activitatSortidaBuida, mitjanaActivitat, grauSatisfaccioCicle,
   percentValorades, totalRepetirSi,
@@ -91,6 +92,9 @@ export default function Documentacio() {
   const [nomsExistents, setNomsExistents] = useState([])
   const [nom, setNom] = useState('')
   const [valoracio, setValoracio] = useState(valoracioBuida())
+  const [plantilla, setPlantilla] = useState(null)
+  const [llegintPlantilla, setLlegintPlantilla] = useState(false)
+  const [errorPlantilla, setErrorPlantilla] = useState(null)
   const [carregant, setCarregant] = useState(false)
   const [desant, setDesant] = useState(false)
   const [missatge, setMissatge] = useState(null)
@@ -407,6 +411,37 @@ export default function Documentacio() {
     const nova = { ...valoracio, ...canvis }
     setValoracio(nova)
     return nova
+  }
+
+  /** Llegeix una plantilla del centre i n'ensenya el contingut abans de
+   *  substituir res. L'escala de cada actuació surt de la fórmula del full,
+   *  no se suposa. */
+  async function pujaPlantilla(fitxer) {
+    if (!fitxer) return
+    setLlegintPlantilla(true)
+    setErrorPlantilla(null)
+    setPlantilla(null)
+    try {
+      const buffer = await fitxer.arrayBuffer()
+      setPlantilla(await llegeixPlantillaValoracio(buffer))
+    } catch (err) {
+      setErrorPlantilla(err.message)
+    } finally {
+      setLlegintPlantilla(false)
+    }
+  }
+
+  function aplicaPlantilla() {
+    if (!plantilla) return
+    const nova = {
+      ...valoracio,
+      responsable: plantilla.valoracio.responsable || valoracio.responsable,
+      membres: plantilla.valoracio.membres || valoracio.membres,
+      objectius: plantilla.valoracio.objectius,
+    }
+    setValoracio(nova)
+    desa(nova)
+    setPlantilla(null)
   }
 
   function actualitzaObjectiu(objectiuId, canvis) {
@@ -1023,6 +1058,69 @@ export default function Documentacio() {
                 </button>
               </div>
             ))}
+            <div style={{ marginTop: 20, paddingTop: 14, borderTop: '1px solid var(--line)' }}>
+              <strong style={{ fontSize: 13 }}>Carrega els objectius d'una plantilla</strong>
+              <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 4, maxWidth: '100%' }}>
+                Puja el full de valoració del centre i l'app en treu els objectius, les actuacions
+                i l'escala de cada una. Des del Google Sheets: Fitxer → Baixa → Microsoft Excel.
+              </p>
+              <label
+                className="btn-ghost"
+                style={{ display: 'inline-block', marginTop: 8, color: 'var(--navy)', borderColor: 'var(--navy)', border: '1px solid', borderRadius: 8, padding: '8px 14px', fontSize: 13, cursor: 'pointer' }}
+              >
+                {llegintPlantilla ? 'Llegint…' : 'Puja la plantilla Excel'}
+                <input
+                  type="file"
+                  accept=".xlsx"
+                  style={{ display: 'none' }}
+                  onChange={(e) => { pujaPlantilla(e.target.files?.[0]); e.target.value = '' }}
+                />
+              </label>
+
+              {errorPlantilla && (
+                <p style={{ fontSize: 12, color: 'var(--red)', marginTop: 8 }}>{errorPlantilla}</p>
+              )}
+
+              {plantilla && (
+                <div className="placeholder-box" style={{ marginTop: 12, padding: '12px 14px' }}>
+                  <strong style={{ fontSize: 13 }}>
+                    {plantilla.valoracio.nom ? `${plantilla.valoracio.nom} — ` : ''}
+                    {plantilla.valoracio.objectius.length} objectius
+                  </strong>
+                  {plantilla.avisos.length > 0 && (
+                    <ul style={{ fontSize: 12, color: 'var(--amber-dark)', marginTop: 6, paddingLeft: 18 }}>
+                      {plantilla.avisos.map((a, i) => <li key={i}>{a}</li>)}
+                    </ul>
+                  )}
+                  <ul style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 8, paddingLeft: 18, maxHeight: 220, overflowY: 'auto' }}>
+                    {plantilla.valoracio.objectius.map((o, i) => (
+                      <li key={i}>{o.text || '(sense text)'} — {o.actuacions.length} actuacions</li>
+                    ))}
+                  </ul>
+                  <p style={{ fontSize: 12, color: 'var(--red)', marginTop: 8 }}>
+                    Això substituirà els objectius que hi ha ara en aquesta valoració.
+                  </p>
+                  <div style={{ display: 'flex', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      onClick={aplicaPlantilla}
+                      style={{ background: 'var(--navy)', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 14px', fontSize: 13, cursor: 'pointer' }}
+                    >
+                      Carrega-ho
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPlantilla(null)}
+                      className="btn-ghost"
+                      style={{ color: 'var(--navy)', borderColor: 'var(--navy)', maxWidth: 130, fontSize: 13 }}
+                    >
+                      Cancel·la
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
             <button type="button" onClick={afegeixObjectiu} className="btn-ghost" style={{ marginTop: 10, color: 'var(--navy)', borderColor: 'var(--navy)', maxWidth: 180 }}>
               + Afegeix objectiu
             </button>
