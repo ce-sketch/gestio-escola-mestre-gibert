@@ -458,11 +458,13 @@ export default function Documentacio() {
       </div>
 
       <div style={{ marginTop: 32, borderTop: '1px solid var(--line)', paddingTop: 20 }}>
-        <h3 style={{ marginTop: 4, fontSize: 18 }}>Valoració de cicle / comissió / equip</h3>
-        <p className="module-lead">
-          Mateixa estructura que els fulls "Valoració ..." de sempre: Responsable, Membres,
-          Objectius (amb Gener/Juny), i — si el teu cicle/comissió ho necessita — "Actuacions"
-          dins de cada objectiu, cadascuna amb el seu indicador d'avaluació. Cada canvi es desa sol.
+        <h3 style={{ marginTop: 4, fontSize: 18 }}>Valoracions</h3>
+        <p className="module-lead" style={{ maxWidth: '100%' }}>
+          Cicles, comissions i equips, comissions mixtes (amb l'AFA), festes i celebracions, i
+          activitats complementàries — tria la pestanya que et correspongui. Mateixa estructura
+          que els fulls "Valoració ..." de sempre: Responsable, Membres, Objectius (amb
+          Gener/Juny), i — quan calgui — "Actuacions" dins de cada objectiu, cadascuna amb el
+          seu indicador d'avaluació. Cada canvi es desa sol.
         </p>
 
         <div style={{ display: 'flex', gap: 16, marginTop: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
