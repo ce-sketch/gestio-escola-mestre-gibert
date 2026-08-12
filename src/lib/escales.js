@@ -165,9 +165,42 @@ export const ESCALES = [
       { id: 'c7', label: '7 cursos', valor: 100 },
     ],
   },
+  {
+    id: 'execucio50',
+    nom: 'Execució amb En procés al 50%',
+    ajuda: "La que fan servir els fulls de comissions i equips: allà 'En procés' val 50%, no 40%.",
+    opcions: [
+      { id: 'no_fet', label: 'No fet', valor: 0 },
+      { id: 'en_proces', label: 'En procés', valor: 50 },
+      { id: 'fet', label: 'Fet', valor: 100 },
+    ],
+  },
+  {
+    id: 'recompte10',
+    nom: 'Recompte de 0 a 10 (de 10 en 10)',
+    ajuda: 'Surt a la Comissió TAC per comptar elements: 0 = 0%, 5 = 50%, 10 = 100%.',
+    opcions: Array.from({ length: 11 }, (_, i) => ({ id: `r${i}`, label: String(i), valor: i * 10 })),
+  },
+  {
+    id: 'lliure',
+    nom: 'Percentatge lliure (0-100%)',
+    ajuda: "La dels fulls de cicle: no hi ha estats, s'escriu directament el percentatge.",
+    opcions: [],
+  },
 ]
 
 export const ESCALA_PER_DEFECTE = 'execucio'
+
+/** Les opcions que toquen a un indicador: les de la seva escala del
+ *  catàleg, o les seves pròpies si ve d'una plantilla amb una escala que
+ *  no és cap de les conegudes. */
+export function opcionsDe(element) {
+  if (element?.escala === 'lliure') return []
+  if (element?.escala === 'propia' && Array.isArray(element.opcions) && element.opcions.length) {
+    return element.opcions.map((o, i) => ({ id: o.id ?? `p${i}`, label: o.label, valor: o.valor }))
+  }
+  return escalaDe(element?.escala).opcions
+}
 
 export function escalaDe(id) {
   return ESCALES.find((e) => e.id === id) ?? ESCALES[0]
