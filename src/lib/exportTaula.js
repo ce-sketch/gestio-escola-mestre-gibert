@@ -1,4 +1,3 @@
-import ExcelJS from 'exceljs'
 import { afegeixCapcalera, ajustaColumnes, NOM_ESCOLA } from './excelCapcalera'
 
 const BLAU_ESCOLA = 'FF1E3A5F' // mateix blau marí de l'app (--navy)
@@ -33,7 +32,15 @@ function comprovaDades(dades, nomFuncio) {
   return { cursEscolarId: dades.cursEscolarId, fulls: dades.fulls ?? [] }
 }
 
+// L'exceljs pesa gairebé un mega. Es carrega només quan de debò cal
+// (exportar o llegir un fitxer), no en obrir l'app: així la primera càrrega
+// no l'arrossega.
+async function carregaExcelJS() {
+  return (await import('exceljs')).default
+}
+
 export async function exportaExcel(nomFitxer, dades) {
+  const ExcelJS = await carregaExcelJS()
   const { cursEscolarId, fulls } = comprovaDades(dades, 'exportaExcel')
   const wb = new ExcelJS.Workbook()
   wb.creator = 'Gestió Escola Mestre Enric Gibert i Camins'

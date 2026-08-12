@@ -1,4 +1,3 @@
-import ExcelJS from 'exceljs'
 import { FESTES, mitjanaObjectiu, mitjanaValoracio } from './valoracions'
 import { afegeixCapcalera, ajustaColumnes } from './excelCapcalera'
 
@@ -22,6 +21,13 @@ function pct(v) {
   return v === '' || v === null || v === undefined ? '' : `${v}%`
 }
 
+// L'exceljs pesa gairebé un mega. Es carrega només quan de debò cal
+// (exportar o llegir un fitxer), no en obrir l'app: així la primera càrrega
+// no l'arrossega.
+async function carregaExcelJS() {
+  return (await import('exceljs')).default
+}
+
 /**
  * Descarrega totes les valoracions (cicles, comissions i equips) d'un curs
  * escolar en un sol Excel, amb la mateixa estructura que els fulls
@@ -30,6 +36,7 @@ function pct(v) {
  * una pestanya "Resum" i una pestanya addicional per cada objectiu.
  */
 export async function exportaValoracionsExcel(valoracions, cursEscolarId) {
+  const ExcelJS = await carregaExcelJS()
   const wb = new ExcelJS.Workbook()
   wb.creator = 'Gestió Escola Mestre Enric Gibert i Camins'
   wb.created = new Date()

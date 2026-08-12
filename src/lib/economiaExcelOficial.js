@@ -1,4 +1,3 @@
-import ExcelJS from 'exceljs'
 import { ENSENYAMENTS, CONCEPTES, conceptaBuit } from './economia'
 
 const BLAU = 'FF1E3A5F'
@@ -24,6 +23,13 @@ function estilCapçalera(cell) {
   cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true }
 }
 
+// L'exceljs pesa gairebé un mega. Es carrega només quan de debò cal
+// (exportar o llegir un fitxer), no en obrir l'app: així la primera càrrega
+// no l'arrossega.
+async function carregaExcelJS() {
+  return (await import('exceljs')).default
+}
+
 /**
  * Genera l'Excel amb la mateixa estructura, capçaleres i fórmules que la
  * plantilla oficial del CEB/Departament d'Educació ("Seguiment
@@ -43,6 +49,7 @@ function estilCapçalera(cell) {
  * omplir-la a mà igualment, tal com ja es fa amb la plantilla original).
  */
 export async function exportaExcelOficial({ nomCentre, codiCentre, cursEscolarId, files }) {
+  const ExcelJS = await carregaExcelJS()
   const [anyIniciStr, anyFiStr] = cursEscolarId.split('-')
   const anyInici = anyIniciStr
   const anyFi = anyFiStr.length === 2 ? `20${anyFiStr}` : anyFiStr

@@ -14,7 +14,6 @@
 // Els fulls de cicle són d'una sola pestanya i no tenen actuacions: cada
 // objectiu es valora amb un percentatge directe.
 
-import ExcelJS from 'exceljs'
 import { ESCALES } from './escales'
 
 const valorText = (v) => {
@@ -69,11 +68,19 @@ function identifica(opcions) {
   return coneguda ? { escala: coneguda.id, opcions: null } : { escala: 'propia', opcions }
 }
 
+// L'exceljs pesa gairebé un mega. Es carrega només quan de debò cal
+// (exportar o llegir un fitxer), no en obrir l'app: així la primera càrrega
+// no l'arrossega.
+async function carregaExcelJS() {
+  return (await import('exceljs')).default
+}
+
 /**
  * @param {ArrayBuffer} buffer  el .xlsx pujat
  * @returns {Promise<{tipus: string, valoracio: object, avisos: string[]}>}
  */
 export async function llegeixPlantillaValoracio(buffer) {
+  const ExcelJS = await carregaExcelJS()
   const wb = new ExcelJS.Workbook()
   await wb.xlsx.load(buffer)
 

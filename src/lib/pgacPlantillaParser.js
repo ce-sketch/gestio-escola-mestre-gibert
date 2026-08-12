@@ -14,7 +14,6 @@
 // Com que cap lectura automàtica és infal·lible, retorna també una llista
 // d'avisos perquè es pugui ensenyar tot abans de desar res.
 
-import ExcelJS from 'exceljs'
 import { ESCALES } from './escales'
 
 const text = (cell) => {
@@ -87,11 +86,19 @@ function identificaEscala(opcions) {
 
 const CODI_OPERATIU = /^Operatiu\s*(\d+\.\d+)\s*[-–—]?\s*(.*)$/i
 
+// L'exceljs pesa gairebé un mega. Es carrega només quan de debò cal
+// (exportar o llegir un fitxer), no en obrir l'app: així la primera càrrega
+// no l'arrossega.
+async function carregaExcelJS() {
+  return (await import('exceljs')).default
+}
+
 /**
  * @param {ArrayBuffer} buffer - el fitxer .xlsx pujat
  * @returns {Promise<{objectius: Array, avisos: string[]}>}
  */
 export async function llegeixPlantillaPgac(buffer) {
+  const ExcelJS = await carregaExcelJS()
   const wb = new ExcelJS.Workbook()
   await wb.xlsx.load(buffer)
 
