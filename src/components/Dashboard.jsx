@@ -13,6 +13,7 @@ const Backup = lazy(() => import('./modules/Backup.jsx'))
 const Economia = lazy(() => import('./modules/Economia.jsx'))
 const Pgac = lazy(() => import('./modules/Pgac.jsx'))
 const MatriuGeneral = lazy(() => import('./modules/MatriuGeneral.jsx'))
+const Comprovacions = lazy(() => import('./modules/Comprovacions.jsx'))
 
 const MODULES = [
   { id: 'inici', label: 'Inici', component: Inici },
@@ -26,6 +27,7 @@ const MODULES = [
   { id: 'pgac', label: 'PGAC', component: Pgac, nomesAdmin: true },
   { id: 'matriu', label: 'Quadre de comandament', component: MatriuGeneral, nomesAdmin: true },
   { id: 'backup', label: 'Backup', component: Backup, nomesAdmin: true },
+  { id: 'comprovacions', label: 'Comprovacions', component: Comprovacions, nomesAdmin: true },
 ]
 
 export default function Dashboard({ user, onSignOut }) {
