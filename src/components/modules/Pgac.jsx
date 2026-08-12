@@ -2,18 +2,64 @@ import { useEffect, useState } from 'react'
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'
 import { db, auth } from '../../firebase'
 import { cursEscolarActual } from '../../lib/cursEscolar'
-import { objectiusPerDefecte, operatiuBuit, indicadorBuit, mitjanaOperatiu, mitjanaObjectiu, mitjanaGeneral } from '../../lib/pgac'
-import { ESTATS_EXECUCIO, estatDe } from '../../lib/estatsExecucio'
+import {
+  objectiusPerDefecte, operatiuBuit, indicadorBuit, normalitzaObjectius,
+  resultatOperatiu, resultatObjectiu, resultatGeneral,
+} from '../../lib/pgac'
+import { ESCALES, escalaDe, opcioDe } from '../../lib/escales'
 
-function Barra({ valor }) {
-  if (valor === null) return <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>Sense dades</span>
-  const color = valor >= 80 ? 'var(--green)' : valor >= 40 ? 'var(--amber-dark)' : 'var(--red)'
+function Barra({ resultat, etiqueta }) {
+  if (!resultat || resultat.valor === null) {
+    return <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>Sense dades</span>
+  }
+  const v = resultat.valor
+  const color = v >= 80 ? 'var(--green)' : v >= 40 ? 'var(--amber-dark)' : 'var(--red)'
+  const pendents = resultat.total - resultat.valorats
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      <div style={{ width: 80, height: 8, borderRadius: 4, background: 'var(--line)', overflow: 'hidden' }}>
-        <div style={{ width: `${Math.min(valor, 100)}%`, height: '100%', background: color }} />
+    <div>
+      {etiqueta && <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>{etiqueta}</div>}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ width: 80, height: 8, borderRadius: 4, background: 'var(--line)', overflow: 'hidden' }}>
+          <div style={{ width: `${Math.min(Math.max(v, 0), 100)}%`, height: '100%', background: color }} />
+        </div>
+        <span style={{ fontSize: 12, fontWeight: 600 }}>{Math.round(v)}%</span>
       </div>
-      <span style={{ fontSize: 12, fontWeight: 600 }}>{Math.round(valor)}%</span>
+      {pendents > 0 && (
+        <div style={{ fontSize: 10, color: 'var(--ink-soft)' }}>
+          {pendents} sense valorar (compten 0)
+        </div>
+      )}
+    </div>
+  )
+}
+
+function CampPes({ valor, onChange, onBlur, titol }) {
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }} title={titol}>
+      <input
+        type="number" min={0} max={100} step={0.1}
+        value={valor ?? ''}
+        onChange={(e) => onChange(e.target.value)}
+        onBlur={onBlur}
+        style={{ width: 52, border: '1px solid var(--line)', borderRadius: 6, padding: '3px 5px', fontSize: 11, textAlign: 'right' }}
+      />
+      <span style={{ fontSize: 10, color: 'var(--ink-soft)' }}>%</span>
+    </span>
+  )
+}
+
+function AvisPesos({ pesTotal, onReparteix }) {
+  if (Math.abs(pesTotal - 100) < 0.5) return null
+  return (
+    <div style={{ fontSize: 11, color: 'var(--amber-dark)', marginTop: 6, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+      <span>Els pesos sumen {pesTotal}%, no 100% — el resultat quedarà per sobre o per sota del que toca.</span>
+      <button
+        type="button"
+        onClick={onReparteix}
+        style={{ background: 'none', border: '1px solid var(--amber-dark)', color: 'var(--amber-dark)', borderRadius: 6, padding: '2px 8px', fontSize: 11, cursor: 'pointer' }}
+      >
+        Reparteix a parts iguals
+      </button>
     </div>
   )
 }
@@ -37,9 +83,10 @@ export default function Pgac() {
     try {
       const snap = await getDoc(doc(db, 'pgac', cursEscolarId))
       if (snap.exists() && snap.data().objectius) {
-        setObjectius(snap.data().objectius)
+        // normalitzaObjectius afegeix els pesos als documents desats abans
+        // que existissin, repartint-los a parts iguals.
+        setObjectius(normalitzaObjectius(snap.data().objectius))
       } else {
-        // Primera vegada: comencem amb les dades reals del document oficial.
         setObjectius(objectiusPerDefecte())
       }
     } catch (err) {
@@ -71,8 +118,11 @@ export default function Pgac() {
     return nous
   }
 
-  function onBlurDesa(nous) {
-    desa(nous)
+  function canviaOperatiu(objectiuIndex, operatiuId, camp, valor) {
+    return actualitza(objectiuIndex, (o) => ({
+      ...o,
+      operatius: o.operatius.map((op) => (op.id !== operatiuId ? op : { ...op, [camp]: valor })),
+    }))
   }
 
   function canviaIndicador(objectiuIndex, operatiuId, indicadorId, camp, valor) {
@@ -80,9 +130,51 @@ export default function Pgac() {
       ...o,
       operatius: o.operatius.map((op) => op.id !== operatiuId ? op : {
         ...op,
-        indicadors: op.indicadors.map((ind) => ind.id !== indicadorId ? ind : { ...ind, [camp]: valor }),
+        indicadors: op.indicadors.map((ind) => (ind.id !== indicadorId ? ind : { ...ind, [camp]: valor })),
       }),
     }))
+  }
+
+  function canviaCompetencies(objectiuIndex, camp, valor) {
+    return actualitza(objectiuIndex, (o) => ({
+      ...o,
+      competencies: { ...o.competencies, [camp]: valor },
+    }))
+  }
+
+  function reparteixIndicadors(objectiuIndex, operatiuId) {
+    const nous = actualitza(objectiuIndex, (o) => ({
+      ...o,
+      operatius: o.operatius.map((op) => {
+        if (op.id !== operatiuId || op.indicadors.length === 0) return op
+        const n = op.indicadors.length
+        const base = Math.round((100 / n) * 10) / 10
+        return {
+          ...op,
+          indicadors: op.indicadors.map((ind, idx) => ({
+            ...ind,
+            pesGlobal: idx === n - 1 ? Math.round((100 - base * (n - 1)) * 10) / 10 : base,
+          })),
+        }
+      }),
+    }))
+    desa(nous)
+  }
+
+  function reparteixOperatius(objectiuIndex) {
+    const nous = actualitza(objectiuIndex, (o) => {
+      const n = o.operatius.length
+      if (n === 0) return o
+      const base = Math.round((100 / n) * 10) / 10
+      return {
+        ...o,
+        operatius: o.operatius.map((op, idx) => ({
+          ...op,
+          pes: idx === n - 1 ? Math.round((100 - base * (n - 1)) * 10) / 10 : base,
+        })),
+      }
+    })
+    desa(nous)
   }
 
   function afegeixOperatiu(objectiuIndex) {
@@ -96,7 +188,7 @@ export default function Pgac() {
   function afegeixIndicador(objectiuIndex, operatiuId) {
     const nous = actualitza(objectiuIndex, (o) => ({
       ...o,
-      operatius: o.operatius.map((op) => op.id !== operatiuId ? op : { ...op, indicadors: [...op.indicadors, indicadorBuit()] }),
+      operatius: o.operatius.map((op) => (op.id !== operatiuId ? op : { ...op, indicadors: [...op.indicadors, indicadorBuit()] })),
     }))
     desa(nous)
   }
@@ -104,19 +196,23 @@ export default function Pgac() {
   function esborraIndicador(objectiuIndex, operatiuId, indicadorId) {
     const nous = actualitza(objectiuIndex, (o) => ({
       ...o,
-      operatius: o.operatius.map((op) => op.id !== operatiuId ? op : { ...op, indicadors: op.indicadors.filter((ind) => ind.id !== indicadorId) }),
+      operatius: o.operatius.map((op) => (op.id !== operatiuId ? op : { ...op, indicadors: op.indicadors.filter((ind) => ind.id !== indicadorId) })),
     }))
     desa(nous)
   }
 
   if (carregant) return <p>Carregant…</p>
 
+  const generalG = resultatGeneral(objectius, 'gener')
+  const generalJ = resultatGeneral(objectius, 'juny')
+
   return (
     <div>
       <p className="module-lead">
-        Seguiment de la Programació General Anual de Centre (PGAC): els 3 Objectius Estratègics
-        del Projecte de Direcció, desglossats en Estratègia → Operatius → Indicadors, amb el
-        percentatge de compliment a Gener i a Juny. Cada canvi es desa sol.
+        Seguiment de la Programació General Anual de Centre (PGAC). El càlcul reprodueix el del
+        document oficial: cada indicador es multiplica pel seu pes dins de l'operatiu, i cada
+        operatiu pel seu pes dins de l'objectiu. Els indicadors sense valorar compten 0, com al
+        document. Cada canvi es desa sol.
       </p>
 
       <div style={{ display: 'flex', gap: 16, marginTop: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
@@ -132,16 +228,14 @@ export default function Pgac() {
         {desant && <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>Desant…</span>}
       </div>
 
-      <div style={{ display: 'flex', gap: 24, marginTop: 16 }}>
-        <div>
-          <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>Compliment general — Gener</span>
-          <Barra valor={mitjanaGeneral(objectius, 'gener')} />
-        </div>
-        <div>
-          <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>Compliment general — Juny</span>
-          <Barra valor={mitjanaGeneral(objectius, 'juny')} />
-        </div>
+      <div style={{ display: 'flex', gap: 24, marginTop: 16, flexWrap: 'wrap' }}>
+        <Barra resultat={generalG} etiqueta="Mitjana dels 3 objectius — Gener" />
+        <Barra resultat={generalJ} etiqueta="Mitjana dels 3 objectius — Juny" />
       </div>
+      <p style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 4 }}>
+        El document oficial no calcula cap total global del PGAC: els tres objectius hi van per
+        separat. Aquesta mitjana és una comoditat de l'app, no una xifra oficial.
+      </p>
 
       {missatge && (
         <p style={{ marginTop: 12, fontSize: 13, color: missatge.type === 'error' ? 'var(--red)' : 'var(--green)' }}>
@@ -152,6 +246,9 @@ export default function Pgac() {
       <div style={{ marginTop: 20 }}>
         {objectius.map((objectiu, objectiuIndex) => {
           const obert = objectiuObert === objectiuIndex
+          const rg = resultatObjectiu(objectiu, 'gener')
+          const rj = resultatObjectiu(objectiu, 'juny')
+          const cb = objectiu.competencies ?? {}
           return (
             <div key={objectiu.id} className="placeholder-box" style={{ marginTop: 10, padding: 0, overflow: 'hidden' }}>
               <div
@@ -159,9 +256,9 @@ export default function Pgac() {
                 onClick={() => setObjectiuObert(obert ? null : objectiuIndex)}
               >
                 <strong>{objectiu.titol}</strong>
-                <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
-                  <Barra valor={mitjanaObjectiu(objectiu, 'gener')} />
-                  <Barra valor={mitjanaObjectiu(objectiu, 'juny')} />
+                <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
+                  <Barra resultat={rg} etiqueta="Gener" />
+                  <Barra resultat={rj} etiqueta="Juny" />
                   <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>{obert ? '▲' : '▼'}</span>
                 </div>
               </div>
@@ -172,82 +269,186 @@ export default function Pgac() {
                   <p style={{ fontSize: 13, fontWeight: 600, marginTop: 10 }}>{objectiu.estrategiaTitol}</p>
                   <p style={{ fontSize: 13, color: 'var(--ink-soft)' }}>{objectiu.estrategiaText}</p>
 
-                  {objectiu.operatius.map((op) => (
-                    <div key={op.id} style={{ marginTop: 16, borderTop: '1px dashed var(--line)', paddingTop: 12 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
-                        <strong style={{ fontSize: 13 }}>{op.titol}</strong>
-                        <div style={{ display: 'flex', gap: 16 }}>
-                          <Barra valor={mitjanaOperatiu(op, 'gener')} />
-                          <Barra valor={mitjanaOperatiu(op, 'juny')} />
+                  <AvisPesos pesTotal={rg.pesTotal} onReparteix={() => reparteixOperatius(objectiuIndex)} />
+
+                  {/* ── Competències bàsiques (el 65/35 del document) ── */}
+                  <div style={{ marginTop: 14, padding: '10px 12px', border: '1px dashed var(--line)', borderRadius: 8 }}>
+                    <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12, fontWeight: 600 }}>
+                      <input
+                        type="checkbox"
+                        checked={!!cb.actiu}
+                        onChange={(e) => { const nous = canviaCompetencies(objectiuIndex, 'actiu', e.target.checked); desa(nous) }}
+                      />
+                      Aquest objectiu barreja els operatius amb les competències bàsiques
+                    </label>
+                    {cb.actiu && (
+                      <div style={{ marginTop: 8 }}>
+                        <p style={{ fontSize: 12, color: 'var(--ink-soft)' }}>{cb.text}</p>
+                        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginTop: 6 }}>
+                          <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}>Pes de les competències</span>
+                          <CampPes
+                            valor={cb.pes}
+                            onChange={(v) => canviaCompetencies(objectiuIndex, 'pes', v)}
+                            onBlur={() => desa(objectius)}
+                            titol="Al document oficial és el 35%; els operatius s'enduen el 65% restant"
+                          />
+                          <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}>
+                            → els operatius pesen el {100 - (Number(cb.pes) || 0)}%
+                          </span>
                         </div>
+                        <select
+                          value={cb.escala ?? 'indicadors6'}
+                          onChange={(e) => { const nous = canviaCompetencies(objectiuIndex, 'escala', e.target.value); desa(nous) }}
+                          style={{ marginTop: 8, border: '1px solid var(--line)', borderRadius: 6, padding: '4px 6px', fontSize: 11 }}
+                        >
+                          {ESCALES.map((e) => <option key={e.id} value={e.id}>{e.nom}</option>)}
+                        </select>
+                        {[{ camp: 'gener', etiqueta: 'Gener' }, { camp: 'juny', etiqueta: 'Juny' }].map(({ camp, etiqueta }) => {
+                          const opcioActual = opcioDe(cb.escala ?? 'indicadors6', cb[camp])
+                          return (
+                            <div key={camp} style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 6, flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: 11, color: 'var(--ink-soft)', minWidth: 40 }}>{etiqueta}</span>
+                              {escalaDe(cb.escala ?? 'indicadors6').opcions.map((op) => (
+                                <button
+                                  key={op.id}
+                                  type="button"
+                                  onClick={() => { const nous = canviaCompetencies(objectiuIndex, camp, op.valor); desa(nous) }}
+                                  style={{
+                                    fontSize: 11, padding: '3px 8px', borderRadius: 6, cursor: 'pointer',
+                                    border: `1px solid ${opcioActual?.id === op.id ? 'var(--navy)' : 'var(--line)'}`,
+                                    background: opcioActual?.id === op.id ? 'var(--navy)' : 'transparent',
+                                    color: opcioActual?.id === op.id ? '#fff' : 'var(--ink)',
+                                  }}
+                                >
+                                  {op.label}
+                                </button>
+                              ))}
+                            </div>
+                          )
+                        })}
                       </div>
-                      <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 4 }}>{op.text}</p>
+                    )}
+                  </div>
 
-                      {op.indicadors.map((ind) => (
-                        <div key={ind.id} style={{ marginTop: 10, padding: '10px 12px', border: '1px solid var(--line)', borderRadius: 8 }}>
-                          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-                            <input
-                              type="text"
-                              value={ind.text}
-                              placeholder="Text de l'indicador"
-                              onChange={(e) => canviaIndicador(objectiuIndex, op.id, ind.id, 'text', e.target.value)}
-                              onBlur={() => onBlurDesa(objectius)}
-                              style={{ flex: 1, minWidth: 220, border: '1px solid var(--line)', borderRadius: 6, padding: '6px 8px', fontSize: 12 }}
+                  {/* ── Operatius ── */}
+                  {objectiu.operatius.map((op) => {
+                    const rog = resultatOperatiu(op, 'gener')
+                    const roj = resultatOperatiu(op, 'juny')
+                    return (
+                      <div key={op.id} style={{ marginTop: 16, borderTop: '1px dashed var(--line)', paddingTop: 12 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap' }}>
+                          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                            <strong style={{ fontSize: 13 }}>{op.titol}</strong>
+                            <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}>pes dins l'objectiu</span>
+                            <CampPes
+                              valor={op.pes}
+                              onChange={(v) => canviaOperatiu(objectiuIndex, op.id, 'pes', v)}
+                              onBlur={() => desa(objectius)}
+                              titol="Pes d'aquest operatiu dins de l'objectiu. Els pesos de tots els operatius han de sumar 100%."
                             />
-                            <button
-                              type="button"
-                              onClick={() => esborraIndicador(objectiuIndex, op.id, ind.id)}
-                              style={{ background: 'none', border: '1px solid var(--red)', color: 'var(--red)', borderRadius: 6, padding: '4px 8px', fontSize: 11 }}
-                            >
-                              Esborra
-                            </button>
                           </div>
-
-                          {[{ camp: 'gener', etiqueta: 'Gener' }, { camp: 'juny', etiqueta: 'Juny' }].map(({ camp, etiqueta }) => {
-                            const estatActual = estatDe(ind[camp])
-                            return (
-                              <div key={camp} style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
-                                <span style={{ fontSize: 11, color: 'var(--ink-soft)', minWidth: 40 }}>{etiqueta}</span>
-                                {ESTATS_EXECUCIO.map((e) => (
-                                  <button
-                                    key={e.id}
-                                    type="button"
-                                    onClick={() => { const nous = canviaIndicador(objectiuIndex, op.id, ind.id, camp, e.valor); onBlurDesa(nous) }}
-                                    style={{
-                                      fontSize: 11, padding: '4px 10px', borderRadius: 6,
-                                      border: `1px solid ${estatActual?.id === e.id ? 'var(--navy)' : 'var(--line)'}`,
-                                      background: estatActual?.id === e.id ? 'var(--navy)' : 'transparent',
-                                      color: estatActual?.id === e.id ? '#fff' : 'var(--ink)',
-                                      cursor: 'pointer',
-                                    }}
-                                  >
-                                    {e.label}
-                                  </button>
-                                ))}
-                                <input
-                                  type="number" min={0} max={100}
-                                  value={ind[camp]}
-                                  onChange={(e) => canviaIndicador(objectiuIndex, op.id, ind.id, camp, e.target.value)}
-                                  onBlur={() => onBlurDesa(objectius)}
-                                  title="Si l'indicador té una escala pròpia (per exemple '2 Cicles = 66%'), escriu aquí el número exacte"
-                                  style={{ width: 56, border: '1px solid var(--line)', borderRadius: 6, padding: '4px 6px', fontSize: 11, marginLeft: 4 }}
-                                />
-                                <span style={{ fontSize: 10, color: 'var(--ink-soft)' }}>%</span>
-                              </div>
-                            )
-                          })}
+                          <div style={{ display: 'flex', gap: 16 }}>
+                            <Barra resultat={rog} etiqueta="Gener" />
+                            <Barra resultat={roj} etiqueta="Juny" />
+                          </div>
                         </div>
-                      ))}
-                      <button
-                        type="button"
-                        onClick={() => afegeixIndicador(objectiuIndex, op.id)}
-                        className="btn-ghost"
-                        style={{ marginTop: 8, fontSize: 12, padding: '4px 10px', maxWidth: 180 }}
-                      >
-                        + Afegeix indicador
-                      </button>
-                    </div>
-                  ))}
+                        <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 4 }}>{op.text}</p>
+
+                        {op.indicadors.length > 0 && (
+                          <AvisPesos pesTotal={rog.pesTotal} onReparteix={() => reparteixIndicadors(objectiuIndex, op.id)} />
+                        )}
+
+                        {op.indicadors.map((ind) => {
+                          const escala = escalaDe(ind.escala)
+                          return (
+                            <div key={ind.id} style={{ marginTop: 10, padding: '10px 12px', border: '1px solid var(--line)', borderRadius: 8 }}>
+                              <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                                <input
+                                  type="text"
+                                  value={ind.text}
+                                  placeholder="Text de l'indicador"
+                                  onChange={(e) => canviaIndicador(objectiuIndex, op.id, ind.id, 'text', e.target.value)}
+                                  onBlur={() => desa(objectius)}
+                                  style={{ flex: 1, minWidth: 220, border: '1px solid var(--line)', borderRadius: 6, padding: '6px 8px', fontSize: 12 }}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => esborraIndicador(objectiuIndex, op.id, ind.id)}
+                                  style={{ background: 'none', border: '1px solid var(--red)', color: 'var(--red)', borderRadius: 6, padding: '4px 8px', fontSize: 11, cursor: 'pointer' }}
+                                >
+                                  Esborra
+                                </button>
+                              </div>
+
+                              <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginTop: 8 }}>
+                                <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}>Pes dins l'operatiu</span>
+                                <CampPes
+                                  valor={ind.pesGlobal}
+                                  onChange={(v) => canviaIndicador(objectiuIndex, op.id, ind.id, 'pesGlobal', v)}
+                                  onBlur={() => desa(objectius)}
+                                  titol="La columna 'Valor Global' del document. Els pesos de tots els indicadors de l'operatiu han de sumar 100%."
+                                />
+                                <select
+                                  value={ind.escala ?? 'execucio'}
+                                  onChange={(e) => { const nous = canviaIndicador(objectiuIndex, op.id, ind.id, 'escala', e.target.value); desa(nous) }}
+                                  style={{ border: '1px solid var(--line)', borderRadius: 6, padding: '4px 6px', fontSize: 11, maxWidth: 260 }}
+                                >
+                                  {ESCALES.map((e) => <option key={e.id} value={e.id}>{e.nom}</option>)}
+                                </select>
+                              </div>
+                              {escala.perConfirmar && (
+                                <p style={{ fontSize: 10, color: 'var(--amber-dark)', marginTop: 4 }}>
+                                  Els percentatges d'aquesta escala encara s'han de confirmar amb un full original.
+                                </p>
+                              )}
+
+                              {[{ camp: 'gener', etiqueta: 'Gener' }, { camp: 'juny', etiqueta: 'Juny' }].map(({ camp, etiqueta }) => {
+                                const opcioActual = opcioDe(ind.escala, ind[camp])
+                                return (
+                                  <div key={camp} style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
+                                    <span style={{ fontSize: 11, color: 'var(--ink-soft)', minWidth: 40 }}>{etiqueta}</span>
+                                    {escala.opcions.map((o) => (
+                                      <button
+                                        key={o.id}
+                                        type="button"
+                                        onClick={() => { const nous = canviaIndicador(objectiuIndex, op.id, ind.id, camp, o.valor); desa(nous) }}
+                                        style={{
+                                          fontSize: 11, padding: '4px 10px', borderRadius: 6, cursor: 'pointer',
+                                          border: `1px solid ${opcioActual?.id === o.id ? 'var(--navy)' : 'var(--line)'}`,
+                                          background: opcioActual?.id === o.id ? 'var(--navy)' : 'transparent',
+                                          color: opcioActual?.id === o.id ? '#fff' : 'var(--ink)',
+                                        }}
+                                      >
+                                        {o.label}
+                                      </button>
+                                    ))}
+                                    <input
+                                      type="number" min={0} max={100}
+                                      value={ind[camp]}
+                                      onChange={(e) => canviaIndicador(objectiuIndex, op.id, ind.id, camp, e.target.value)}
+                                      onBlur={() => desa(objectius)}
+                                      title="Si cal un número que no és a l'escala, escriu-lo aquí"
+                                      style={{ width: 56, border: '1px solid var(--line)', borderRadius: 6, padding: '4px 6px', fontSize: 11, marginLeft: 4 }}
+                                    />
+                                    <span style={{ fontSize: 10, color: 'var(--ink-soft)' }}>%</span>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )
+                        })}
+
+                        <button
+                          type="button"
+                          onClick={() => afegeixIndicador(objectiuIndex, op.id)}
+                          className="btn-ghost"
+                          style={{ marginTop: 8, fontSize: 12, padding: '4px 10px', maxWidth: 180, color: 'var(--navy)', borderColor: 'var(--navy)' }}
+                        >
+                          + Afegeix indicador
+                        </button>
+                      </div>
+                    )
+                  })}
 
                   <button
                     type="button"
