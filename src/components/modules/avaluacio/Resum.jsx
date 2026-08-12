@@ -30,7 +30,10 @@ export default function Resum() {
       try {
         const [snapAlumnes, snapAvaluacio] = await Promise.all([
           getDocs(query(collection(db, 'alumnes'), where('actiu', '==', true))),
-          getDocs(collection(db, 'avaluacio')),
+          // Filtrat pel curs escolar: la col·lecció "avaluacio" només
+          // creix (cada correcció hi afegeix una fila nova), i sense filtre
+          // aquesta pantalla acabaria descarregant tots els cursos passats.
+          getDocs(query(collection(db, 'avaluacio'), where('cursEscolar', '==', cursEscolarId))),
         ])
         setAlumnesTots(snapAlumnes.docs.map((d) => ({ id: d.id, ...d.data() })))
         const totes = snapAvaluacio.docs.map((d) => ({ id: d.id, ...d.data() }))
@@ -43,7 +46,7 @@ export default function Resum() {
       }
     }
     carrega()
-  }, [])
+  }, [cursEscolarId])
 
   const cursos = useMemo(
     () => [...new Set(alumnesTots.map((a) => a.curs))].filter((c) => grauPrimaria(c) !== null).sort(),
