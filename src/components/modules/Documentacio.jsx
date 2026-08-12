@@ -14,7 +14,7 @@ import {
 } from '../../lib/festesDetall'
 import { CURS_AMB_PLANTILLA as CURS_FESTES, FESTES_PLANTILLES_26_27, construeixFestaAmbPlantilla } from '../../lib/festesPlantilles26_27'
 import { carregaConfigValoracions } from '../../lib/valoracionsConfig'
-import { ESTATS_EXECUCIO, estatDe } from '../../lib/estatsExecucio'
+import { ESCALES, opcionsDe } from '../../lib/escales'
 import {
   CRITERIS_ACTIVITAT, activitatBuida as activitatSortidaBuida, mitjanaActivitat, grauSatisfaccioCicle,
   percentValorades, totalRepetirSi,
@@ -34,39 +34,53 @@ function inputPercent(valor, onChange, onBlur) {
   )
 }
 
-/** Selector de 3 estats (No fet / En procés / Fet), tal com surt a la
- *  plantilla oficial — a més d'un camp numèric per si l'indicador té una
- *  escala pròpia (per exemple "2 Cicles = 66%"). `onCanvi` rep el valor
- *  numèric ja calculat (0/40/100, o el que s'escrigui a mà). */
-function SelectorEstat({ etiqueta, valor, onCanvi }) {
-  const estatActual = estatDe(valor)
+/** Selector del grau d'una actuació o objectiu. Cada element porta la seva
+ *  pròpia escala, perquè els fulls del centre no en fan servir una de sola:
+ *  les comissions tenen "En procés" al 50%, els cicles escriuen el
+ *  percentatge directament, i n'hi ha de binàries i de recompte.
+ *  `onCanvi` rep el valor numèric ja convertit. */
+function SelectorEstat({ etiqueta, valor, escala, opcions: opcionsPropies, onCanvi, onCanviEscala }) {
+  const element = { escala: escala ?? 'execucio50', opcions: opcionsPropies }
+  const opcions = opcionsDe(element)
+  const actual = opcions.find((o) => o.valor === Number(valor)) ?? null
   return (
     <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
       <span style={{ fontSize: 11, color: 'var(--ink-soft)', minWidth: 40 }}>{etiqueta}</span>
-      {ESTATS_EXECUCIO.map((e) => (
+      {opcions.map((o) => (
         <button
-          key={e.id}
+          key={o.id}
           type="button"
-          onClick={() => onCanvi(e.valor)}
+          onClick={() => onCanvi(o.valor)}
           style={{
             fontSize: 11, padding: '4px 10px', borderRadius: 6,
-            border: `1px solid ${estatActual?.id === e.id ? 'var(--navy)' : 'var(--line)'}`,
-            background: estatActual?.id === e.id ? 'var(--navy)' : 'transparent',
-            color: estatActual?.id === e.id ? '#fff' : 'var(--ink)',
+            border: `1px solid ${actual?.id === o.id ? 'var(--navy)' : 'var(--line)'}`,
+            background: actual?.id === o.id ? 'var(--navy)' : 'transparent',
+            color: actual?.id === o.id ? '#fff' : 'var(--ink)',
             cursor: 'pointer',
           }}
         >
-          {e.label}
+          {o.label}
         </button>
       ))}
       <input
         type="number" min={0} max={100}
         value={valor}
         onChange={(e) => onCanvi(e.target.value)}
-        title="Si l'indicador té una escala pròpia, escriu aquí el número exacte"
+        title="Percentatge exacte"
         style={{ width: 56, border: '1px solid var(--line)', borderRadius: 6, padding: '4px 6px', fontSize: 11 }}
       />
       <span style={{ fontSize: 10, color: 'var(--ink-soft)' }}>%</span>
+      {onCanviEscala && (
+        <select
+          value={escala ?? 'execucio50'}
+          onChange={(e) => onCanviEscala(e.target.value)}
+          title="Escala d'aquesta actuació, tal com surt al full original"
+          style={{ border: '1px solid var(--line)', borderRadius: 6, padding: '3px 5px', fontSize: 10, maxWidth: 190 }}
+        >
+          {(escala === 'propia') && <option value="propia">Escala pròpia del full</option>}
+          {ESCALES.map((e) => <option key={e.id} value={e.id}>{e.nom}</option>)}
+        </select>
+      )}
     </div>
   )
 }
@@ -890,9 +904,22 @@ export default function Documentacio() {
               </label>
             </div>
 
-            <div style={{ display: 'flex', gap: 24, marginTop: 16, fontSize: 13 }}>
-              <span>TOTAL GENERAL — Gener: <strong>{mitjanaValoracio(valoracio, 'gener') !== null ? `${Math.round(mitjanaValoracio(valoracio, 'gener'))}%` : '—'}</strong></span>
-              <span>TOTAL GENERAL — Juny: <strong>{mitjanaValoracio(valoracio, 'juny') !== null ? `${Math.round(mitjanaValoracio(valoracio, 'juny'))}%` : '—'}</strong></span>
+            <div style={{ display: 'flex', gap: 24, marginTop: 16, fontSize: 13, flexWrap: 'wrap' }}>
+              {['gener', 'juny'].map((camp) => {
+                const total = mitjanaValoracio(valoracio, camp)
+                const p = pendentsValoracio(valoracio, camp)
+                return (
+                  <span key={camp}>
+                    TOTAL GENERAL — {camp === 'gener' ? 'Gener' : 'Juny'}:{' '}
+                    <strong>{total !== null ? `${Math.round(total)}%` : '—'}</strong>
+                    {p.total - p.valorats > 0 && (
+                      <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}>
+                        {' '}({p.total - p.valorats} sense valorar, compten 0)
+                      </span>
+                    )}
+                  </span>
+                )
+              })}
             </div>
 
             <p style={{ fontSize: 13, fontWeight: 600, marginTop: 24 }}>Objectius</p>
@@ -914,11 +941,16 @@ export default function Documentacio() {
                     <SelectorEstat
                       etiqueta="Gener"
                       valor={objectiu.gener}
+                      escala={objectiu.escala ?? 'lliure'}
+                      opcions={objectiu.opcions}
                       onCanvi={(v) => { const nova = actualitzaObjectiu(objectiu.id, { gener: v }); desa(nova) }}
+                      onCanviEscala={(e) => { const nova = actualitzaObjectiu(objectiu.id, { escala: e }); desa(nova) }}
                     />
                     <SelectorEstat
                       etiqueta="Juny"
                       valor={objectiu.juny}
+                      escala={objectiu.escala ?? 'lliure'}
+                      opcions={objectiu.opcions}
                       onCanvi={(v) => { const nova = actualitzaObjectiu(objectiu.id, { juny: v }); desa(nova) }}
                     />
                   </div>
@@ -927,6 +959,11 @@ export default function Documentacio() {
                   {objectiu.actuacions.length > 0 && (
                     <div style={{ fontSize: 12, fontWeight: 600 }}>
                       TOTAL objectiu — Gener {mitjanaObjectiu(objectiu, 'gener') !== null ? `${Math.round(mitjanaObjectiu(objectiu, 'gener'))}%` : '—'} · Juny {mitjanaObjectiu(objectiu, 'juny') !== null ? `${Math.round(mitjanaObjectiu(objectiu, 'juny'))}%` : '—'}
+                      {pendentsObjectiu(objectiu, 'juny').total - pendentsObjectiu(objectiu, 'juny').valorats > 0 && (
+                        <span style={{ fontWeight: 400, color: 'var(--ink-soft)' }}>
+                          {' '}· {pendentsObjectiu(objectiu, 'juny').total - pendentsObjectiu(objectiu, 'juny').valorats} sense valorar al juny
+                        </span>
+                      )}
                     </div>
                   )}
                   <button type="button" onClick={() => esborraObjectiu(objectiu.id)} style={{ background: 'none', border: '1px solid var(--red)', color: 'var(--red)', borderRadius: 6, padding: '4px 8px', fontSize: 11 }}>
@@ -961,11 +998,16 @@ export default function Documentacio() {
                       <SelectorEstat
                         etiqueta="Gener"
                         valor={actuacio.gener}
+                        escala={actuacio.escala ?? 'execucio50'}
+                        opcions={actuacio.opcions}
                         onCanvi={(v) => { const nova = actualitzaActuacio(objectiu.id, actuacio.id, { gener: v }); desa(nova) }}
+                        onCanviEscala={(e) => { const nova = actualitzaActuacio(objectiu.id, actuacio.id, { escala: e }); desa(nova) }}
                       />
                       <SelectorEstat
                         etiqueta="Juny"
                         valor={actuacio.juny}
+                        escala={actuacio.escala ?? 'execucio50'}
+                        opcions={actuacio.opcions}
                         onCanvi={(v) => { const nova = actualitzaActuacio(objectiu.id, actuacio.id, { juny: v }); desa(nova) }}
                       />
                     </div>
