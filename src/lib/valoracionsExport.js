@@ -1,5 +1,6 @@
 import ExcelJS from 'exceljs'
 import { FESTES, mitjanaObjectiu, mitjanaValoracio } from './valoracions'
+import { afegeixCapcalera, ajustaColumnes } from './excelCapcalera'
 
 const BLAU = 'FF1E3A5F'
 const GRIS = 'FFF2F0EA'
@@ -38,10 +39,7 @@ export async function exportaValoracionsExcel(valoracions, cursEscolarId) {
 
     // --- Pestanya principal (Resum, o única si és un cicle sense actuacions) ---
     const ws = wb.addWorksheet(nomFullSegur(v.nom, teActuacions ? ' - Resum' : ''))
-    ws.getCell('A1').value = `Valoració PGAC — Curs ${cursEscolarId}`
-    ws.getCell('A1').font = { bold: true, size: 13 }
-    ws.mergeCells('A1:D1')
-    ws.addRow([])
+    afegeixCapcalera(ws, { titol: `Valoració ${v.nom}`, cursEscolarId, columnes: 3 })
     ws.addRow(['Departament/comissió/servei:', v.nom])
     if (v.responsable) ws.addRow(['Responsable:', v.responsable])
     if (v.membres) ws.addRow(['Membres:', v.membres])
@@ -79,21 +77,18 @@ export async function exportaValoracionsExcel(valoracions, cursEscolarId) {
       })
     }
 
-    ws.getColumn(1).width = 42
-    ws.getColumn(2).width = 12
-    ws.getColumn(3).width = 12
+    ajustaColumnes(ws, [42, 12, 12])
 
     // --- Una pestanya per cada objectiu que tingui actuacions ---
     if (teActuacions) {
       v.objectius.forEach((o, oi) => {
         if (!o.actuacions || o.actuacions.length === 0) return
         const wsO = wb.addWorksheet(nomFullSegur(v.nom, ` - Obj.${oi + 1}`))
-        wsO.getCell('A1').value = `Objectiu ${oi + 1}: ${o.text}`
-        wsO.getCell('A1').font = { bold: true }
-        wsO.mergeCells('A1:D1')
-        wsO.getRow(1).height = 30
-        wsO.getCell('A1').alignment = { wrapText: true, vertical: 'middle' }
-        wsO.addRow([])
+        afegeixCapcalera(wsO, {
+          titol: `${v.nom} — Objectiu ${oi + 1}: ${o.text}`,
+          cursEscolarId,
+          columnes: 4,
+        })
 
         const capO = wsO.addRow(["Actuacions/Activitats", "Indicador d'avaluació", 'Gener', 'Juny'])
         capO.eachCell((cell) => estilCapçalera(cell))
@@ -112,10 +107,7 @@ export async function exportaValoracionsExcel(valoracions, cursEscolarId) {
           cell.border = TOTES_VORES
         })
 
-        wsO.getColumn(1).width = 38
-        wsO.getColumn(2).width = 38
-        wsO.getColumn(3).width = 12
-        wsO.getColumn(4).width = 12
+        ajustaColumnes(wsO, [38, 38, 12, 12])
       })
     }
   }
