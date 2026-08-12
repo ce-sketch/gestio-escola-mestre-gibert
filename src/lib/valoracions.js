@@ -5,11 +5,14 @@
 // seu propi indicador i percentatges, dins de cada objectiu.
 
 export function actuacioBuida() {
-  return { id: crypto.randomUUID(), text: '', indicador: '', gener: '', juny: '' }
+  // Les actuacions de comissions i equips fan servir l'escala dels seus
+  // fulls, on "En procés" val 50% (als fulls del PGAC en val 40).
+  return { id: crypto.randomUUID(), text: '', indicador: '', gener: '', juny: '', escala: 'execucio50', opcions: null }
 }
 
 export function objectiuBuit() {
-  return { id: crypto.randomUUID(), text: '', gener: '', juny: '', actuacions: [] }
+  // Els fulls de cicle no tenen estats: s'hi escriu el percentatge directament.
+  return { id: crypto.randomUUID(), text: '', gener: '', juny: '', escala: 'lliure', opcions: null, actuacions: [] }
 }
 
 export function valoracioBuida() {
@@ -38,29 +41,60 @@ export const NOMS_SUGGERITS = [
 // botó a part dins de Valoracions, en comptes de barrejar-se amb la resta.
 export const NOMS_AFA = ['Comissió Comunicació', 'Comissió Espai de migdia', 'Comissió de Transformem els Patis']
 
-/** Mitjana de Gener/Juny d'un objectiu — si té actuacions, la mitjana és
- *  de les actuacions; si no, es fa servir el valor introduït directament
- *  a l'objectiu (com als cicles, que no desglossen en actuacions). */
+/**
+ * Resultat d'un objectiu, tal com el calculen els fulls originals:
+ * `=AVERAGE(...)` de les seves actuacions. Ull amb un detall que canvia molt
+ * el número: als fulls, les actuacions vénen pre-omplertes amb "No fet", o
+ * sigui que **les que no s'han valorat compten 0**, no s'ignoren. Si
+ * s'ignoressin, una comissió amb un sol objectiu fet donaria 100% quan el
+ * full real dona 10%.
+ */
 export function mitjanaObjectiu(objectiu, camp) {
-  if (objectiu.actuacions && objectiu.actuacions.length > 0) {
-    const valors = objectiu.actuacions
-      .filter((a) => a[camp] !== '' && a[camp] !== null && a[camp] !== undefined)
-      .map((a) => Number(a[camp]))
-    if (valors.length === 0) return null
-    return valors.reduce((a, b) => a + b, 0) / valors.length
+  const actuacions = objectiu.actuacions ?? []
+  if (actuacions.length > 0) {
+    const suma = actuacions.reduce((total, a) => total + valorNumeric(a[camp]), 0)
+    return suma / actuacions.length
   }
-  if (objectiu[camp] === '' || objectiu[camp] === null || objectiu[camp] === undefined) return null
+  if (objectiu[camp] === '' || objectiu[camp] === null || objectiu[camp] === undefined) return 0
   return Number(objectiu[camp])
 }
 
-/** Mitjana general de tots els objectius d'una valoració (equival al
- *  "Resultat PGAC" / "Grau d'assoliment dels objectius" del full original). */
+/** Resultat de la valoració sencera: `=average(...)` de tots els objectius,
+ *  comptant també els que encara no s'han valorat. */
 export function mitjanaValoracio(valoracio, camp) {
-  const valors = valoracio.objectius
-    .map((o) => mitjanaObjectiu(o, camp))
-    .filter((v) => v !== null)
-  if (valors.length === 0) return null
-  return valors.reduce((a, b) => a + b, 0) / valors.length
+  const objectius = valoracio.objectius ?? []
+  if (objectius.length === 0) return null
+  const suma = objectius.reduce((total, o) => total + (mitjanaObjectiu(o, camp) ?? 0), 0)
+  return suma / objectius.length
+}
+
+function valorNumeric(v) {
+  if (v === '' || v === null || v === undefined) return 0
+  const n = Number(v)
+  return Number.isNaN(n) ? 0 : n
+}
+
+function esBuit(v) {
+  return v === '' || v === null || v === undefined
+}
+
+/** Quantes caselles queden per valorar dins d'un objectiu, per poder-ho dir
+ *  al costat del resultat: un 10% a l'octubre no és un mal resultat, és que
+ *  encara no toca. */
+export function pendentsObjectiu(objectiu, camp) {
+  const actuacions = objectiu.actuacions ?? []
+  if (actuacions.length > 0) {
+    return { total: actuacions.length, valorats: actuacions.filter((a) => !esBuit(a[camp])).length }
+  }
+  return { total: 1, valorats: esBuit(objectiu[camp]) ? 0 : 1 }
+}
+
+/** El mateix, per a tota la valoració. */
+export function pendentsValoracio(valoracio, camp) {
+  return (valoracio.objectius ?? []).reduce((acc, o) => {
+    const p = pendentsObjectiu(o, camp)
+    return { total: acc.total + p.total, valorats: acc.valorats + p.valorats }
+  }, { total: 0, valorats: 0 })
 }
 
 // Festes del curs (es mantenen com a valoració simple i separada).

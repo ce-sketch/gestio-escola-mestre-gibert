@@ -49,9 +49,23 @@ export function festaBuida(festaLabel) {
  *  que ja tenen un grau assignat. */
 export function mitjanaObjectiuGrup(festa, grupNom, objectiuId) {
   const activitats = festa.grups?.[grupNom]?.[objectiuId]?.activitats ?? []
-  const valors = activitats.filter((a) => a.grau !== '' && a.grau !== null && a.grau !== undefined).map((a) => Number(a.grau))
-  if (valors.length === 0) return null
-  return valors.reduce((a, b) => a + b, 0) / valors.length
+  if (activitats.length === 0) return null
+  // Als fulls de festa les activitats vénen pre-omplertes amb "No assolit":
+  // les que no s'han valorat compten 0, no s'ignoren.
+  const suma = activitats.reduce((total, a) => {
+    const n = Number(a.grau)
+    return total + (a.grau === '' || a.grau === null || a.grau === undefined || Number.isNaN(n) ? 0 : n)
+  }, 0)
+  return suma / activitats.length
+}
+
+/** Quantes activitats queden per valorar dins d'un objectiu d'un grup. */
+export function pendentsObjectiuGrup(festa, grupNom, objectiuId) {
+  const activitats = festa.grups?.[grupNom]?.[objectiuId]?.activitats ?? []
+  return {
+    total: activitats.length,
+    valorats: activitats.filter((a) => a.grau !== '' && a.grau !== null && a.grau !== undefined).length,
+  }
 }
 
 /** Mitjana ponderada de tots els objectius d'un grup (fent servir el pes
