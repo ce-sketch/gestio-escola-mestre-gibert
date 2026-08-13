@@ -15,6 +15,7 @@ import {
 } from './pgac'
 import { mitjanaObjectiu, mitjanaValoracio, pendentsValoracio } from './valoracions'
 import { opcionsDe, ESCALES } from './escales'
+import { NIVELLS_GRAU, festaBuida, mitjanaObjectiuGrup, mitjanaGrup, mitjanaGeneralFesta } from './festesDetall'
 import { escalaDeFormula } from './valoracionsPlantillaParser'
 import { escalaDelText } from './pgacPlantillaParser'
 
@@ -242,21 +243,90 @@ function grupLectors() {
   return { titol: 'Lectors de plantilles', proves }
 }
 
-// ── Punts oberts, marcats a posta com a pendents ────────────────────────
 
-function grupPendents() {
-  return {
-    titol: 'Pendents de confirmar',
-    proves: [{
-      nom: "Festes: els percentatges dels 6 nivells (No assolit → Alt) encara no s'han pogut llegir de cap full original",
-      esperat: 'confirmat amb un full real',
-      obtingut: 'suposats: 0 / 20 / 40 / 60 / 80 / 100',
-      ok: false,
-      avis: true,
-    }],
+// ── Festes ──────────────────────────────────────────────────────────────
+// Els números d'aquestes comprovacions surten del full real de la
+// Castanyada del curs 2025-26, i s'han verificat un per un contra el que
+// diu aquell full.
+
+function grupFestes() {
+  const proves = []
+
+  proves.push(comprova(
+    'Els 6 nivells valen 0 / 20 / 40 / 60 / 80 / 100',
+    [0, 20, 40, 60, 80, 100],
+    () => NIVELLS_GRAU.map((n) => n.valor)
+  ))
+
+  proves.push(comprova(
+    'Una festa nova neix amb els pesos 30/30/40 dels fulls del centre',
+    [30, 30, 40],
+    () => festaBuida('Castanyada').objectius.map((o) => o.pes)
+  ))
+
+  // La Castanyada 25-26, Educació Infantil:
+  //   Objectiu 1 → Alt, Alt, Bo        = 93,33%
+  //   Objectiu 2 → Alt, Alt, Alt       = 100%
+  //   Objectiu 3 → Alt, Alt, Alt       = 100%
+  //   amb els pesos 30/30/40           = 98,00%  ← el que diu el full
+  const castanyadaEI = () => {
+    const festa = festaBuida('Castanyada')
+    const [o1, o2, o3] = festa.objectius
+    const posa = (objectiu, graus) => {
+      festa.grups['Educació Infantil'][objectiu.id].activitats =
+        graus.map((g) => ({ id: Math.random().toString(), text: '', grau: g }))
+    }
+    posa(o1, [100, 100, 80])
+    posa(o2, [100, 100, 100])
+    posa(o3, [100, 100, 100])
+    return festa
   }
+
+  proves.push(comprova(
+    "Castanyada 25-26, Infantil, objectiu 1 (Alt/Alt/Bo) dona 93,33%",
+    93.33,
+    () => {
+      const festa = castanyadaEI()
+      return mitjanaObjectiuGrup(festa, 'Educació Infantil', festa.objectius[0].id)
+    }
+  ))
+
+  proves.push(comprova(
+    "Castanyada 25-26, Infantil: amb els pesos 30/30/40 dona el 98% del full",
+    98,
+    () => mitjanaGrup(castanyadaEI(), 'Educació Infantil')
+  ))
+
+  // El total de l'objectiu 1 de la festa: mitjana dels 4 cicles al 80% i
+  // Equip Directiu al 20%. Al full: 89,33%.
+  proves.push(comprova(
+    "Castanyada 25-26: cicles al 80% i equip directiu al 20% donen el 89,33% del full",
+    89.33,
+    () => {
+      const festa = festaBuida('Castanyada')
+      const [o1] = festa.objectius
+      const posa = (grup, graus) => {
+        festa.grups[grup][o1.id].activitats = graus.map((g) => ({ id: Math.random().toString(), text: '', grau: g }))
+      }
+      // Només l'objectiu 1, i per això li donem tot el pes.
+      festa.objectius = [{ ...o1, pes: 100 }]
+      for (const g of Object.keys(festa.grups)) {
+        festa.grups[g] = { [o1.id]: festa.grups[g][o1.id] }
+      }
+      posa('Educació Infantil', [100, 100, 80])   // 93,33
+      posa('Cicle Inicial', [100, 80, 100])       // 93,33
+      posa('Cicle Mitjà', [100, 80, 80])          // 86,67
+      posa('Cicle Superior', [100, 100, 40])      // 80,00
+      posa('Equip Directiu', [80, 100, 100])      // 93,33
+      return mitjanaGeneralFesta(festa)
+    }
+  ))
+
+  return { titol: 'Festes', proves }
 }
 
+// ── Punts oberts, marcats a posta com a pendents ────────────────────────
+
 export function executaComprovacions() {
-  return [grupPgac(), grupValoracions(), grupEscales(), grupLectors(), grupPendents()]
+  return [grupPgac(), grupValoracions(), grupFestes(), grupEscales(), grupLectors()]
 }

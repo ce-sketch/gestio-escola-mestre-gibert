@@ -8,6 +8,10 @@
 
 export const GRUPS = ['Educació Infantil', 'Cicle Inicial', 'Cicle Mitjà', 'Cicle Superior', 'Equip Directiu']
 
+// Escala de 6 nivells, CONFIRMADA amb el full de la Castanyada del curs
+// 2025-26, on cada nivell surt al costat del seu percentatge
+// (Alt 100%, Bo 80%, Satisfactori 60%, Poc satisfactori 40%, Baix 20%,
+// No assolit 0%).
 export const NIVELLS_GRAU = [
   { id: 'no_assolit', label: 'No assolit', valor: 0 },
   { id: 'baix', label: 'Baix', valor: 20 },
@@ -32,7 +36,9 @@ function grupBuit(objectius) {
 }
 
 export function festaBuida(festaLabel) {
-  const objectius = [objectiuFestaBuit(100)]
+  // Els pesos entre objectius surten escrits als criteris dels fulls de
+  // festa: "Objectiu 1: 30% · Objectiu 2: 30% · Objectiu 3: 40%".
+  const objectius = [objectiuFestaBuit(30), objectiuFestaBuit(30), objectiuFestaBuit(40)]
   const grups = {}
   for (const g of GRUPS) grups[g] = grupBuit(objectius)
   return {

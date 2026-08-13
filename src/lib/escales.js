@@ -40,8 +40,7 @@ export const ESCALES = [
   {
     id: 'qualitativa6',
     nom: 'Qualitativa de 6 nivells',
-    ajuda: "La de les valoracions de festes. Atenció: el document en dona els noms però no els percentatges — aquests són una interpolació regular i caldria confirmar-los amb un full de festa real.",
-    perConfirmar: true,
+    ajuda: "La de les valoracions de festes. Confirmada amb el full de la Castanyada del curs 2025-26.",
     opcions: [
       { id: 'no_assolit', label: 'No assolit', valor: 0 },
       { id: 'baix', label: 'Baix', valor: 20 },
