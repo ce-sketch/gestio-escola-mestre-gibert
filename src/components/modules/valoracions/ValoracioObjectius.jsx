@@ -3,7 +3,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'
 import { db, auth } from '../../../firebase'
 import { slug } from '../../../lib/slug'
 import {
-  valoracioBuida, objectiuBuit, actuacioBuida,
+  valoracioBuida, objectiuBuit, actuacioBuida, MOMENTS_DADES,
   mitjanaObjectiu, mitjanaValoracio, pendentsValoracio, pendentsObjectiu,
 } from '../../../lib/valoracions'
 import { CURS_AMB_PLANTILLA, PLANTILLES_26_27 } from '../../../lib/valoracionsPlantilles26_27'
@@ -180,6 +180,23 @@ export default function ValoracioObjectius({ cursEscolarId, tipus, nom, onDesat 
     return nova
   }
 
+  function actualitzaEtiquetaDades(objectiuId, moment, valor) {
+    return actualitzaObjectiu(objectiuId, {
+      etiquetesDades: {
+        ...(valoracio.objectius.find((o) => o.id === objectiuId)?.etiquetesDades ?? {}),
+        [moment]: valor,
+      },
+    })
+  }
+
+  function actualitzaDadaActuacio(objectiuId, actuacioId, moment, valor) {
+    const objectiu = valoracio.objectius.find((o) => o.id === objectiuId)
+    const actuacio = objectiu?.actuacions.find((a) => a.id === actuacioId)
+    return actualitzaActuacio(objectiuId, actuacioId, {
+      dades: { ...(actuacio?.dades ?? { inici: '', gener: '', juny: '' }), [moment]: valor },
+    })
+  }
+
   function afegeixObjectiu() {
     const nova = actualitza({ objectius: [...valoracio.objectius, objectiuBuit()] })
     desa(nova)
@@ -336,6 +353,25 @@ export default function ValoracioObjectius({ cursEscolarId, tipus, nom, onDesat 
                         ✕
                       </button>
                     </div>
+                    {objectiu.recullDades && (
+                      <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
+                        {MOMENTS_DADES.map((m) => (
+                          <label key={m.id} style={{ flex: 1, minWidth: 150 }}>
+                            <span style={{ display: 'block', fontSize: 10, color: 'var(--ink-soft)' }}>
+                              {objectiu.etiquetesDades?.[m.id] || m.label}
+                            </span>
+                            <textarea
+                              rows={2}
+                              value={actuacio.dades?.[m.id] ?? ''}
+                              placeholder="Dada recollida"
+                              onChange={(e) => actualitzaDadaActuacio(objectiu.id, actuacio.id, m.id, e.target.value)}
+                              onBlur={() => desa(valoracio)}
+                              style={{ width: '100%', border: '1px solid var(--line)', borderRadius: 6, padding: '5px 8px', fontSize: 12, resize: 'vertical' }}
+                            />
+                          </label>
+                        ))}
+                      </div>
+                    )}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 6 }}>
                       <SelectorEstat
                         etiqueta="Gener"
@@ -355,6 +391,40 @@ export default function ValoracioObjectius({ cursEscolarId, tipus, nom, onDesat 
                     </div>
                   </div>
                 ))}
+                <div style={{ marginTop: 10, marginLeft: 28, paddingTop: 8, borderTop: '1px dashed var(--line)' }}>
+                  <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12 }}>
+                    <input
+                      type="checkbox"
+                      checked={!!objectiu.recullDades}
+                      onChange={(e) => { const nova = actualitzaObjectiu(objectiu.id, { recullDades: e.target.checked }); desa(nova) }}
+                    />
+                    Aquest objectiu recull dades
+                  </label>
+                  <p style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 2 }}>
+                    Per als objectius on el full demana escriure xifres o textos (ajuts de menjador,
+                    preus, nombre de monitors…). Les dades no compten al percentatge: el grau se
+                    segueix marcant a part, com al full.
+                  </p>
+                  {objectiu.recullDades && (
+                    <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+                      {MOMENTS_DADES.map((m) => (
+                        <label key={m.id} style={{ flex: 1, minWidth: 150 }}>
+                          <span style={{ display: 'block', fontSize: 10, color: 'var(--ink-soft)' }}>
+                            Títol de la columna «{m.label}»
+                          </span>
+                          <input
+                            type="text"
+                            value={objectiu.etiquetesDades?.[m.id] ?? m.label}
+                            onChange={(e) => actualitzaEtiquetaDades(objectiu.id, m.id, e.target.value)}
+                            onBlur={() => desa(valoracio)}
+                            style={{ width: '100%', border: '1px solid var(--line)', borderRadius: 6, padding: '4px 6px', fontSize: 11 }}
+                          />
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
                 <button
                   type="button"
                   onClick={() => afegeixActuacio(objectiu.id)}
