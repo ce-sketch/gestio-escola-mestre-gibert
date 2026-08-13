@@ -6,7 +6,9 @@ import {
   GRUPS, NIVELLS_GRAU, festaBuida, objectiuFestaBuit, activitatBuida,
   mitjanaObjectiuGrup, mitjanaGrup, mitjanaGeneralFesta,
 } from '../../../lib/festesDetall'
-import { CURS_AMB_PLANTILLA as CURS_FESTES, construeixFestaAmbPlantilla } from '../../../lib/festesPlantilles26_27'
+import {
+  CURS_AMB_PLANTILLA as CURS_FESTES, FESTES_PLANTILLES_26_27, construeixFestaAmbPlantilla,
+} from '../../../lib/festesPlantilles26_27'
 
 /** Valoració d'una festa: objectius amb pes, desglossats per grup
  *  (cicles + equip directiu) amb activitats i grau d'assoliment. */
