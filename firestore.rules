@@ -156,6 +156,12 @@ service cloud.firestore {
     // Configuració de quines comissions/equips i festes estan actives cada
     // curs — nomès l'administrador la pot canviar, però tot el personal la
     // pot llegir (per saber quines opcions els han de sortir).
+    // Aprenentatge cooperatiu: un document per curs escolar. L'omplen els
+    // cicles, com la resta de valoracions.
+    match /aprenentatgeCooperatiu/{cursEscolarId} {
+      allow read, write: if esComptePersonal();
+    }
+
     match /valoracionsConfig/{cursEscolarId} {
       allow read: if esComptePersonal();
       allow write: if esAdmin();
