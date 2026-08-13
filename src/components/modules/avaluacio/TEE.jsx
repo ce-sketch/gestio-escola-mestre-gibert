@@ -8,6 +8,7 @@ import { interpretaDictatTEE } from '../../../lib/dictatTEE'
 import { cursEscolarActual } from '../../../lib/cursEscolar'
 import { normalitza } from '../../../lib/text'
 import { esAdmin } from '../../../lib/roles'
+import BotoDrive from '../../BotoDrive'
 
 // Paraules clau per reconèixer cada columna de criteri a la capçalera del
 // fitxer Excel pujat, siguin quin siguin l'ordre o els espais exactes.
@@ -467,6 +468,12 @@ export default function TEE() {
           🎤 Dicta notes (per número d'alumne)
         </button>
 
+        <BotoDrive
+          onFitxer={handleFileUpload}
+          tipus="fulls"
+          etiqueta="Tria el fitxer del Drive"
+          onError={(t) => setMissatge({ type: 'error', text: t })}
+        />
         <label
           className="btn-ghost"
           style={{ color: 'var(--navy)', borderColor: 'var(--navy)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center' }}
