@@ -4,6 +4,7 @@ import { db } from '../../firebase'
 import { comptaDiesLectius } from '../../lib/calendar'
 import { fetchDocText, parseOfficialCalendarText } from '../../lib/officialCalendarDoc'
 import { cursEscolarActual, cursSeguent } from '../../lib/cursEscolar'
+import BotoDrive from '../BotoDrive'
 
 // ID del document "HORARI I CALENDARI ESCOLAR" a Google Docs. Ha d'estar
 // compartit com "Qualsevol persona amb l'enllaç" (lector) perquè el botó
@@ -312,6 +313,12 @@ export default function Calendari() {
         >
           👁 Obre el document per consultar-lo
         </a>
+        <BotoDrive
+          onFitxer={pujaFitxerManualment}
+          tipus="documents"
+          etiqueta="Tria el calendari del Drive"
+          onError={(t) => setMissatge({ type: 'error', text: t })}
+        />
         <label
           className="btn-ghost"
           style={{ color: 'var(--navy)', borderColor: 'var(--navy)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center' }}

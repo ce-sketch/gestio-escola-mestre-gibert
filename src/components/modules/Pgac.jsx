@@ -8,6 +8,7 @@ import {
 } from '../../lib/pgac'
 import { ESCALES, escalaDe, opcioDe, opcionsDe } from '../../lib/escales'
 import { llegeixPlantillaPgac } from '../../lib/pgacPlantillaParser'
+import BotoDrive from '../BotoDrive'
 
 function Barra({ resultat, etiqueta }) {
   if (!resultat || resultat.valor === null) {
@@ -322,6 +323,13 @@ export default function Pgac() {
 
         <div style={{ display: 'flex', gap: 24, marginTop: 12, flexWrap: 'wrap' }}>
           <div>
+            <BotoDrive
+              onFitxer={(e) => pujaPlantilla(e.target.files?.[0])}
+              tipus="fulls"
+              etiqueta="Tria la plantilla del Drive"
+              onError={setErrorPlantilla}
+              disabled={important}
+            />
             <label
               className="btn-ghost"
               style={{ display: 'inline-block', color: 'var(--navy)', borderColor: 'var(--navy)', fontSize: 13, cursor: 'pointer', padding: '8px 14px', borderRadius: 8, border: '1px solid' }}

@@ -6,6 +6,8 @@ import { ENSENYAMENTS, CURSOS, CONCEPTES, conceptaBuit, filaBuida, totalConcepte
 import { exportaExcelOficial } from '../../lib/economiaExcelOficial'
 import { fetchDocText } from '../../lib/officialCalendarDoc'
 import { parseOfficialQuotesText, parseResumSortides } from '../../lib/officialQuotesDoc'
+import { DOC_SORTIDES_OFICIAL_ID, descarregaDocumentSortides } from '../../lib/documentSortides'
+import BotoDrive from '../BotoDrive'
 
 // ID del document "Recull informatiu de les famílies" a Google Docs, amb
 // els preus de quotes. Ha d'estar compartit com "Qualsevol persona amb
@@ -15,7 +17,6 @@ const DOC_QUOTES_OFICIAL_ID = '11d6iuGeB3MhBuy_fzAJJQSXDxom8x4cVtDk4FqTq-U0'
 // ID del document consolidat "Activitats_Complementaries_..._I3_a_6e" a
 // Google Sheets, amb el full "Resum" ja calculat. Ha d'estar compartit com
 // "Qualsevol persona amb l'enllaç" (lector).
-const DOC_SORTIDES_OFICIAL_ID = '1BjWwDFbFqlfjn1DQ-RT1WsO-mkqg9LM_x-f-WxCem08'
 
 // Conceptes on la reducció NESE (situació socioeconòmica) és del 100%,
 // segons el criteri del centre: material escolar i activitats
@@ -212,16 +213,7 @@ export default function Economia() {
     setMissatge(null)
     setSortidesTrobades(null)
     try {
-      const url = `https://docs.google.com/spreadsheets/d/${DOC_SORTIDES_OFICIAL_ID}/export?format=xlsx`
-      const res = await fetch(url)
-      if (!res.ok) {
-        throw new Error(
-          `No s'ha pogut llegir el document (codi ${res.status}). Comprova que està compartit ` +
-          `com "Qualsevol persona amb l'enllaç" pot veure.`
-        )
-      }
-      const buffer = await res.arrayBuffer()
-      const workbook = XLSX.read(buffer, { type: 'array' })
+      const workbook = await descarregaDocumentSortides(XLSX)
       processaWorkbookSortides(workbook, XLSX)
     } catch (err) {
       setMissatge({ type: 'error', text: err.message })
@@ -523,6 +515,12 @@ export default function Economia() {
         >
           👁 Obre el document per consultar-lo
         </a>
+        <BotoDrive
+          onFitxer={pujaFitxerPreusManualment}
+          tipus="documents"
+          etiqueta="Tria el document de preus del Drive"
+          onError={(t) => setMissatge({ type: 'error', text: t })}
+        />
         <label
           className="btn-ghost"
           style={{ color: 'var(--navy)', borderColor: 'var(--navy)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center' }}
@@ -562,6 +560,13 @@ export default function Economia() {
           >
             👁 Obre el document per consultar-lo
           </a>
+          <BotoDrive
+            onFitxer={pujaResumSortides}
+            tipus="fulls"
+            etiqueta="Tria el document de sortides del Drive"
+            onError={(t) => setMissatge({ type: 'error', text: t })}
+            disabled={carregantSortides}
+          />
           <label
             className="btn-ghost"
             style={{ color: 'var(--navy)', borderColor: 'var(--navy)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center' }}

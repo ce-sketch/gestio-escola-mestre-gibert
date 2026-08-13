@@ -9,6 +9,7 @@ import { interpretaResum, interpretaFullObjectiu, interpretaResumCicle, interpre
 import { CICLES } from '../../lib/valoracions'
 import { GRUPS, festaBuida, objectiuFestaBuit, activitatBuida } from '../../lib/festesDetall'
 import { slug } from '../../lib/slug'
+import BotoDrive from '../BotoDrive'
 
 // El `xlsx` pesa 429 kB i només fa falta quan algú puja un fitxer. Es
 // carrega en aquell moment, no en obrir el mòdul.
@@ -367,6 +368,13 @@ export default function MatriuGeneral() {
               Els 4 cicles sempre estan disponibles per als docents — aquí només pots pujar-hi
               una plantilla ja omplerta per a un curs concret.
             </p>
+            <BotoDrive
+              onFitxer={pujaPlantillaCicle}
+              tipus="fulls"
+              etiqueta="Tria la plantilla de cicle del Drive"
+              onError={(t) => setMissatge({ type: 'error', text: t })}
+              disabled={pujantCicle}
+            />
             <label className="btn-ghost" style={{ fontSize: 12, padding: '5px 10px', cursor: 'pointer', display: 'inline-flex', marginTop: 6 }}>
               {pujantCicle ? 'Llegint la plantilla…' : '📤 Puja una plantilla de cicle (Excel)'}
               <input type="file" accept=".xlsx,.xls" onChange={pujaPlantillaCicle} style={{ display: 'none' }} disabled={pujantCicle} />
@@ -397,6 +405,13 @@ export default function MatriuGeneral() {
               <button type="button" onClick={afegeixComissio} className="btn-ghost" style={{ fontSize: 12, padding: '5px 10px' }}>
                 + Afegeix en blanc
               </button>
+              <BotoDrive
+                onFitxer={pujaPlantillaComissio}
+                tipus="fulls"
+                etiqueta="Tria la plantilla de comissió del Drive"
+                onError={(t) => setMissatge({ type: 'error', text: t })}
+                disabled={pujantPlantilla}
+              />
               <label className="btn-ghost" style={{ fontSize: 12, padding: '5px 10px', cursor: 'pointer' }}>
                 {pujantPlantilla ? 'Llegint la plantilla…' : '📤 O puja una plantilla (Excel) ja omplerta'}
                 <input type="file" accept=".xlsx,.xls" onChange={pujaPlantillaComissio} style={{ display: 'none' }} disabled={pujantPlantilla} />
@@ -420,6 +435,13 @@ export default function MatriuGeneral() {
                 )
               })}
             </div>
+            <BotoDrive
+              onFitxer={pujaPlantillaFesta}
+              tipus="fulls"
+              etiqueta="Tria la plantilla de festa del Drive"
+              onError={(t) => setMissatge({ type: 'error', text: t })}
+              disabled={pujantFesta}
+            />
             <label className="btn-ghost" style={{ fontSize: 12, padding: '5px 10px', cursor: 'pointer', display: 'inline-flex', marginTop: 10 }}>
               {pujantFesta ? 'Llegint la plantilla…' : '📤 Puja una plantilla de festa (Excel, amb tots els fulls de grup)'}
               <input type="file" accept=".xlsx,.xls" onChange={pujaPlantillaFesta} style={{ display: 'none' }} disabled={pujantFesta} />

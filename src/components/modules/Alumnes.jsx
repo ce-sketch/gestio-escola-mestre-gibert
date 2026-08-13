@@ -5,6 +5,7 @@ import {
 import { db } from '../../firebase'
 import { slug } from '../../lib/slug'
 import { cursEscolarActual } from '../../lib/cursEscolar'
+import BotoDrive from '../BotoDrive'
 
 const DEFAULT_CLASSES = ['1r A', '1r B']
 
@@ -395,6 +396,12 @@ export default function Alumnes() {
           fitxer descarregat — detecta totes les classes soles, sense haver-les d'enganxar
           una per una.
         </p>
+        <BotoDrive
+          onFitxer={handleFileChange}
+          tipus="fulls"
+          etiqueta="Tria la llista d'alumnes del Drive"
+          onError={setErrorFitxer}
+        />
         <input type="file" accept=".xlsx,.xls" onChange={handleFileChange} style={{ marginTop: 8 }} />
 
         {errorFitxer && <p style={{ color: 'var(--red)', fontSize: 13, marginTop: 10 }}>{errorFitxer}</p>}
@@ -516,6 +523,13 @@ export default function Alumnes() {
           Escolars o Pla de Xoc — i per tant qui el finança, CEB o Generalitat segons la
           promoció). No canvia qui té dret a la reducció de les quotes.
         </p>
+        <BotoDrive
+          onFitxer={handleAjutFileChange}
+          tipus="fulls"
+          etiqueta="Tria el fitxer d'ajuts del Drive"
+          onError={(t) => setAjutMissatge({ type: 'error', text: t })}
+          disabled={ajutCarregant}
+        />
         <input type="file" accept=".xlsx,.xls" onChange={handleAjutFileChange} style={{ marginTop: 8 }} disabled={ajutCarregant} />
         {ajutCarregant && <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 8 }}>Actualitzant…</p>}
         {ajutMissatge && (
