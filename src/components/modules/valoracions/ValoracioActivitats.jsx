@@ -180,8 +180,9 @@ export default function ValoracioActivitats({ cursEscolarId, cicleActivitats }) 
                   onClick={actualitzaDesDelDocument}
                   disabled={pujantActivitats}
                   className="btn-ghost"
+                  style={{ maxWidth: '100%', textAlign: 'left' }}
                 >
-                  {pujantActivitats ? 'Llegint el document…' : '🔄 Actualitza des del document oficial'}
+                  {pujantActivitats ? 'Llegint el document…' : '↻ Actualitza activitats complementàries des del document oficial'}
                 </button>
                 <label className="btn-ghost" style={{ cursor: 'pointer', display: 'inline-flex' }}>
                   {pujantActivitats ? 'Llegint el document…' : '📤 Puja el document de sortides (el mateix d\'Economia)'}
