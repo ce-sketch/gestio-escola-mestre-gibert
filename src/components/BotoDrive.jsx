@@ -44,7 +44,12 @@ export default function BotoDrive({
       onClick={obre}
       disabled={disabled || obrint}
       className="btn-ghost"
-      style={{ maxWidth: '100%', textAlign: 'left' }}
+      style={{
+        // Els colors van aquí a més del CSS: així el botó és llegible
+        // encara que el full d'estils desplegat sigui d'abans.
+        color: 'var(--navy)', borderColor: 'var(--navy)',
+        maxWidth: '100%', textAlign: 'left',
+      }}
     >
       {obrint ? 'Obrint el Drive…' : `📁 ${etiqueta}`}
     </button>
