@@ -14,66 +14,10 @@
 // Els fulls de cicle són d'una sola pestanya i no tenen actuacions: cada
 // objectiu es valora amb un percentatge directe.
 
-import { ESCALES } from './escales'
 
-const valorText = (v) => {
-  if (v === null || v === undefined) return ''
-  if (typeof v !== 'object') return String(v)
-  if (Array.isArray(v.richText)) return v.richText.map((t) => t.text).join('')
-  if (v.formula !== undefined) return ''
-  // Les cel·les amb enllaç guarden { text, hyperlink }, i aquell "text" pot
-  // ser al seu torn un richText — per això es torna a passar per aquí.
-  if (v.text !== undefined) return valorText(v.text)
-  return ''
-}
-
-const text = (cell) => valorText(cell?.value)
-
-const formula = (cell) => {
-  const v = cell?.value
-  return typeof v === 'object' && v !== null && v.formula ? String(v.formula) : ''
-}
-
-const neteja = (s) => s.replace(/\s+/g, ' ').trim()
-
-/**
- * Treu l'escala d'una fórmula del tipus
- *   if(F7="no fet", 0%, if(F7="En procés", 50%, if(F7="fet", 100%)))
- * o d'una de recompte
- *   if(F7=0, 0%, F7=1, 10%, …)
- */
-export function escalaDeFormula(f) {
-  if (!f) return null
-  const parells = [...f.matchAll(/=\s*"?([^",()=]+?)"?\s*,\s*(\d+(?:[.,]\d+)?)\s*%/g)]
-    .map((m) => ({ label: neteja(m[1]), valor: Number(String(m[2]).replace(',', '.')) }))
-    .filter((o) => o.label && !/^[A-Z]+\d+$/.test(o.label) && o.label.length < 30)
-  if (parells.length < 2) return null
-
-  const vistos = new Map()
-  for (const o of parells) if (!vistos.has(o.valor)) vistos.set(o.valor, o)
-  return [...vistos.values()].sort((a, b) => a.valor - b.valor)
-}
-
-/** Si les opcions coincideixen amb una escala del catàleg, en retorna l'id;
- *  si no, es guarden com a escala pròpia d'aquella actuació. */
-function identifica(opcions) {
-  if (!opcions) return { escala: 'execucio50', opcions: null }
-  // Han de coincidir els percentatges I les etiquetes: hi ha escales del
-  // catàleg amb els mateixos números però noms diferents (0/20/40/60/80/100
-  // val tant per a "No assolit…Alt" com per a un recompte de 0 a 5), i
-  // canviar-li els noms a l'usuari seria enganyós.
-  const mateixos = (a, b) => a.length === b.length &&
-    a.every((o, i) => o.valor === b[i].valor && o.label.toLowerCase() === b[i].label.toLowerCase())
-  const coneguda = ESCALES.find((e) => mateixos(e.opcions, opcions))
-  return coneguda ? { escala: coneguda.id, opcions: null } : { escala: 'propia', opcions }
-}
-
-// L'exceljs pesa gairebé un mega. Es carrega només quan de debò cal
-// (exportar o llegir un fitxer), no en obrir l'app: així la primera càrrega
-// no l'arrossega.
-async function carregaExcelJS() {
-  return (await import('exceljs')).default
-}
+import {
+  carregaExcelJS, text, formula, neteja, escalaDeFormula, identificaEscala,
+} from './excelLectura'
 
 /**
  * @param {ArrayBuffer} buffer  el .xlsx pujat
@@ -183,7 +127,7 @@ function llegeixComissio(wb, fullsObjectiu) {
         if (opcionsEscala) return
         opcionsEscala = escalaDeFormula(formula(cell))
       })
-      const { escala, opcions } = identifica(opcionsEscala)
+      const { escala, opcions } = identificaEscala(opcionsEscala, 'execucio50')
 
       const dades = { inici: '', gener: '', juny: '' }
       for (const [moment, info] of Object.entries(cols.dades)) {

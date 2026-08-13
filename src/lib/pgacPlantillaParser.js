@@ -14,84 +14,13 @@
 // Com que cap lectura automàtica és infal·lible, retorna també una llista
 // d'avisos perquè es pugui ensenyar tot abans de desar res.
 
-import { ESCALES } from './escales'
+import {
+  carregaExcelJS, text, neteja as netejaText, numero,
+  aPercentatge, escalaDeText as escalaDelText, identificaEscala,
+} from './excelLectura'
 
-const text = (cell) => {
-  if (!cell) return ''
-  const v = cell.value
-  if (v === null || v === undefined) return ''
-  if (typeof v === 'object') {
-    if (v.richText) return v.richText.map((t) => t.text).join('')
-    if (v.formula !== undefined) return v.result === undefined || v.result === null ? '' : String(v.result)
-    if (v.text) return String(v.text)
-    return ''
-  }
-  return String(v)
-}
-
-const numero = (cell) => {
-  if (!cell) return null
-  const v = cell.value
-  const n = typeof v === 'object' && v !== null ? v.result : v
-  return typeof n === 'number' ? n : null
-}
-
-const netejaText = (s) => s.replace(/\s+/g, ' ').trim()
-
-/** Els pesos del document van de 0 a 1; l'app els fa servir de 0 a 100. */
-const aPercentatge = (n) => (n === null ? null : Math.round(n * 1000) / 10)
-
-/**
- * Treu l'escala d'un text del tipus "Fet=100% En procés=40% No fet= 0%" o
- * "0 convenis = No assolit  1 conveni= Bo  2-3 convenis= Alt".
- * Retorna les opcions ordenades de menys a més, o null si no en troba.
- */
-export function escalaDelText(descripcio) {
-  if (!descripcio) return null
-  const net = netejaText(descripcio).replace(/,(\d)/g, '.$1') // 66,7% → 66.7%
-
-  // Cas 1: "etiqueta = NN%"
-  const parells = [...net.matchAll(/([^=/·,;]+?)\s*=\s*(\d+(?:\.\d+)?)\s*%/g)]
-    .map((m) => ({ label: netejaText(m[1]).replace(/^[-–·\s]+/, ''), valor: Number(m[2]) }))
-    .filter((o) => o.label && o.label.length < 40)
-
-  if (parells.length >= 2) return dedupe(parells)
-
-  // Cas 2: "0 convenis = No assolit / 1 conveni = Bo / 2-3 convenis = Alt",
-  // on l'etiqueta va a la dreta i el percentatge no hi surt. Es reconeix
-  // perquè els noms coincideixen amb una escala qualitativa coneguda.
-  const qualitativa = ESCALES.find((e) =>
-    e.opcions.length >= 2 &&
-    e.opcions.every((o) => new RegExp(`\\b${o.label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(net)))
-  if (qualitativa) return qualitativa.opcions.map((o) => ({ ...o }))
-
-  return null
-}
-
-function dedupe(opcions) {
-  const vistos = new Map()
-  for (const o of opcions) if (!vistos.has(o.valor)) vistos.set(o.valor, o)
-  return [...vistos.values()].sort((a, b) => a.valor - b.valor)
-}
-
-/** Si les opcions llegides coincideixen amb una escala del catàleg, en
- *  torna l'id; si no, es guarden com a escala pròpia de l'indicador. */
-function identificaEscala(opcions) {
-  if (!opcions) return { escala: 'execucio', opcions: null }
-  const valors = opcions.map((o) => o.valor).join('|')
-  const coneguda = ESCALES.find((e) => e.opcions.map((o) => o.valor).join('|') === valors)
-  if (coneguda) return { escala: coneguda.id, opcions: null }
-  return { escala: 'propia', opcions }
-}
 
 const CODI_OPERATIU = /^Operatiu\s*(\d+\.\d+)\s*[-–—]?\s*(.*)$/i
-
-// L'exceljs pesa gairebé un mega. Es carrega només quan de debò cal
-// (exportar o llegir un fitxer), no en obrir l'app: així la primera càrrega
-// no l'arrossega.
-async function carregaExcelJS() {
-  return (await import('exceljs')).default
-}
 
 /**
  * @param {ArrayBuffer} buffer - el fitxer .xlsx pujat
