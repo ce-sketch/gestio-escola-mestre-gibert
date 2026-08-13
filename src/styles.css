@@ -220,17 +220,41 @@ input {
   .user-email { display: inline; }
 }
 
+/* Botó secundari.
+   Va en blau marí sobre fons clar, que és on són gairebé tots (dins dels
+   mòduls). Abans anava en blanc, pensat per a la barra superior, i els
+   botons de dins dels mòduls quedaven blancs sobre blanc si algú
+   s'oblidava de forçar-hi el color a mà. Ara la variant clara és la de
+   sèrie i la fosca s'aplica sola on toca. */
 .btn-ghost {
   background: transparent;
-  border: 1px solid rgba(255,255,255,0.35);
-  color: white;
+  border: 1px solid var(--navy);
+  color: var(--navy);
   border-radius: 6px;
   padding: 6px 12px;
   font-size: 13px;
   font-weight: 500;
+  cursor: pointer;
 }
 
-.btn-ghost:hover { background: rgba(255,255,255,0.1); }
+.btn-ghost:hover { background: rgba(30, 58, 95, 0.07); }
+
+.btn-ghost:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn-ghost:disabled:hover { background: transparent; }
+
+/* Variant per a fons foscos: només la barra superior. Si algun dia
+   n'apareix un altre, s'hi afegeix el selector aquí i no cal tocar cap
+   component. */
+.topbar .btn-ghost {
+  border-color: rgba(255,255,255,0.35);
+  color: white;
+}
+
+.topbar .btn-ghost:hover { background: rgba(255,255,255,0.1); }
 
 .nav-toggle {
   display: flex;
