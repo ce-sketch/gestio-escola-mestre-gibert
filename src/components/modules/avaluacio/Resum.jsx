@@ -220,25 +220,27 @@ export default function Resum() {
           {TRIMESTRES.map((t) => <option key={t} value={t}>{t}</option>)}
         </select>
       </label>
-      <table style={{ borderCollapse: 'collapse', fontSize: 13, width: '100%', marginTop: 12 }}>
-        <thead>
-          <tr style={{ textAlign: 'left', borderBottom: '2px solid var(--line)' }}>
-            <th style={{ padding: '6px 8px' }}>Classe</th>
-            {COLUMNES_COMUNES.map((c) => <th key={c.id} style={{ padding: '6px 8px' }}>{c.label}</th>)}
-            <th style={{ padding: '6px 8px' }}>Total avaluats</th>
-          </tr>
-        </thead>
-        <tbody>
-          {resumTee.map((fila) => (
-            <tr key={fila.curs} style={{ borderBottom: '1px solid var(--line)' }}>
-              <td style={{ padding: '6px 8px', fontWeight: 500 }}>{fila.curs}</td>
-              {COLUMNES_COMUNES.map((c) => <td key={c.id} style={{ padding: '6px 8px' }}>{fila.comptadors[c.id]}</td>)}
-              <td style={{ padding: '6px 8px', fontWeight: 600 }}>{fila.total}</td>
+      <div className="taula-scroll">
+        <table style={{ borderCollapse: 'collapse', fontSize: 13, width: '100%', marginTop: 12 }}>
+          <thead>
+            <tr style={{ textAlign: 'left', borderBottom: '2px solid var(--line)' }}>
+              <th style={{ padding: '6px 8px' }}>Classe</th>
+              {COLUMNES_COMUNES.map((c) => <th key={c.id} style={{ padding: '6px 8px' }}>{c.label}</th>)}
+              <th style={{ padding: '6px 8px' }}>Total avaluats</th>
             </tr>
-          ))}
-          <FilaTotal label="TEE" files={resumTee} columnes={COLUMNES_COMUNES} />
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {resumTee.map((fila) => (
+              <tr key={fila.curs} style={{ borderBottom: '1px solid var(--line)' }}>
+                <td style={{ padding: '6px 8px', fontWeight: 500 }}>{fila.curs}</td>
+                {COLUMNES_COMUNES.map((c) => <td key={c.id} style={{ padding: '6px 8px' }}>{fila.comptadors[c.id]}</td>)}
+                <td style={{ padding: '6px 8px', fontWeight: 600 }}>{fila.total}</td>
+              </tr>
+            ))}
+            <FilaTotal label="TEE" files={resumTee} columnes={COLUMNES_COMUNES} />
+          </tbody>
+        </table>
+      </div>
 
       <h3 style={{ marginTop: 32, fontSize: 16 }}>Comprensió Lectora (CL) i Velocitat Lectora (VL)</h3>
       <div style={{ display: 'flex', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
@@ -264,25 +266,27 @@ export default function Resum() {
       {resumCl.map(({ momentId, label, files }) => (
         <div key={momentId} style={{ marginTop: 16 }}>
           <p className="module-note" style={{ fontStyle: 'normal', fontWeight: 600, color: 'var(--ink)' }}>{label}</p>
-          <table style={{ borderCollapse: 'collapse', fontSize: 13, width: '100%', marginTop: 8 }}>
-            <thead>
-              <tr style={{ textAlign: 'left', borderBottom: '2px solid var(--line)' }}>
-                <th style={{ padding: '6px 8px' }}>Classe</th>
-                {COLUMNES_CL.map((c) => <th key={c} style={{ padding: '6px 8px' }}>{c}</th>)}
-                <th style={{ padding: '6px 8px' }}>Total avaluats</th>
-              </tr>
-            </thead>
-            <tbody>
-              {files.map((fila) => (
-                <tr key={fila.curs} style={{ borderBottom: '1px solid var(--line)' }}>
-                  <td style={{ padding: '6px 8px', fontWeight: 500 }}>{fila.curs}</td>
-                  {COLUMNES_CL.map((c) => <td key={c} style={{ padding: '6px 8px' }}>{fila.comptadors[c]}</td>)}
-                  <td style={{ padding: '6px 8px', fontWeight: 600 }}>{fila.total}</td>
+          <div className="taula-scroll">
+            <table style={{ borderCollapse: 'collapse', fontSize: 13, width: '100%', marginTop: 8 }}>
+              <thead>
+                <tr style={{ textAlign: 'left', borderBottom: '2px solid var(--line)' }}>
+                  <th style={{ padding: '6px 8px' }}>Classe</th>
+                  {COLUMNES_CL.map((c) => <th key={c} style={{ padding: '6px 8px' }}>{c}</th>)}
+                  <th style={{ padding: '6px 8px' }}>Total avaluats</th>
                 </tr>
-              ))}
-              <FilaTotal label={`CL ${label}`} files={files} columnes={COLUMNES_CL} />
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {files.map((fila) => (
+                  <tr key={fila.curs} style={{ borderBottom: '1px solid var(--line)' }}>
+                    <td style={{ padding: '6px 8px', fontWeight: 500 }}>{fila.curs}</td>
+                    {COLUMNES_CL.map((c) => <td key={c} style={{ padding: '6px 8px' }}>{fila.comptadors[c]}</td>)}
+                    <td style={{ padding: '6px 8px', fontWeight: 600 }}>{fila.total}</td>
+                  </tr>
+                ))}
+                <FilaTotal label={`CL ${label}`} files={files} columnes={COLUMNES_CL} />
+              </tbody>
+            </table>
+          </div>
         </div>
       ))}
 
@@ -290,25 +294,27 @@ export default function Resum() {
       {resumVl.map(({ moment, files }) => (
         <div key={moment.id} style={{ marginTop: 16 }}>
           <p className="module-note" style={{ fontStyle: 'normal', fontWeight: 600, color: 'var(--ink)' }}>{moment.label}</p>
-          <table style={{ borderCollapse: 'collapse', fontSize: 13, width: '100%', marginTop: 8 }}>
-            <thead>
-              <tr style={{ textAlign: 'left', borderBottom: '2px solid var(--line)' }}>
-                <th style={{ padding: '6px 8px' }}>Classe</th>
-                {COLUMNES_COMUNES.map((c) => <th key={c.id} style={{ padding: '6px 8px' }}>{c.label}</th>)}
-                <th style={{ padding: '6px 8px' }}>Total avaluats</th>
-              </tr>
-            </thead>
-            <tbody>
-              {files.map((fila) => (
-                <tr key={fila.curs} style={{ borderBottom: '1px solid var(--line)' }}>
-                  <td style={{ padding: '6px 8px', fontWeight: 500 }}>{fila.curs}</td>
-                  {COLUMNES_COMUNES.map((c) => <td key={c.id} style={{ padding: '6px 8px' }}>{fila.comptadors[c.id]}</td>)}
-                  <td style={{ padding: '6px 8px', fontWeight: 600 }}>{fila.total}</td>
+          <div className="taula-scroll">
+            <table style={{ borderCollapse: 'collapse', fontSize: 13, width: '100%', marginTop: 8 }}>
+              <thead>
+                <tr style={{ textAlign: 'left', borderBottom: '2px solid var(--line)' }}>
+                  <th style={{ padding: '6px 8px' }}>Classe</th>
+                  {COLUMNES_COMUNES.map((c) => <th key={c.id} style={{ padding: '6px 8px' }}>{c.label}</th>)}
+                  <th style={{ padding: '6px 8px' }}>Total avaluats</th>
                 </tr>
-              ))}
-              <FilaTotal label={`VL ${moment.label}`} files={files} columnes={COLUMNES_COMUNES} />
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {files.map((fila) => (
+                  <tr key={fila.curs} style={{ borderBottom: '1px solid var(--line)' }}>
+                    <td style={{ padding: '6px 8px', fontWeight: 500 }}>{fila.curs}</td>
+                    {COLUMNES_COMUNES.map((c) => <td key={c.id} style={{ padding: '6px 8px' }}>{fila.comptadors[c.id]}</td>)}
+                    <td style={{ padding: '6px 8px', fontWeight: 600 }}>{fila.total}</td>
+                  </tr>
+                ))}
+                <FilaTotal label={`VL ${moment.label}`} files={files} columnes={COLUMNES_COMUNES} />
+              </tbody>
+            </table>
+          </div>
         </div>
       ))}
 

@@ -345,68 +345,70 @@ export default function NotaArea() {
         </button>
       </div>
 
-      <table style={{ borderCollapse: 'collapse', fontSize: 13, width: '100%', marginTop: 12 }}>
-        <thead>
-          <tr style={{ textAlign: 'left', borderBottom: '2px solid var(--line)' }}>
-            <th style={{ padding: '6px 8px', width: 44 }}>Núm.</th>
-            <th style={{ padding: '6px 8px', minWidth: 160 }}>Alumne</th>
-            <th style={{ padding: '6px 8px', minWidth: 160 }}>Nota general Català</th>
-            <th style={{ padding: '6px 8px' }}>Coherència amb TEE/CL/VL</th>
-          </tr>
-        </thead>
-        <tbody>
-          {alumnesClasse.map((alumne) => {
-            const incoherencia = comprovaCoherencia(alumne.id)
-            const autoOmplert = esAutoOmplert(alumne.id)
-            return (
-              <tr key={alumne.id} style={{ borderBottom: '1px solid var(--line)' }}>
-                <td style={{ padding: '6px 8px', color: 'var(--ink-soft)' }}>{alumne.numLlista ?? '—'}</td>
-                <td style={{ padding: '6px 8px', fontWeight: 500 }}>{alumne.nom}</td>
-                <td style={{ padding: '4px 6px' }}>
-                  <select
-                    value={notaGeneralAlumne(alumne.id)}
-                    onChange={(e) => desaUn(alumne, e.target.value)}
-                    disabled={desantId === alumne.id}
-                    style={{
-                      border: `1px solid ${autoOmplert ? 'var(--amber-dark)' : 'var(--line)'}`,
-                      borderRadius: 6, padding: '4px 6px', fontSize: 12,
-                    }}
-                    title={autoOmplert ? 'Omplert automàticament des de "Notes per àrea (totes)"' : undefined}
-                  >
-                    <option value="">—</option>
-                    {NIVELLS.map((n) => <option key={n.id} value={n.id}>{n.label}</option>)}
-                  </select>
-                  {desantId === alumne.id && (
-                    <span style={{ color: 'var(--ink-soft)', fontSize: 11, marginLeft: 4 }}>Desant…</span>
-                  )}
-                  {autoOmplert && desantId !== alumne.id && (
-                    <span style={{ color: 'var(--amber-dark)', fontSize: 11, marginLeft: 4 }} title="Auto-omplert des de Notes per àrea">*</span>
-                  )}
-                </td>
-                <td style={{ padding: '4px 6px' }}>
-                  {incoherencia ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ color: 'var(--red)', fontWeight: 600, fontSize: 12 }}>
-                        ⚠ {incoherencia.origen}: {incoherencia.pitjor.label}
-                      </span>
-                      <button
-                        className="chip"
-                        onClick={() => enviaAvisIncoherencia(alumne, incoherencia)}
-                        disabled={enviantAvis === alumne.id || !WORKER_AVISOS_URL}
-                        type="button"
-                      >
-                        {enviantAvis === alumne.id ? 'Enviant…' : 'Envia avís'}
-                      </button>
-                    </div>
-                  ) : (
-                    <span style={{ color: 'var(--ink-soft)', fontSize: 12 }}>—</span>
-                  )}
-                </td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
+      <div className="taula-scroll">
+        <table style={{ borderCollapse: 'collapse', fontSize: 13, width: '100%', marginTop: 12 }}>
+          <thead>
+            <tr style={{ textAlign: 'left', borderBottom: '2px solid var(--line)' }}>
+              <th style={{ padding: '6px 8px', width: 44 }}>Núm.</th>
+              <th style={{ padding: '6px 8px', minWidth: 160 }}>Alumne</th>
+              <th style={{ padding: '6px 8px', minWidth: 160 }}>Nota general Català</th>
+              <th style={{ padding: '6px 8px' }}>Coherència amb TEE/CL/VL</th>
+            </tr>
+          </thead>
+          <tbody>
+            {alumnesClasse.map((alumne) => {
+              const incoherencia = comprovaCoherencia(alumne.id)
+              const autoOmplert = esAutoOmplert(alumne.id)
+              return (
+                <tr key={alumne.id} style={{ borderBottom: '1px solid var(--line)' }}>
+                  <td style={{ padding: '6px 8px', color: 'var(--ink-soft)' }}>{alumne.numLlista ?? '—'}</td>
+                  <td style={{ padding: '6px 8px', fontWeight: 500 }}>{alumne.nom}</td>
+                  <td style={{ padding: '4px 6px' }}>
+                    <select
+                      value={notaGeneralAlumne(alumne.id)}
+                      onChange={(e) => desaUn(alumne, e.target.value)}
+                      disabled={desantId === alumne.id}
+                      style={{
+                        border: `1px solid ${autoOmplert ? 'var(--amber-dark)' : 'var(--line)'}`,
+                        borderRadius: 6, padding: '4px 6px', fontSize: 12,
+                      }}
+                      title={autoOmplert ? 'Omplert automàticament des de "Notes per àrea (totes)"' : undefined}
+                    >
+                      <option value="">—</option>
+                      {NIVELLS.map((n) => <option key={n.id} value={n.id}>{n.label}</option>)}
+                    </select>
+                    {desantId === alumne.id && (
+                      <span style={{ color: 'var(--ink-soft)', fontSize: 11, marginLeft: 4 }}>Desant…</span>
+                    )}
+                    {autoOmplert && desantId !== alumne.id && (
+                      <span style={{ color: 'var(--amber-dark)', fontSize: 11, marginLeft: 4 }} title="Auto-omplert des de Notes per àrea">*</span>
+                    )}
+                  </td>
+                  <td style={{ padding: '4px 6px' }}>
+                    {incoherencia ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ color: 'var(--red)', fontWeight: 600, fontSize: 12 }}>
+                          ⚠ {incoherencia.origen}: {incoherencia.pitjor.label}
+                        </span>
+                        <button
+                          className="chip"
+                          onClick={() => enviaAvisIncoherencia(alumne, incoherencia)}
+                          disabled={enviantAvis === alumne.id || !WORKER_AVISOS_URL}
+                          type="button"
+                        >
+                          {enviantAvis === alumne.id ? 'Enviant…' : 'Envia avís'}
+                        </button>
+                      </div>
+                    ) : (
+                      <span style={{ color: 'var(--ink-soft)', fontSize: 12 }}>—</span>
+                    )}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
 
       <div style={{ display: 'flex', gap: 10, marginTop: 20, flexWrap: 'wrap' }}>
         <button

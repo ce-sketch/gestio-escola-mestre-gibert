@@ -614,57 +614,61 @@ export default function NotesGenerals() {
           ) : resumGlobalPerArea.map(({ area: a, files, total, avaluatsTotal }) => (
             <div key={a.id} style={{ marginTop: 16 }}>
               <p style={{ fontSize: 13, fontWeight: 600 }}>{a.label}</p>
-              <table style={{ borderCollapse: 'collapse', fontSize: 13, width: '100%', marginTop: 6 }}>
-                <thead>
-                  <tr style={{ textAlign: 'left', borderBottom: '2px solid var(--line)' }}>
-                    <th style={{ padding: '6px 8px', minWidth: 80 }}>Classe</th>
-                    {NIVELLS.map((n) => <th key={n.id} style={{ padding: '6px 8px', color: n.color }}>{n.curt}</th>)}
-                    <th style={{ padding: '6px 8px' }}>Avaluats</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {files.map((f) => (
-                    <tr key={f.classe} style={{ borderBottom: '1px solid var(--line)' }}>
-                      <td style={{ padding: '6px 8px', fontWeight: 500 }}>{f.classe}</td>
-                      {NIVELLS.map((n) => <td key={n.id} style={{ padding: '6px 8px' }}>{f.comptes[n.id]}</td>)}
-                      <td style={{ padding: '6px 8px' }}>{f.avaluats}</td>
+              <div className="taula-scroll">
+                <table style={{ borderCollapse: 'collapse', fontSize: 13, width: '100%', marginTop: 6 }}>
+                  <thead>
+                    <tr style={{ textAlign: 'left', borderBottom: '2px solid var(--line)' }}>
+                      <th style={{ padding: '6px 8px', minWidth: 80 }}>Classe</th>
+                      {NIVELLS.map((n) => <th key={n.id} style={{ padding: '6px 8px', color: n.color }}>{n.curt}</th>)}
+                      <th style={{ padding: '6px 8px' }}>Avaluats</th>
                     </tr>
-                  ))}
-                  <tr style={{ background: 'var(--bg-soft, #f5f5f0)' }}>
-                    <td style={{ padding: '6px 8px', fontWeight: 700 }}>TOTAL</td>
-                    {NIVELLS.map((n) => <td key={n.id} style={{ padding: '6px 8px', fontWeight: 700 }}>{total[n.id]}</td>)}
-                    <td style={{ padding: '6px 8px', fontWeight: 700 }}>{avaluatsTotal}</td>
-                  </tr>
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {files.map((f) => (
+                      <tr key={f.classe} style={{ borderBottom: '1px solid var(--line)' }}>
+                        <td style={{ padding: '6px 8px', fontWeight: 500 }}>{f.classe}</td>
+                        {NIVELLS.map((n) => <td key={n.id} style={{ padding: '6px 8px' }}>{f.comptes[n.id]}</td>)}
+                        <td style={{ padding: '6px 8px' }}>{f.avaluats}</td>
+                      </tr>
+                    ))}
+                    <tr style={{ background: 'var(--bg-soft, #f5f5f0)' }}>
+                      <td style={{ padding: '6px 8px', fontWeight: 700 }}>TOTAL</td>
+                      {NIVELLS.map((n) => <td key={n.id} style={{ padding: '6px 8px', fontWeight: 700 }}>{total[n.id]}</td>)}
+                      <td style={{ padding: '6px 8px', fontWeight: 700 }}>{avaluatsTotal}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
           ))}
 
           <h3 style={{ marginTop: 32, fontSize: 15 }}>Resum d'un curs concret</h3>
-          <table style={{ borderCollapse: 'collapse', fontSize: 13, width: '100%', marginTop: 20 }}>
-            <thead>
-              <tr style={{ textAlign: 'left', borderBottom: '2px solid var(--line)' }}>
-                <th style={{ padding: '6px 8px', minWidth: 140 }}>Àrea</th>
-                {NIVELLS.map((n) => <th key={n.id} style={{ padding: '6px 8px', color: n.color }}>{n.curt}</th>)}
-                <th style={{ padding: '6px 8px' }}>Avaluats</th>
-                <th style={{ padding: '6px 8px' }}>Sense nota</th>
-              </tr>
-            </thead>
-            <tbody>
-              {resumPerArea.map(({ area: a, avaluats, comptes, calculada }) => (
-                <tr key={a.id} style={{ borderBottom: '1px solid var(--line)', fontStyle: calculada ? 'italic' : 'normal' }}>
-                  <td style={{ padding: '6px 8px', fontWeight: 500, color: calculada ? 'var(--ink-soft)' : 'inherit' }}>{a.label}</td>
-                  {NIVELLS.map((n) => (
-                    <td key={n.id} style={{ padding: '6px 8px' }}>{comptes[n.id]}</td>
-                  ))}
-                  <td style={{ padding: '6px 8px' }}>{avaluats}</td>
-                  <td style={{ padding: '6px 8px', color: 'var(--ink-soft)' }}>
-                    {alumnesDelNivell.length - avaluats}
-                  </td>
+          <div className="taula-scroll">
+            <table style={{ borderCollapse: 'collapse', fontSize: 13, width: '100%', marginTop: 20 }}>
+              <thead>
+                <tr style={{ textAlign: 'left', borderBottom: '2px solid var(--line)' }}>
+                  <th style={{ padding: '6px 8px', minWidth: 140 }}>Àrea</th>
+                  {NIVELLS.map((n) => <th key={n.id} style={{ padding: '6px 8px', color: n.color }}>{n.curt}</th>)}
+                  <th style={{ padding: '6px 8px' }}>Avaluats</th>
+                  <th style={{ padding: '6px 8px' }}>Sense nota</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {resumPerArea.map(({ area: a, avaluats, comptes, calculada }) => (
+                  <tr key={a.id} style={{ borderBottom: '1px solid var(--line)', fontStyle: calculada ? 'italic' : 'normal' }}>
+                    <td style={{ padding: '6px 8px', fontWeight: 500, color: calculada ? 'var(--ink-soft)' : 'inherit' }}>{a.label}</td>
+                    {NIVELLS.map((n) => (
+                      <td key={n.id} style={{ padding: '6px 8px' }}>{comptes[n.id]}</td>
+                    ))}
+                    <td style={{ padding: '6px 8px' }}>{avaluats}</td>
+                    <td style={{ padding: '6px 8px', color: 'var(--ink-soft)' }}>
+                      {alumnesDelNivell.length - avaluats}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
           <p style={{ marginTop: 24, fontWeight: 600, fontSize: 13 }}>
             Alumnes amb àrees no superades ({nivellResum}, {trimestre})
@@ -672,24 +676,26 @@ export default function NotesGenerals() {
           {alumnesAmbSuspeses.length === 0 ? (
             <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 6 }}>Cap alumne amb àrees no superades.</p>
           ) : (
-            <table style={{ borderCollapse: 'collapse', fontSize: 13, width: '100%', marginTop: 10 }}>
-              <thead>
-                <tr style={{ textAlign: 'left', borderBottom: '2px solid var(--line)' }}>
-                  <th style={{ padding: '6px 8px', width: 44 }}>Núm.</th>
-                  <th style={{ padding: '6px 8px' }}>Alumne</th>
-                  <th style={{ padding: '6px 8px' }}>Àrees no superades</th>
-                </tr>
-              </thead>
-              <tbody>
-                {alumnesAmbSuspeses.map((a) => (
-                  <tr key={a.nom} style={{ borderBottom: '1px solid var(--line)' }}>
-                    <td style={{ padding: '6px 8px', color: 'var(--ink-soft)' }}>{a.numLlista ?? '—'}</td>
-                    <td style={{ padding: '6px 8px', fontWeight: 500 }}>{a.nom}</td>
-                    <td style={{ padding: '6px 8px', color: 'var(--red)' }}>{a.arees.join(', ')}</td>
+            <div className="taula-scroll">
+              <table style={{ borderCollapse: 'collapse', fontSize: 13, width: '100%', marginTop: 10 }}>
+                <thead>
+                  <tr style={{ textAlign: 'left', borderBottom: '2px solid var(--line)' }}>
+                    <th style={{ padding: '6px 8px', width: 44 }}>Núm.</th>
+                    <th style={{ padding: '6px 8px' }}>Alumne</th>
+                    <th style={{ padding: '6px 8px' }}>Àrees no superades</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {alumnesAmbSuspeses.map((a) => (
+                    <tr key={a.nom} style={{ borderBottom: '1px solid var(--line)' }}>
+                      <td style={{ padding: '6px 8px', color: 'var(--ink-soft)' }}>{a.numLlista ?? '—'}</td>
+                      <td style={{ padding: '6px 8px', fontWeight: 500 }}>{a.nom}</td>
+                      <td style={{ padding: '6px 8px', color: 'var(--red)' }}>{a.arees.join(', ')}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </>
       )}

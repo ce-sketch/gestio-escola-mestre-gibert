@@ -172,39 +172,41 @@ export default function InformeCatala() {
           {teeAlumne.length === 0 ? (
             <p className="module-note">Encara no hi ha cap nota de Text Escrit per aquest alumne.</p>
           ) : (
-            <table style={{ borderCollapse: 'collapse', fontSize: 13, width: '100%', marginTop: 8 }}>
-              <thead>
-                <tr style={{ textAlign: 'left', borderBottom: '2px solid var(--line)' }}>
-                  <th style={{ padding: '6px 8px' }}>Trimestre</th>
-                  {CRITERIS_TEE.map((c) => <th key={c.id} style={{ padding: '6px 8px' }}>{c.label}</th>)}
-                  <th style={{ padding: '6px 8px' }}>Nota (0-10)</th>
-                  <th style={{ padding: '6px 8px' }}>Global</th>
-                </tr>
-              </thead>
-              <tbody>
-                {TRIMESTRES.map((t) => {
-                  const reg = teeAlumne.find((r) => r.trimestre === t)
-                  if (!reg) return null
-                  const nivellsCicle = NIVELLS_PER_CICLE[reg.cicle ?? cicleDe(curs)]
-                  const etiquetaNivell = (id) => nivellsCicle.find((n) => n.id === id)
-                  const globalNivell = etiquetaNivell(reg.global)
-                  return (
-                    <tr key={t} style={{ borderBottom: '1px solid var(--line)' }}>
-                      <td style={{ padding: '6px 8px', fontWeight: 500 }}>{t}</td>
-                      {CRITERIS_TEE.map((c) => (
-                        <td key={c.id} style={{ padding: '6px 8px' }}>
-                          {etiquetaNivell(reg.criteris?.[c.id])?.label ?? '—'}
+            <div className="taula-scroll">
+              <table style={{ borderCollapse: 'collapse', fontSize: 13, width: '100%', marginTop: 8 }}>
+                <thead>
+                  <tr style={{ textAlign: 'left', borderBottom: '2px solid var(--line)' }}>
+                    <th style={{ padding: '6px 8px' }}>Trimestre</th>
+                    {CRITERIS_TEE.map((c) => <th key={c.id} style={{ padding: '6px 8px' }}>{c.label}</th>)}
+                    <th style={{ padding: '6px 8px' }}>Nota (0-10)</th>
+                    <th style={{ padding: '6px 8px' }}>Global</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {TRIMESTRES.map((t) => {
+                    const reg = teeAlumne.find((r) => r.trimestre === t)
+                    if (!reg) return null
+                    const nivellsCicle = NIVELLS_PER_CICLE[reg.cicle ?? cicleDe(curs)]
+                    const etiquetaNivell = (id) => nivellsCicle.find((n) => n.id === id)
+                    const globalNivell = etiquetaNivell(reg.global)
+                    return (
+                      <tr key={t} style={{ borderBottom: '1px solid var(--line)' }}>
+                        <td style={{ padding: '6px 8px', fontWeight: 500 }}>{t}</td>
+                        {CRITERIS_TEE.map((c) => (
+                          <td key={c.id} style={{ padding: '6px 8px' }}>
+                            {etiquetaNivell(reg.criteris?.[c.id])?.label ?? '—'}
+                          </td>
+                        ))}
+                        <td style={{ padding: '6px 8px', color: 'var(--ink-soft)' }}>{reg.notaAutomatica ?? '—'}</td>
+                        <td style={{ padding: '6px 8px', fontWeight: 600, color: globalNivell?.color }}>
+                          {globalNivell?.label ?? '—'}
                         </td>
-                      ))}
-                      <td style={{ padding: '6px 8px', color: 'var(--ink-soft)' }}>{reg.notaAutomatica ?? '—'}</td>
-                      <td style={{ padding: '6px 8px', fontWeight: 600, color: globalNivell?.color }}>
-                        {globalNivell?.label ?? '—'}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
           )}
 
           <p className="module-note" style={{ marginTop: 28, fontStyle: 'normal', fontWeight: 600, color: 'var(--ink)' }}>
@@ -213,32 +215,34 @@ export default function InformeCatala() {
           {lecturaAlumne.length === 0 ? (
             <p className="module-note">Encara no hi ha cap nota de Lectura per aquest alumne.</p>
           ) : (
-            <table style={{ borderCollapse: 'collapse', fontSize: 13, width: '100%', marginTop: 8 }}>
-              <thead>
-                <tr style={{ textAlign: 'left', borderBottom: '2px solid var(--line)' }}>
-                  <th style={{ padding: '6px 8px' }}>Moment</th>
-                  <th style={{ padding: '6px 8px' }}>VL (paraules/min)</th>
-                  <th style={{ padding: '6px 8px' }}>Nivell lector</th>
-                  <th style={{ padding: '6px 8px' }}>CL (respostes)</th>
-                  <th style={{ padding: '6px 8px' }}>Nivell CL</th>
-                </tr>
-              </thead>
-              <tbody>
-                {MOMENTS_LECTURA.map((m) => {
-                  const reg = lecturaAlumne.find((r) => r.moment === m.id)
-                  if (!reg) return null
-                  return (
-                    <tr key={m.id} style={{ borderBottom: '1px solid var(--line)' }}>
-                      <td style={{ padding: '6px 8px', fontWeight: 500 }}>{m.label}</td>
-                      <td style={{ padding: '6px 8px' }}>{reg.vl ?? '—'}</td>
-                      <td style={{ padding: '6px 8px', fontWeight: 600, color: 'var(--navy)' }}>{reg.nivellVl ?? '—'}</td>
-                      <td style={{ padding: '6px 8px' }}>{m.teCL ? (reg.cl ?? '—') : '—'}</td>
-                      <td style={{ padding: '6px 8px', fontWeight: 600 }}>{m.teCL ? (reg.nivellCl ?? '—') : '—'}</td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+            <div className="taula-scroll">
+              <table style={{ borderCollapse: 'collapse', fontSize: 13, width: '100%', marginTop: 8 }}>
+                <thead>
+                  <tr style={{ textAlign: 'left', borderBottom: '2px solid var(--line)' }}>
+                    <th style={{ padding: '6px 8px' }}>Moment</th>
+                    <th style={{ padding: '6px 8px' }}>VL (paraules/min)</th>
+                    <th style={{ padding: '6px 8px' }}>Nivell lector</th>
+                    <th style={{ padding: '6px 8px' }}>CL (respostes)</th>
+                    <th style={{ padding: '6px 8px' }}>Nivell CL</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {MOMENTS_LECTURA.map((m) => {
+                    const reg = lecturaAlumne.find((r) => r.moment === m.id)
+                    if (!reg) return null
+                    return (
+                      <tr key={m.id} style={{ borderBottom: '1px solid var(--line)' }}>
+                        <td style={{ padding: '6px 8px', fontWeight: 500 }}>{m.label}</td>
+                        <td style={{ padding: '6px 8px' }}>{reg.vl ?? '—'}</td>
+                        <td style={{ padding: '6px 8px', fontWeight: 600, color: 'var(--navy)' }}>{reg.nivellVl ?? '—'}</td>
+                        <td style={{ padding: '6px 8px' }}>{m.teCL ? (reg.cl ?? '—') : '—'}</td>
+                        <td style={{ padding: '6px 8px', fontWeight: 600 }}>{m.teCL ? (reg.nivellCl ?? '—') : '—'}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
           )}
 
           {teeAlumne.length === 0 && lecturaAlumne.length === 0 && (
