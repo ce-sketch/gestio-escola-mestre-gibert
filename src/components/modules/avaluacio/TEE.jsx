@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react'
-import * as XLSX from 'xlsx'
 import { collection, query, where, getDocs, addDoc, doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'
 import { db, auth } from '../../../firebase'
 import { redueixVigents } from '../../../lib/avaluacioCatala'
@@ -18,6 +17,15 @@ const PARAULES_CAPÇALERA = {
   presentacio: ['presentacio'],
   ortografia: ['ortografia'],
   morfosintaxis: ['morfosintaxi'],
+}
+
+// El `xlsx` pesa 429 kB i només fa falta quan algú puja un fitxer. Es
+// carrega en aquell moment, no en obrir el mòdul.
+// (No es pot canviar per l'`exceljs`: aquest no retorna el valor calculat
+// de les cel·les amb fórmula, i les plantilles omplertes del centre en van
+// plenes. Comprovat comparant els dos lectors sobre fitxers reals.)
+async function carregaXLSX() {
+  return import('xlsx')
 }
 
 export default function TEE() {
@@ -158,7 +166,8 @@ export default function TEE() {
     }
   }
 
-  function handleFileUpload(e) {
+  async function handleFileUpload(e) {
+    const XLSX = await carregaXLSX()
     const file = e.target.files?.[0]
     if (!file) return
     setErrorFitxer(null)
