@@ -165,6 +165,22 @@ function grupValoracions() {
   ))
 
   proves.push(comprova(
+    'Les dades recollides no alteren el percentatge (el grau es marca a part)',
+    50,
+    () => {
+      const amb = (gener, dades) => ({ id: Math.random().toString(), text: 'a', gener, juny: '', escala: 'execucio50', dades })
+      return mitjanaObjectiu({
+        id: 'x',
+        recullDades: true,
+        actuacions: [
+          amb(100, { inici: '270', gener: '286', juny: '' }),
+          amb('', { inici: 'Fix: 24€ mes', gener: 'Fix: 24€ mes', juny: 'Fix: 24€ mes' }),
+        ],
+      }, 'gener')
+    }
+  ))
+
+  proves.push(comprova(
     'El comptador de pendents distingeix valorades de no valorades',
     { total: 8, valorats: 2 },
     () => pendentsValoracio({

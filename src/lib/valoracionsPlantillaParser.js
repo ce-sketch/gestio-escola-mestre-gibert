@@ -121,41 +121,100 @@ function llegeixComissio(wb, fullsObjectiu) {
   )
 
   for (const ws of ordenats) {
-    const titol = neteja(text(ws.getCell('C4')))
+    const titol = neteja(text(ws.getCell('C4'))) || neteja(text(ws.getCell('D4')))
     const actuacions = []
 
-    // La capçalera de la taula ("Actuacions/Activitats") marca on comença.
+    // ── Mapa de columnes ────────────────────────────────────────────────
+    // No es pot donar per fet que sempre siguin les mateixes: els objectius
+    // de recollida de dades (per exemple "Enregistrar les dades del SIC")
+    // intercalen columnes de text lliure entre les de sempre. Es busquen
+    // pel títol de la capçalera.
     let filaCap = null
-    for (let f = 1; f <= 15; f++) {
-      if (/Actuacions?\s*\/?\s*Activitats?/i.test(neteja(text(ws.getCell(f, 2))))) { filaCap = f; break }
+    const cols = { text: null, indicador: null, dades: {} }
+
+    for (let f = 1; f <= Math.min(ws.rowCount, 15) && filaCap === null; f++) {
+      const fila = ws.getRow(f)
+      let teActuacions = false
+      fila.eachCell({ includeEmpty: false }, (cell, col) => {
+        if (/Actuacions?\s*\/?\s*Activitats?/i.test(neteja(text(cell)))) teActuacions = true
+      })
+      if (!teActuacions) continue
+      filaCap = f
+      fila.eachCell({ includeEmpty: false }, (cell, col) => {
+        const t = neteja(text(cell))
+        if (!t) return
+        if (/Actuacions?\s*\/?\s*Activitats?/i.test(t)) { if (cols.text === null) cols.text = col; return }
+        if (/^Indicador/i.test(t)) { if (cols.indicador === null) cols.indicador = col; return }
+        if (/Seguiment|Grau\s*d.assoliment/i.test(t)) return
+        // La resta de capçaleres amb text són columnes de dades. Es
+        // classifiquen pel moment que anomenen.
+        const moment = /inici/i.test(t) ? 'inici' : /juny/i.test(t) ? 'juny' : /gener|febrer/i.test(t) ? 'gener' : null
+        if (moment && cols.dades[moment] === undefined) cols.dades[moment] = { col, etiqueta: t }
+      })
     }
+
     if (filaCap === null) {
       avisos.push(`${ws.name}: no hi he trobat la taula d'actuacions.`)
       continue
     }
 
-    for (let f = filaCap + 1; f <= Math.min(ws.rowCount, filaCap + 40); f++) {
-      // La fila de l'AVERAGE tanca la llista d'actuacions
-      if (/average/i.test(formula(ws.getCell(f, 6)))) break
-      const titolAct = neteja(text(ws.getCell(f, 2)))
-      if (!titolAct) continue
-      if (/^Valoració|^Recorda|^Propostes/i.test(titolAct)) break
+    const recullDades = Object.keys(cols.dades).length > 0
+    if (recullDades) {
+      avisos.push(`${ws.name}: té columnes de recollida de dades (${Object.values(cols.dades).map((d) => d.etiqueta.slice(0, 30)).join(' · ')}).`)
+    }
 
-      const { escala, opcions } = identifica(escalaDeFormula(formula(ws.getCell(f, 7))))
+    for (let f = filaCap + 1; f <= Math.min(ws.rowCount, filaCap + 40); f++) {
+      const fila = ws.getRow(f)
+      // La fila de l'AVERAGE tanca la llista d'actuacions
+      let esTotal = false
+      fila.eachCell({ includeEmpty: false }, (cell) => {
+        if (/average/i.test(formula(cell))) esTotal = true
+      })
+      if (esTotal) break
+
+      const titolAct = neteja(text(fila.getCell(cols.text ?? 2)))
+      if (!titolAct) continue
+      if (/^Valoració|^Recorda|^Propostes|^Resultat/i.test(titolAct)) break
+
+      // L'escala surt de la primera fórmula de la fila que en tingui una:
+      // així no depèn de quina columna ocupi.
+      let opcionsEscala = null
+      fila.eachCell({ includeEmpty: false }, (cell) => {
+        if (opcionsEscala) return
+        opcionsEscala = escalaDeFormula(formula(cell))
+      })
+      const { escala, opcions } = identifica(opcionsEscala)
+
+      const dades = { inici: '', gener: '', juny: '' }
+      for (const [moment, info] of Object.entries(cols.dades)) {
+        dades[moment] = neteja(text(fila.getCell(info.col)))
+      }
+
       actuacions.push({
         id: crypto.randomUUID(),
         text: titolAct,
-        indicador: neteja(text(ws.getCell(f, 4))),
-        gener: '',
-        juny: '',
-        escala,
-        opcions,
+        indicador: cols.indicador ? neteja(text(fila.getCell(cols.indicador))) : '',
+        gener: '', juny: '',
+        escala, opcions,
+        dades,
       })
     }
 
     if (!titol && actuacions.length === 0) continue
     if (actuacions.length === 0) avisos.push(`${ws.name}: cap actuació llegida.`)
-    objectius.push({ id: crypto.randomUUID(), text: titol, gener: '', juny: '', escala: 'execucio50', opcions: null, actuacions })
+    objectius.push({
+      id: crypto.randomUUID(),
+      text: titol,
+      gener: '', juny: '',
+      escala: 'execucio50', opcions: null,
+      recullDades,
+      etiquetesDades: {
+        inici: cols.dades.inici?.etiqueta ?? 'Inici de curs',
+        gener: cols.dades.gener?.etiqueta ?? 'Gener',
+        juny: cols.dades.juny?.etiqueta ?? 'Juny',
+      },
+      actuacions,
+    })
   }
 
   if (objectius.length === 0) throw new Error("No he pogut llegir cap objectiu d'aquesta plantilla.")

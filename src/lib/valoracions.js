@@ -7,12 +7,35 @@
 export function actuacioBuida() {
   // Les actuacions de comissions i equips fan servir l'escala dels seus
   // fulls, on "En procés" val 50% (als fulls del PGAC en val 40).
-  return { id: crypto.randomUUID(), text: '', indicador: '', gener: '', juny: '', escala: 'execucio50', opcions: null }
+  //
+  // "dades" només s'omple als objectius de recollida (per exemple
+  // "Enregistrar les dades del SIC"), on el full té columnes de text lliure
+  // per a tres moments del curs. No entra mai al càlcul: el percentatge
+  // segueix sortint del Fet/No fet, igual que al full original.
+  return {
+    id: crypto.randomUUID(),
+    text: '', indicador: '', gener: '', juny: '',
+    escala: 'execucio50', opcions: null,
+    dades: { inici: '', gener: '', juny: '' },
+  }
 }
+
+/** Els tres moments en què es recullen dades, tal com surten als fulls. */
+export const MOMENTS_DADES = [
+  { id: 'inici', label: 'Inici de curs' },
+  { id: 'gener', label: 'Gener' },
+  { id: 'juny', label: 'Juny' },
+]
 
 export function objectiuBuit() {
   // Els fulls de cicle no tenen estats: s'hi escriu el percentatge directament.
-  return { id: crypto.randomUUID(), text: '', gener: '', juny: '', escala: 'lliure', opcions: null, actuacions: [] }
+  return {
+    id: crypto.randomUUID(), text: '', gener: '', juny: '',
+    escala: 'lliure', opcions: null,
+    recullDades: false,
+    etiquetesDades: { inici: 'Inici de curs', gener: 'Gener', juny: 'Juny' },
+    actuacions: [],
+  }
 }
 
 export function valoracioBuida() {

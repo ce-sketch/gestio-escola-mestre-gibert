@@ -97,24 +97,36 @@ export async function exportaValoracionsExcel(valoracions, cursEscolarId) {
           columnes: 4,
         })
 
-        const capO = wsO.addRow(["Actuacions/Activitats", "Indicador d'avaluació", 'Gener', 'Juny'])
+        // Els objectius de recollida (per exemple el del SIC) porten tres
+        // columnes més amb el text que s'hi ha enregistrat.
+        const et = o.etiquetesDades ?? {}
+        const capçaleres = o.recullDades
+          ? ["Actuacions/Activitats", "Indicador d'avaluació",
+             et.inici || 'Inici de curs', et.gener || 'Gener', et.juny || 'Juny',
+             'Gener', 'Juny']
+          : ["Actuacions/Activitats", "Indicador d'avaluació", 'Gener', 'Juny']
+        const capO = wsO.addRow(capçaleres)
         capO.eachCell((cell) => estilCapçalera(cell))
         o.actuacions.forEach((a, ai) => {
-          const fila = wsO.addRow([a.text, a.indicador, pct(a.gener), pct(a.juny)])
+          const fila = wsO.addRow(o.recullDades
+            ? [a.text, a.indicador, a.dades?.inici ?? '', a.dades?.gener ?? '', a.dades?.juny ?? '', pct(a.gener), pct(a.juny)]
+            : [a.text, a.indicador, pct(a.gener), pct(a.juny)])
           fila.eachCell((cell) => {
             cell.border = TOTES_VORES
             cell.alignment = { wrapText: true, vertical: 'top' }
             if (ai % 2 === 0) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFAFAF7' } }
           })
         })
-        const filaResultatO = wsO.addRow(['Resultat', '', pct(mitjanaObjectiu(o, 'gener')), pct(mitjanaObjectiu(o, 'juny'))])
+        const filaResultatO = wsO.addRow(o.recullDades
+          ? ['Resultat', '', '', '', '', pct(mitjanaObjectiu(o, 'gener')), pct(mitjanaObjectiu(o, 'juny'))]
+          : ['Resultat', '', pct(mitjanaObjectiu(o, 'gener')), pct(mitjanaObjectiu(o, 'juny'))])
         filaResultatO.eachCell((cell) => {
           cell.font = { bold: true }
           cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: GRIS } }
           cell.border = TOTES_VORES
         })
 
-        ajustaColumnes(wsO, [38, 38, 12, 12])
+        ajustaColumnes(wsO, o.recullDades ? [34, 24, 26, 26, 26, 12, 12] : [38, 38, 12, 12])
       })
     }
   }
