@@ -6,7 +6,7 @@
   --paper: #F7F5EF;
   --paper-raised: #FFFFFF;
   --ink: #2B2B2B;
-  --ink-soft: #6B6B65;
+  --ink-soft: #5A5A54;  /* enfosquit: amb #6B6B65 el text petit es quedava just per sota del contrast mínim de l'estàndard */
   --line: #E4E0D6;
   --green: #3E7A4C;
   --red: #B23A32;
@@ -433,4 +433,34 @@ input {
   background: var(--red);
   border-color: var(--red);
   color: white;
+}
+
+
+/* ── Focus visible ──────────────────────────────────────────────────────
+   Abans només l'input de .field marcava el focus. Sense això, qui navega
+   amb el tabulador no sap mai on és, i en una app amb desenes de camps per
+   pantalla això és molt incòmode. `:focus-visible` només s'activa amb el
+   teclat: amb el ratolí no surt res. */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+label.btn-ghost:focus-within {
+  outline: 2px solid var(--navy);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* Els botons que fan d'etiqueta per a un <input type="file"> amagat no
+   reben el focus sols: se'ls hi ha de posar amb tabindex al component. */
+
+/* ── Zones de toc ───────────────────────────────────────────────────────
+   En mòbil, un botó de menys de 40px és difícil d'encertar. Els botons
+   petits de dins dels formularis (esborrar una actuació, per exemple) es
+   queden petits visualment però amb prou àrea clicable. */
+@media (pointer: coarse) {
+  button, label.btn-ghost {
+    min-height: 40px;
+  }
 }
