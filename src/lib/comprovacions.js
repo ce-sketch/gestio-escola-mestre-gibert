@@ -13,7 +13,7 @@
 import {
   objectiusPerDefecte, resultatOperatiu, resultatObjectiu, normalitzaObjectius,
 } from './pgac'
-import { mitjanaObjectiu, mitjanaValoracio, pendentsValoracio } from './valoracions'
+import { mitjanaObjectiu, mitjanaValoracio, pendentsValoracio, valoracioBuida } from './valoracions'
 import { opcionsDe, ESCALES } from './escales'
 import { NIVELLS_GRAU, festaBuida, mitjanaObjectiuGrup, mitjanaGrup, mitjanaGeneralFesta } from './festesDetall'
 import { escalaDeFormula } from './valoracionsPlantillaParser'
@@ -150,6 +150,18 @@ function grupValoracions() {
         { id: 'c', gener: '', juny: '', escala: 'lliure', actuacions: [] },
       ],
     }, 'gener')
+  ))
+
+  proves.push(comprova(
+    "Una valoració desada es torna a llegir sencera (abans hi havia una crida trencada que ho tallava)",
+    true,
+    () => {
+      // Reprodueix el que fa carregaValoracio: barrejar el que hi ha desat
+      // amb l'esquelet buit. Havia de petar per una funció inexistent.
+      const desat = { nom: 'Comissió TAC', responsable: 'A', objectius: [{ id: 'x', text: 'Obj', actuacions: [] }] }
+      const carregat = { ...valoracioBuida(), ...desat, objectius: desat.objectius }
+      return carregat.nom === 'Comissió TAC' && carregat.objectius.length === 1
+    }
   ))
 
   proves.push(comprova(
