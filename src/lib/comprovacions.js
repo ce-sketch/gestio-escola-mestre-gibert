@@ -16,8 +16,7 @@ import {
 import { mitjanaObjectiu, mitjanaValoracio, pendentsValoracio, valoracioBuida } from './valoracions'
 import { opcionsDe, ESCALES } from './escales'
 import { NIVELLS_GRAU, festaBuida, mitjanaObjectiuGrup, mitjanaGrup, mitjanaGeneralFesta } from './festesDetall'
-import { escalaDeFormula } from './valoracionsPlantillaParser'
-import { escalaDelText } from './pgacPlantillaParser'
+import { escalaDeFormula, escalaDeText } from './excelLectura'
 
 const arrodoneix = (n) => (typeof n === 'number' ? Math.round(n * 100) / 100 : n)
 
@@ -259,13 +258,13 @@ function grupLectors() {
   proves.push(comprova(
     'Llegeix l\'escala del text del criteri del PGAC',
     [0, 40, 100],
-    () => escalaDelText('Fet=100% En procés=40% No fet= 0%').map((o) => o.valor)
+    () => escalaDeText('Fet=100% En procés=40% No fet= 0%').map((o) => o.valor)
   ))
 
   proves.push(comprova(
     "Un text sense escala no s'inventa res",
     null,
-    () => escalaDelText('Informe elaborat i lliurat a la direcció')
+    () => escalaDeText('Informe elaborat i lliurat a la direcció')
   ))
 
   return { titol: 'Lectors de plantilles', proves }
