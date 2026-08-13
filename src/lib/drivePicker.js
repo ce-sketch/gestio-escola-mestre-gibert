@@ -70,12 +70,17 @@ async function demanaPermis() {
  *
  * @returns {Promise<{nom: string, buffer: ArrayBuffer} | null>}
  */
-export async function triaDocumentDelDrive() {
+export async function triaDocumentDelDrive(tipus = 'fulls') {
   await carregaPicker()
   const token = await demanaPermis()
 
   const fitxer = await new Promise((resol) => {
-    const vista = new window.google.picker.DocsView(window.google.picker.ViewId.SPREADSHEETS)
+    // Els mòduls que llegeixen preus o el calendari treballen amb
+    // documents de text; la resta, amb fulls de càlcul.
+    const idVista = tipus === 'documents'
+      ? window.google.picker.ViewId.DOCUMENTS
+      : window.google.picker.ViewId.SPREADSHEETS
+    const vista = new window.google.picker.DocsView(idVista)
       .setIncludeFolders(true)
       .setSelectFolderEnabled(false)
 
@@ -96,15 +101,21 @@ export async function triaDocumentDelDrive() {
   })
 
   if (!fitxer) return null
-  return { nom: fitxer.name, buffer: await baixa(fitxer, token) }
+  const { buffer, mime } = await baixa(fitxer, tipus, token)
+  return { nom: fitxer.name, buffer, mime }
 }
 
 /** Els fulls de càlcul de Google s'han d'exportar; els .xlsx pujats es
  *  baixen tal qual. */
-async function baixa(fitxer, token) {
-  const esFullDeGoogle = fitxer.mimeType === 'application/vnd.google-apps.spreadsheet'
-  const url = esFullDeGoogle
-    ? `https://www.googleapis.com/drive/v3/files/${fitxer.id}/export?mimeType=application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`
+async function baixa(fitxer, tipus, token) {
+  // Un document de Google no es pot baixar tal qual: s'ha d'exportar. Els
+  // fulls, a Excel; els documents de text, a text pla, que és el que
+  // esperen els lectors de preus i de calendari.
+  const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  const mimeExport = tipus === 'documents' ? 'text/plain' : XLSX_MIME
+  const esDeGoogle = (fitxer.mimeType ?? '').startsWith('application/vnd.google-apps.')
+  const url = esDeGoogle
+    ? `https://www.googleapis.com/drive/v3/files/${fitxer.id}/export?mimeType=${encodeURIComponent(mimeExport)}`
     : `https://www.googleapis.com/drive/v3/files/${fitxer.id}?alt=media`
 
   const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
@@ -117,5 +128,5 @@ async function baixa(fitxer, token) {
     }
     throw new Error(`No s'ha pogut baixar el document (codi ${res.status}).`)
   }
-  return res.arrayBuffer()
+  return { buffer: await res.arrayBuffer(), mime: esDeGoogle ? mimeExport : (fitxer.mimeType ?? '') }
 }
