@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'
 import { db, auth } from '../../firebase'
 import { cursEscolarActual } from '../../lib/cursEscolar'
@@ -263,6 +263,13 @@ export default function Pgac() {
   }
 
   function esborraIndicador(objectiuIndex, operatiuId, indicadorId) {
+    const indicador = objectius[objectiuIndex]?.operatius
+      .find((op) => op.id === operatiuId)?.indicadors.find((i) => i.id === indicadorId)
+    if (indicador?.text?.trim() && !window.confirm(`Segur que vols esborrar «${indicador.text.slice(0, 60)}»?`)) return
+    return esborraIndicadorConfirmat(objectiuIndex, operatiuId, indicadorId)
+  }
+
+  function esborraIndicadorConfirmat(objectiuIndex, operatiuId, indicadorId) {
     const nous = actualitza(objectiuIndex, (o) => ({
       ...o,
       operatius: o.operatius.map((op) => (op.id !== operatiuId ? op : { ...op, indicadors: op.indicadors.filter((ind) => ind.id !== indicadorId) })),
@@ -270,10 +277,14 @@ export default function Pgac() {
     desa(nous)
   }
 
-  if (carregant) return <p>Carregant…</p>
+  // Els totals recorren tots els objectius, operatius i indicadors. Sense
+  // memoritzar-los es refan a cada tecla que es prem en qualsevol camp.
+  // Van abans del "return" de càrrega: els hooks de React s'han de cridar
+  // sempre en el mateix ordre, passi el que passi.
+  const generalG = useMemo(() => resultatGeneral(objectius, 'gener'), [objectius])
+  const generalJ = useMemo(() => resultatGeneral(objectius, 'juny'), [objectius])
 
-  const generalG = resultatGeneral(objectius, 'gener')
-  const generalJ = resultatGeneral(objectius, 'juny')
+  if (carregant) return <p>Carregant…</p>
 
   return (
     <div>

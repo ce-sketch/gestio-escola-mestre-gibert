@@ -566,11 +566,7 @@ export default function Alumnes() {
               type="button"
               onClick={esborraTotsElsAlumnes}
               disabled={confirmaEsborrat !== 'ESBORRA' || esborrant}
-              style={{
-                background: 'var(--red)', color: '#fff', border: 'none', borderRadius: 8,
-                padding: '10px 16px', fontWeight: 600, cursor: confirmaEsborrat === 'ESBORRA' ? 'pointer' : 'not-allowed',
-                opacity: confirmaEsborrat === 'ESBORRA' ? 1 : 0.5,
-              }}
+              className="btn-perill"
             >
               {esborrant ? 'Esborrant…' : 'Esborra tots els alumnes'}
             </button>
@@ -637,34 +633,36 @@ export default function Alumnes() {
                     d'avaluació i <strong>{inventari.assistencia}</strong> d'assistència,
                     repartits així:
                   </p>
-                  <table style={{ marginTop: 8, fontSize: 12, borderCollapse: 'collapse' }}>
-                    <thead>
-                      <tr>
-                        <th style={{ textAlign: 'left', padding: '4px 10px 4px 0' }}>Classe</th>
-                        <th style={{ textAlign: 'right', padding: '4px 10px' }}>Avaluació</th>
-                        <th style={{ textAlign: 'right', padding: '4px 10px' }}>Assistència</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {inventari.classes.map((c) => (
-                        <tr key={c.classe} style={{ background: classeProves === c.classe ? 'var(--sand)' : 'transparent' }}>
-                          <td style={{ padding: '4px 10px 4px 0' }}>
-                            <label style={{ display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer' }}>
-                              <input
-                                type="radio"
-                                name="classeProves"
-                                checked={classeProves === c.classe}
-                                onChange={() => { setClasseProves(c.classe); setConfirmaEsborratProves('') }}
-                              />
-                              {c.classe}
-                            </label>
-                          </td>
-                          <td style={{ textAlign: 'right', padding: '4px 10px' }}>{c.avaluacio}</td>
-                          <td style={{ textAlign: 'right', padding: '4px 10px' }}>{c.assistencia}</td>
+                  <div className="taula-scroll">
+                    <table style={{ marginTop: 8, fontSize: 12, borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr>
+                          <th style={{ textAlign: 'left', padding: '4px 10px 4px 0' }}>Classe</th>
+                          <th style={{ textAlign: 'right', padding: '4px 10px' }}>Avaluació</th>
+                          <th style={{ textAlign: 'right', padding: '4px 10px' }}>Assistència</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {inventari.classes.map((c) => (
+                          <tr key={c.classe} style={{ background: classeProves === c.classe ? 'var(--sand)' : 'transparent' }}>
+                            <td style={{ padding: '4px 10px 4px 0' }}>
+                              <label style={{ display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer' }}>
+                                <input
+                                  type="radio"
+                                  name="classeProves"
+                                  checked={classeProves === c.classe}
+                                  onChange={() => { setClasseProves(c.classe); setConfirmaEsborratProves('') }}
+                                />
+                                {c.classe}
+                              </label>
+                            </td>
+                            <td style={{ textAlign: 'right', padding: '4px 10px' }}>{c.avaluacio}</td>
+                            <td style={{ textAlign: 'right', padding: '4px 10px' }}>{c.assistencia}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </>
               )}
             </div>
@@ -691,12 +689,7 @@ export default function Alumnes() {
                 type="button"
                 onClick={() => esborraProvesDelCurs(classeProves)}
                 disabled={!esCursEnMarxa || !classeProves || confirmaEsborratProves !== 'ESBORRA' || esborrantProves}
-                style={{
-                  background: 'var(--red)', color: '#fff', border: 'none', borderRadius: 8,
-                  padding: '10px 16px', fontWeight: 600,
-                  cursor: esCursEnMarxa && classeProves && confirmaEsborratProves === 'ESBORRA' ? 'pointer' : 'not-allowed',
-                  opacity: esCursEnMarxa && classeProves && confirmaEsborratProves === 'ESBORRA' ? 1 : 0.5,
-                }}
+                className="btn-perill"
               >
                 {esborrantProves ? 'Esborrant…' : `Esborra ${classeProves || 'la classe triada'}`}
               </button>
@@ -722,12 +715,7 @@ export default function Alumnes() {
                 type="button"
                 onClick={() => { esborraProvesDelCurs(''); setConfirmaEsborratTot('') }}
                 disabled={!esCursEnMarxa || confirmaEsborratTot !== 'ESBORRA TOT' || esborrantProves}
-                style={{
-                  background: 'var(--red)', color: '#fff', border: 'none', borderRadius: 8,
-                  padding: '10px 16px', fontWeight: 600,
-                  cursor: esCursEnMarxa && confirmaEsborratTot === 'ESBORRA TOT' ? 'pointer' : 'not-allowed',
-                  opacity: esCursEnMarxa && confirmaEsborratTot === 'ESBORRA TOT' ? 1 : 0.5,
-                }}
+                className="btn-perill"
               >
                 {esborrantProves ? 'Esborrant…' : `Esborra-ho tot del curs ${cursProves}`}
               </button>

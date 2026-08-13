@@ -250,45 +250,47 @@ export default function Absentisme() {
           {carregant ? (
             <p style={{ marginTop: 24 }}>Calculant…</p>
           ) : (
-            <table style={{ width: '100%', marginTop: 24, borderCollapse: 'collapse', fontSize: 14 }}>
-              <thead>
-                <tr style={{ textAlign: 'left', borderBottom: '2px solid var(--line)' }}>
-                  <th style={{ padding: '8px 6px', width: 32 }}></th>
-                  <th style={{ padding: '8px 6px' }}>Alumne</th>
-                  <th style={{ padding: '8px 6px' }}>Absències</th>
-                  <th style={{ padding: '8px 6px' }}>No justif.</th>
-                  <th style={{ padding: '8px 6px' }}>Índex total</th>
-                  <th style={{ padding: '8px 6px' }}>Índex no justif.</th>
-                </tr>
-              </thead>
-              <tbody>
-                {files.map((f) => {
-                  const nivell = nivellAlerta(f.indexInjustificat)
-                  const color = nivell === 'greu' ? 'var(--red)' : nivell === 'atencio' ? 'var(--amber-dark)' : 'var(--ink)'
-                  return (
-                    <tr key={f.alumne.id} style={{ borderBottom: '1px solid var(--line)' }}>
-                      <td style={{ padding: '8px 6px' }}>
-                        {nivell && (
-                          <input
-                            type="checkbox"
-                            checked={seleccionats.has(f.alumne.id)}
-                            onChange={() => toggleSeleccio(f.alumne.id)}
-                          />
-                        )}
-                      </td>
-                      <td style={{ padding: '8px 6px', fontWeight: nivell ? 600 : 400, color }}>{f.alumne.nom}</td>
-                      <td style={{ padding: '8px 6px' }}>{f.absencies}</td>
-                      <td style={{ padding: '8px 6px' }}>{f.absenciesInjust}</td>
-                      <td style={{ padding: '8px 6px' }}>{f.indexAbsentisme.toFixed(1)}%</td>
-                      <td style={{ padding: '8px 6px', fontWeight: 600, color }}>{f.indexInjustificat.toFixed(1)}%</td>
-                    </tr>
-                  )
-                })}
-                {files.length === 0 && (
-                  <tr><td colSpan={6} style={{ padding: '16px 6px', color: 'var(--ink-soft)' }}>No hi ha dades per a aquest període.</td></tr>
-                )}
-              </tbody>
-            </table>
+            <div className="taula-scroll">
+              <table style={{ width: '100%', marginTop: 24, borderCollapse: 'collapse', fontSize: 14 }}>
+                <thead>
+                  <tr style={{ textAlign: 'left', borderBottom: '2px solid var(--line)' }}>
+                    <th style={{ padding: '8px 6px', width: 32 }}></th>
+                    <th style={{ padding: '8px 6px' }}>Alumne</th>
+                    <th style={{ padding: '8px 6px' }}>Absències</th>
+                    <th style={{ padding: '8px 6px' }}>No justif.</th>
+                    <th style={{ padding: '8px 6px' }}>Índex total</th>
+                    <th style={{ padding: '8px 6px' }}>Índex no justif.</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {files.map((f) => {
+                    const nivell = nivellAlerta(f.indexInjustificat)
+                    const color = nivell === 'greu' ? 'var(--red)' : nivell === 'atencio' ? 'var(--amber-dark)' : 'var(--ink)'
+                    return (
+                      <tr key={f.alumne.id} style={{ borderBottom: '1px solid var(--line)' }}>
+                        <td style={{ padding: '8px 6px' }}>
+                          {nivell && (
+                            <input
+                              type="checkbox"
+                              checked={seleccionats.has(f.alumne.id)}
+                              onChange={() => toggleSeleccio(f.alumne.id)}
+                            />
+                          )}
+                        </td>
+                        <td style={{ padding: '8px 6px', fontWeight: nivell ? 600 : 400, color }}>{f.alumne.nom}</td>
+                        <td style={{ padding: '8px 6px' }}>{f.absencies}</td>
+                        <td style={{ padding: '8px 6px' }}>{f.absenciesInjust}</td>
+                        <td style={{ padding: '8px 6px' }}>{f.indexAbsentisme.toFixed(1)}%</td>
+                        <td style={{ padding: '8px 6px', fontWeight: 600, color }}>{f.indexInjustificat.toFixed(1)}%</td>
+                      </tr>
+                    )
+                  })}
+                  {files.length === 0 && (
+                    <tr><td colSpan={6} style={{ padding: '16px 6px', color: 'var(--ink-soft)' }}>No hi ha dades per a aquest període.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           )}
 
           <button

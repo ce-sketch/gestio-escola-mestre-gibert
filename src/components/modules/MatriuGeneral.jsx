@@ -512,28 +512,30 @@ export default function MatriuGeneral() {
                   <div style={{ padding: '4px 14px 14px', borderTop: '1px solid var(--line)' }}>
                     {v.membres && <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 8 }}>Membres: {v.membres}</p>}
 
-                    <table style={{ borderCollapse: 'collapse', fontSize: 12, width: '100%', marginTop: 10 }}>
-                      <thead>
-                        <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--line)' }}>
-                          <th style={{ padding: '4px 6px' }}>Objectiu</th>
-                          <th style={{ padding: '4px 6px' }}>Gener</th>
-                          <th style={{ padding: '4px 6px' }}>Juny</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(v.objectius ?? []).map((o) => {
-                          const og = mitjanaObjectiu(o, 'gener')
-                          const oj = mitjanaObjectiu(o, 'juny')
-                          return (
-                            <tr key={o.id} style={{ borderBottom: '1px solid var(--line)' }}>
-                              <td style={{ padding: '4px 6px' }}>{o.text || '(sense text)'}</td>
-                              <td style={{ padding: '4px 6px', color: colorPer(og) }}>{og !== null ? `${Math.round(og)}%` : '—'}</td>
-                              <td style={{ padding: '4px 6px', color: colorPer(oj) }}>{oj !== null ? `${Math.round(oj)}%` : '—'}</td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
+                    <div className="taula-scroll">
+                      <table style={{ borderCollapse: 'collapse', fontSize: 12, width: '100%', marginTop: 10 }}>
+                        <thead>
+                          <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--line)' }}>
+                            <th style={{ padding: '4px 6px' }}>Objectiu</th>
+                            <th style={{ padding: '4px 6px' }}>Gener</th>
+                            <th style={{ padding: '4px 6px' }}>Juny</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(v.objectius ?? []).map((o) => {
+                            const og = mitjanaObjectiu(o, 'gener')
+                            const oj = mitjanaObjectiu(o, 'juny')
+                            return (
+                              <tr key={o.id} style={{ borderBottom: '1px solid var(--line)' }}>
+                                <td style={{ padding: '4px 6px' }}>{o.text || '(sense text)'}</td>
+                                <td style={{ padding: '4px 6px', color: colorPer(og) }}>{og !== null ? `${Math.round(og)}%` : '—'}</td>
+                                <td style={{ padding: '4px 6px', color: colorPer(oj) }}>{oj !== null ? `${Math.round(oj)}%` : '—'}</td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
 
                     {v.valoracioRevisio && <p style={{ fontSize: 12, marginTop: 10 }}><strong>Valoració/revisió:</strong> {v.valoracioRevisio}</p>}
                     {v.valoracioFinal && <p style={{ fontSize: 12, marginTop: 6 }}><strong>Valoració final:</strong> {v.valoracioFinal}</p>}
