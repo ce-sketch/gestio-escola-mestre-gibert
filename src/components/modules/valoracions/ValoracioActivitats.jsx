@@ -8,6 +8,7 @@ import {
 } from '../../../lib/activitatsComplementariesDetall'
 import { activitatsDelCicle } from '../../../lib/activitatsComplementariesParser'
 import { descarregaDocumentSortides, URL_DOC_SORTIDES } from '../../../lib/documentSortides'
+import { triaDocumentDelDrive } from '../../../lib/drivePicker'
 
 // El `xlsx` pesa 429 kB i només fa falta quan algú puja un fitxer. Es
 // carrega en aquell moment, no en obrir el mòdul.
@@ -117,6 +118,33 @@ export default function ValoracioActivitats({ cursEscolarId, cicleActivitats }) 
     }
   }
 
+  /** Tria un document del Drive amb el selector de Google i el llegeix
+   *  directament, sense baixar-lo ni tornar-lo a pujar. */
+  async function triaDelDrive() {
+    if (!cicleActivitats) return
+    setPujantActivitats(true)
+    setMissatge(null)
+    try {
+      const tria = await triaDocumentDelDrive()
+      if (!tria) return // ha tancat el selector sense triar res
+      const XLSX = await carregaXLSX()
+      const workbook = XLSX.read(tria.buffer, { type: 'array' })
+      const trobades = activitatsDelCicle(workbook, XLSX, cicleActivitats)
+      if (trobades.length === 0) {
+        setMissatge({ type: 'error', text: `No he trobat cap activitat pel cicle "${cicleActivitats}" a «${tria.nom}».` })
+        return
+      }
+      const noves = combina(trobades)
+      setActivitats(noves)
+      await desaActivitats(noves)
+      setMissatge({ type: 'ok', text: `${trobades.length} activitats carregades de «${tria.nom}».` })
+    } catch (err) {
+      setMissatge({ type: 'error', text: err.message })
+    } finally {
+      setPujantActivitats(false)
+    }
+  }
+
   function pujaActivitatsCicle(e) {
     const file = e.target.files?.[0]
     if (!file || !cicleActivitats) return
@@ -184,6 +212,15 @@ export default function ValoracioActivitats({ cursEscolarId, cicleActivitats }) 
                 >
                   {pujantActivitats ? 'Llegint el document…' : '↻ Actualitza activitats complementàries des del document oficial'}
                 </button>
+                <button
+                  type="button"
+                  onClick={triaDelDrive}
+                  disabled={pujantActivitats}
+                  className="btn-ghost"
+                  style={{ maxWidth: '100%', textAlign: 'left' }}
+                >
+                  📁 Tria un document del Drive
+                </button>
                 <label className="btn-ghost" style={{ cursor: 'pointer', display: 'inline-flex' }}>
                   {pujantActivitats ? 'Llegint el document…' : '📤 Puja el document de sortides (el mateix d\'Economia)'}
                   <input type="file" accept=".xlsx,.xls" onChange={pujaActivitatsCicle} style={{ display: 'none' }} disabled={pujantActivitats} />
@@ -192,7 +229,9 @@ export default function ValoracioActivitats({ cursEscolarId, cicleActivitats }) 
               <p className="module-note" style={{ marginTop: 6 }}>
                 El botó de dalt llegeix el <a href={URL_DOC_SORTIDES} target="_blank" rel="noreferrer">document consolidat</a> del
                 Drive, el mateix que actualitza Economia: quan allà s'hi afegeix una sortida, aquí ja hi és.
-                El de pujar fitxer només fa falta si el document no es pot llegir des del Drive.{' '}
+                Amb «Tria un document del Drive» pots agafar-ne un altre sense baixar-lo: s'obre el
+                selector de Google i l'app només veu el fitxer que triïs. El de pujar fitxer queda
+                per si el Drive no respon.{' '}
               </p>
               <p className="module-note" style={{ marginTop: 6 }}>
                 Puja el mateix Excel consolidat "Activitats_Complementaries_..._I3_a_6e" que ja
