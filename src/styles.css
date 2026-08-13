@@ -464,3 +464,64 @@ label.btn-ghost:focus-within {
     min-height: 40px;
   }
 }
+
+
+/* ─────────────────────────────────────────────────────────────────────
+   Patrons que es repetien escrits a mà per tot el codi. Tenir-los aquí
+   evita que un canvi de color s'hagi d'anar a buscar a vint fitxers, que
+   és com va passar el problema de la lletra blanca.
+   ───────────────────────────────────────────────────────────────────── */
+
+/* Embolcall de taula. Les taules del centre tenen moltes columnes i en una
+   pantalla estreta o se surten o es comprimeixen fins a ser il·legibles.
+   Amb això es poden desplaçar de costat i el mòbil deixa de ser un
+   problema. */
+.taula-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin: 0 -4px;
+  padding: 0 4px;
+}
+
+.taula-scroll > table {
+  min-width: 100%;
+}
+
+/* Botó d'acció destructiva (esborrar, buidar…). */
+.btn-perill {
+  background: var(--red);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-perill:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Caixa amb vora suau, per agrupar un bloc dins d'un mòdul. */
+.caixa {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+
+.caixa-discreta {
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+/* Text petit d'ajuda sota d'un camp o d'un botó. */
+.nota {
+  font-size: 11px;
+  color: var(--ink-soft);
+  margin-top: 4px;
+}
+
+.nota-avis { color: var(--amber-dark); }
+.nota-error { color: var(--red); }
