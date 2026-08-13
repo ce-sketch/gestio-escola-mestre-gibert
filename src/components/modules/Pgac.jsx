@@ -327,7 +327,7 @@ export default function Pgac() {
               onFitxer={(e) => pujaPlantilla(e.target.files?.[0])}
               tipus="fulls"
               etiqueta="Tria la plantilla del Drive"
-              onError={setErrorPlantilla}
+              onError={(t) => setMissatge({ type: 'error', text: t })}
               disabled={important}
             />
             <label
