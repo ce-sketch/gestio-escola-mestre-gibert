@@ -156,12 +156,6 @@ export default function ValoracioFesta({ cursEscolarId, festaId }) {
   return (
     <>
       {desant && <span style={{ fontSize: 12, color: 'var(--ink-soft)', display: 'block', marginTop: 8 }}>Desant…</span>}
-          !festaId ? (
-            <p style={{ marginTop: 16, fontSize: 13, color: 'var(--ink-soft)' }}>Tria una festa per començar (o continuar) la valoració.</p>
-          ) : carregant || !festa ? (
-            <p style={{ marginTop: 16 }}>Carregant…</p>
-          ) : (
-            <>
               <div style={{ display: 'flex', gap: 16, marginTop: 20, flexWrap: 'wrap', alignItems: 'flex-end' }}>
                 <label className="field" style={{ maxWidth: 260 }}>
                   <span>Data</span>
@@ -300,8 +294,6 @@ export default function ValoracioFesta({ cursEscolarId, festaId }) {
                   {missatge.text}
                 </p>
               )}
-            </>
-          )
     </>
   )
 }

@@ -7,6 +7,7 @@ import {
   percentValorades, totalRepetirSi,
 } from '../../../lib/activitatsComplementariesDetall'
 import { activitatsDelCicle } from '../../../lib/activitatsComplementariesParser'
+import { descarregaDocumentSortides, URL_DOC_SORTIDES } from '../../../lib/documentSortides'
 
 // El `xlsx` pesa 429 kB i només fa falta quan algú puja un fitxer. Es
 // carrega en aquell moment, no en obrir el mòdul.
@@ -75,6 +76,47 @@ export default function ValoracioActivitats({ cursEscolarId, cicleActivitats }) 
    *  n'extreu les activitats reals del cicle triat — sense esborrar cap
    *  valoració que ja s'hagués introduït per a una activitat que coincideixi
    *  de nom. */
+  /** Combina les activitats llegides del document amb les que ja hi ha
+   *  desades: si el nom coincideix, es manté la valoració i només
+   *  s'actualitzen les dades de la sortida. */
+  function combina(trobades) {
+    return trobades.map((t) => {
+      const existent = activitats.find((a) => a.nom === t.nom)
+      if (existent) return { ...existent, nivell: t.nivell, data: t.data, horari: t.horari, preu: t.preu }
+      const nova = activitatSortidaBuida(t.nom)
+      nova.nivell = t.nivell
+      nova.data = t.data
+      nova.horari = t.horari
+      nova.preu = t.preu
+      return nova
+    })
+  }
+
+  /** Llegeix el document consolidat directament del Drive — el mateix que
+   *  actualitza Economia. Així no cal baixar-lo i tornar-lo a pujar aquí. */
+  async function actualitzaDesDelDocument() {
+    if (!cicleActivitats) return
+    setPujantActivitats(true)
+    setMissatge(null)
+    try {
+      const XLSX = await carregaXLSX()
+      const workbook = await descarregaDocumentSortides(XLSX)
+      const trobades = activitatsDelCicle(workbook, XLSX, cicleActivitats)
+      if (trobades.length === 0) {
+        setMissatge({ type: 'error', text: `No he trobat cap activitat pel cicle "${cicleActivitats}" al document.` })
+        return
+      }
+      const noves = combina(trobades)
+      setActivitats(noves)
+      await desaActivitats(noves)
+      setMissatge({ type: 'ok', text: `${trobades.length} activitats carregades del document oficial.` })
+    } catch (err) {
+      setMissatge({ type: 'error', text: err.message })
+    } finally {
+      setPujantActivitats(false)
+    }
+  }
+
   function pujaActivitatsCicle(e) {
     const file = e.target.files?.[0]
     if (!file || !cicleActivitats) return
@@ -132,20 +174,25 @@ export default function ValoracioActivitats({ cursEscolarId, cicleActivitats }) 
   return (
     <>
       {desant && <span style={{ fontSize: 12, color: 'var(--ink-soft)', display: 'block', marginTop: 8 }}>Desant…</span>}
-          !cicleActivitats ? (
-            <p style={{ marginTop: 16, fontSize: 13, color: 'var(--ink-soft)' }}>
-              Tria un cicle per començar (o continuar) la valoració d'activitats complementàries.
-            </p>
-          ) : carregantActivitats ? (
-            <p style={{ marginTop: 16 }}>Carregant…</p>
-          ) : (
-            <>
               <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap', alignItems: 'center' }}>
-                <label className="btn-ghost" style={{ color: 'var(--navy)', borderColor: 'var(--navy)', cursor: 'pointer', display: 'inline-flex' }}>
+                <button
+                  type="button"
+                  onClick={actualitzaDesDelDocument}
+                  disabled={pujantActivitats}
+                  className="btn-ghost"
+                >
+                  {pujantActivitats ? 'Llegint el document…' : '🔄 Actualitza des del document oficial'}
+                </button>
+                <label className="btn-ghost" style={{ cursor: 'pointer', display: 'inline-flex' }}>
                   {pujantActivitats ? 'Llegint el document…' : '📤 Puja el document de sortides (el mateix d\'Economia)'}
                   <input type="file" accept=".xlsx,.xls" onChange={pujaActivitatsCicle} style={{ display: 'none' }} disabled={pujantActivitats} />
                 </label>
               </div>
+              <p className="module-note" style={{ marginTop: 6 }}>
+                El botó de dalt llegeix el <a href={URL_DOC_SORTIDES} target="_blank" rel="noreferrer">document consolidat</a> del
+                Drive, el mateix que actualitza Economia: quan allà s'hi afegeix una sortida, aquí ja hi és.
+                El de pujar fitxer només fa falta si el document no es pot llegir des del Drive.{' '}
+              </p>
               <p className="module-note" style={{ marginTop: 6 }}>
                 Puja el mateix Excel consolidat "Activitats_Complementaries_..._I3_a_6e" que ja
                 fas servir a Economia — es llegeixen els fulls dels nivells d'aquest cicle i
@@ -246,8 +293,6 @@ export default function ValoracioActivitats({ cursEscolarId, cicleActivitats }) 
                   )
                 })}
               </div>
-            </>
-          )
     </>
   )
 }
