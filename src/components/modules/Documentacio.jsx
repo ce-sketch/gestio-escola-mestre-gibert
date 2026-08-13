@@ -21,7 +21,15 @@ import {
   percentValorades, totalRepetirSi,
 } from '../../lib/activitatsComplementariesDetall'
 import { activitatsDelCicle } from '../../lib/activitatsComplementariesParser'
-import * as XLSX from 'xlsx'
+
+// El `xlsx` pesa 429 kB i només fa falta quan algú puja un fitxer. Es
+// carrega en aquell moment, no en obrir el mòdul.
+// (No es pot canviar per l'`exceljs`: aquest no retorna el valor calculat
+// de les cel·les amb fórmula, i les plantilles omplertes del centre en van
+// plenes. Comprovat comparant els dos lectors sobre fitxers reals.)
+async function carregaXLSX() {
+  return import('xlsx')
+}
 
 function inputPercent(valor, onChange, onBlur) {
   return (
@@ -172,6 +180,7 @@ export default function Documentacio() {
 
     const reader = new FileReader()
     reader.onload = async (event) => {
+      const XLSX = await carregaXLSX()
       try {
         const workbook = XLSX.read(event.target.result, { type: 'binary' })
         const trobades = activitatsDelCicle(workbook, XLSX, cicleActivitats)

@@ -6,7 +6,6 @@ import { ENSENYAMENTS, CURSOS, CONCEPTES, conceptaBuit, filaBuida, totalConcepte
 import { exportaExcelOficial } from '../../lib/economiaExcelOficial'
 import { fetchDocText } from '../../lib/officialCalendarDoc'
 import { parseOfficialQuotesText, parseResumSortides } from '../../lib/officialQuotesDoc'
-import * as XLSX from 'xlsx'
 
 // ID del document "Recull informatiu de les famílies" a Google Docs, amb
 // els preus de quotes. Ha d'estar compartit com "Qualsevol persona amb
@@ -22,6 +21,15 @@ const DOC_SORTIDES_OFICIAL_ID = '1BjWwDFbFqlfjn1DQ-RT1WsO-mkqg9LM_x-f-WxCem08'
 // segons el criteri del centre: material escolar i activitats
 // complementàries — no s'aplica a la resta de conceptes.
 const CONCEPTES_REDUCCIO_NESE = ['materialEscolar', 'activitatsComplementaries']
+
+// El `xlsx` pesa 429 kB i només fa falta quan algú puja un fitxer. Es
+// carrega en aquell moment, no en obrir el mòdul.
+// (No es pot canviar per l'`exceljs`: aquest no retorna el valor calculat
+// de les cel·les amb fórmula, i les plantilles omplertes del centre en van
+// plenes. Comprovat comparant els dos lectors sobre fitxers reals.)
+async function carregaXLSX() {
+  return import('xlsx')
+}
 
 export default function Economia() {
   const [cursEscolarId, setCursEscolarId] = useState(cursEscolarActual())
@@ -199,6 +207,7 @@ export default function Economia() {
    *  pública de Google Sheets (equivalent a fetchDocText, però per a fulls
    *  de càlcul en comptes de documents de text). */
   async function actualitzaSortidesDesDelDocument() {
+    const XLSX = await carregaXLSX()
     setCarregantSortides(true)
     setMissatge(null)
     setSortidesTrobades(null)
@@ -213,7 +222,7 @@ export default function Economia() {
       }
       const buffer = await res.arrayBuffer()
       const workbook = XLSX.read(buffer, { type: 'array' })
-      processaWorkbookSortides(workbook)
+      processaWorkbookSortides(workbook, XLSX)
     } catch (err) {
       setMissatge({ type: 'error', text: err.message })
     } finally {
@@ -221,7 +230,7 @@ export default function Economia() {
     }
   }
 
-  function processaWorkbookSortides(workbook) {
+  function processaWorkbookSortides(workbook, XLSX) {
     const nomFull = workbook.SheetNames.find((n) => n.toLowerCase().includes('resum'))
     if (!nomFull) {
       setMissatge({ type: 'error', text: 'No he trobat cap full "Resum" en aquest Excel. Comprova que és el document consolidat correcte.' })
@@ -240,7 +249,8 @@ export default function Economia() {
    *  (un sol Excel amb un full per curs i un full "Resum" ja calculat), i
    *  en llegeix el full "Resum" directament. Alternativa manual per si la
    *  lectura automàtica de dalt falla algun dia. */
-  function pujaResumSortides(e) {
+  async function pujaResumSortides(e) {
+    const XLSX = await carregaXLSX()
     const file = e.target.files?.[0]
     if (!file) return
     setCarregantSortides(true)
@@ -251,7 +261,7 @@ export default function Economia() {
     reader.onload = (event) => {
       try {
         const workbook = XLSX.read(event.target.result, { type: 'binary' })
-        processaWorkbookSortides(workbook)
+        processaWorkbookSortides(workbook, XLSX)
       } catch (err) {
         setMissatge({ type: 'error', text: `No s'ha pogut llegir l'Excel: ${err.message}` })
       } finally {

@@ -9,7 +9,15 @@ import { interpretaResum, interpretaFullObjectiu, interpretaResumCicle, interpre
 import { CICLES } from '../../lib/valoracions'
 import { GRUPS, festaBuida, objectiuFestaBuit, activitatBuida } from '../../lib/festesDetall'
 import { slug } from '../../lib/slug'
-import * as XLSX from 'xlsx'
+
+// El `xlsx` pesa 429 kB i només fa falta quan algú puja un fitxer. Es
+// carrega en aquell moment, no en obrir el mòdul.
+// (No es pot canviar per l'`exceljs`: aquest no retorna el valor calculat
+// de les cel·les amb fórmula, i les plantilles omplertes del centre en van
+// plenes. Comprovat comparant els dos lectors sobre fitxers reals.)
+async function carregaXLSX() {
+  return import('xlsx')
+}
 
 function colorPer(valor) {
   if (valor === null || valor === undefined) return 'var(--ink-soft)'
@@ -87,6 +95,7 @@ export default function MatriuGeneral() {
 
     const reader = new FileReader()
     reader.onload = async (event) => {
+      const XLSX = await carregaXLSX()
       try {
         const workbook = XLSX.read(event.target.result, { type: 'binary' })
         const nomFullResum = workbook.SheetNames.find((n) => n.toLowerCase().includes('resum')) ?? workbook.SheetNames[0]
@@ -167,6 +176,7 @@ export default function MatriuGeneral() {
 
     const reader = new FileReader()
     reader.onload = async (event) => {
+      const XLSX = await carregaXLSX()
       try {
         const workbook = XLSX.read(event.target.result, { type: 'binary' })
         const nomFull = workbook.SheetNames.find((n) => n.toLowerCase().includes('valoraci')) ?? workbook.SheetNames[0]
@@ -232,6 +242,7 @@ export default function MatriuGeneral() {
 
     const reader = new FileReader()
     reader.onload = async (event) => {
+      const XLSX = await carregaXLSX()
       try {
         const workbook = XLSX.read(event.target.result, { type: 'binary' })
         const nomFullResum = workbook.SheetNames.find((n) => n.toLowerCase().includes('resum')) ?? workbook.SheetNames[0]

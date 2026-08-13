@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import * as XLSX from 'xlsx'
 import {
   collection, doc, getDocs, query, where, writeBatch, serverTimestamp,
 } from 'firebase/firestore'
@@ -23,6 +22,15 @@ const COL_NESE_MOTIU = 9
 // activitats — no pas qualsevol alumne NESE (una discapacitat o altes
 // capacitats, per exemple, no donen aquest dret).
 const MOTIU_NESE_REDUCCIO = 'situacions socioeconòmiques'
+
+// El `xlsx` pesa 429 kB i només fa falta quan algú puja un fitxer. Es
+// carrega en aquell moment, no en obrir el mòdul.
+// (No es pot canviar per l'`exceljs`: aquest no retorna el valor calculat
+// de les cel·les amb fórmula, i les plantilles omplertes del centre en van
+// plenes. Comprovat comparant els dos lectors sobre fitxers reals.)
+async function carregaXLSX() {
+  return import('xlsx')
+}
 
 export default function Alumnes() {
   const [classes, setClasses] = useState(
@@ -107,6 +115,7 @@ export default function Alumnes() {
 
     const reader = new FileReader()
     reader.onload = async (event) => {
+      const XLSX = await carregaXLSX()
       try {
         const workbook = XLSX.read(event.target.result, { type: 'binary' })
         const primerFull = workbook.Sheets[workbook.SheetNames[0]]
@@ -154,7 +163,8 @@ export default function Alumnes() {
     reader.readAsBinaryString(file)
   }
 
-  function handleFileChange(e) {
+  async function handleFileChange(e) {
+    const XLSX = await carregaXLSX()
     const file = e.target.files?.[0]
     if (!file) return
     setErrorFitxer(null)
