@@ -58,6 +58,9 @@ export const NOMS_SUGGERITS = [
   'Comissió TAC', 'Comissió Material', 'Comissió Anglès', 'Comissió Biblioteca',
   'Comissió Espais',
   "Equip d'Atenció a la Diversitat", 'Coordinació de Riscos Laborals', 'Equip LIC',
+  // Aquestes dues no són comissions però els seus fulls tenen la mateixa
+  // estructura (Resum + un full per objectiu), així que van aquí mateix.
+  'Equip Directiu', 'Jardins. AREP',
 ]
 
 // Comissions mixtes (amb participació de famílies/AFA) — es mostren en un
