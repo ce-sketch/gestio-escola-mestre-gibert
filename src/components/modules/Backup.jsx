@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import JSZip from 'jszip'
+import { exportaDadesCrues, restauraDades, inspeccionaBackup } from '../../lib/backupDades'
 import { collection, getDocs, doc, getDoc, setDoc, deleteDoc, writeBatch, serverTimestamp, orderBy, query, limit } from 'firebase/firestore'
 import { db, auth } from '../../firebase'
 import { aCsv, formataData } from '../../lib/csv'
@@ -11,6 +12,11 @@ const DIES_AVIS = 30
 
 export default function Backup() {
   const [exportant, setExportant] = useState(false)
+  const [backupLlegit, setBackupLlegit] = useState(null)   // { nom, dades, contingut }
+  const [triades, setTriades] = useState(new Set())
+  const [confirmaRestaura2, setConfirmaRestaura2] = useState('')
+  const [restaurantZip, setRestaurantZip] = useState(null)
+  const [resultatRestaura, setResultatRestaura] = useState(null)
   const [ultimBackup, setUltimBackup] = useState(null)
   const [carregant, setCarregant] = useState(true)
   const [missatge, setMissatge] = useState(null)
@@ -47,6 +53,54 @@ export default function Backup() {
       setVersions([])
     } finally {
       setCarregantVersions(false)
+    }
+  }
+
+  /** Obre un .zip de còpia i ensenya què hi ha, sense tocar res encara. */
+  async function llegeixBackup(fitxer) {
+    if (!fitxer) return
+    setBackupLlegit(null)
+    setResultatRestaura(null)
+    setMissatge(null)
+    try {
+      const zip = await JSZip.loadAsync(fitxer)
+      const dades = {}
+      for (const [ruta, entrada] of Object.entries(zip.files)) {
+        const m = ruta.match(/^dades\/([a-zA-Z]+)\.json$/)
+        if (!m || m[1] === 'manifest') continue
+        dades[m[1]] = JSON.parse(await entrada.async('string'))
+      }
+      const contingut = inspeccionaBackup(dades)
+      if (contingut.length === 0) {
+        setMissatge({
+          type: 'error',
+          text: "Aquest .zip no porta la carpeta \"dades/\". Deu ser una còpia feta abans que l'app sabés restaurar; d'aquelles només se'n poden llegir els CSV.",
+        })
+        return
+      }
+      setBackupLlegit({ nom: fitxer.name, dades, contingut })
+      setTriades(new Set(contingut.map((c) => c.id)))
+    } catch (err) {
+      setMissatge({ type: 'error', text: `No s'ha pogut obrir el fitxer: ${err.message}` })
+    }
+  }
+
+  async function apliquaRestauracio() {
+    if (!backupLlegit) return
+    setRestaurantZip('començant')
+    setResultatRestaura(null)
+    try {
+      const resultat = await restauraDades(backupLlegit.dades, {
+        nomes: [...triades],
+        onProgres: (nom, fets, total) => setRestaurantZip(`${nom}: ${fets} de ${total}`),
+      })
+      setResultatRestaura(resultat)
+      setBackupLlegit(null)
+      setConfirmaRestaura2('')
+    } catch (err) {
+      setMissatge({ type: 'error', text: `La restauració ha fallat: ${err.message}` })
+    } finally {
+      setRestaurantZip(null)
     }
   }
 
@@ -161,6 +215,20 @@ export default function Backup() {
         }
       }
 
+      // Les dades en cru, que són les que permeten tornar-les a entrar.
+      // Els CSV de sobre són per llegir; això és per restaurar.
+      const { dades, comptadors } = await exportaDadesCrues()
+      const carpetaDades = zip.folder('dades')
+      for (const [nom, documents] of Object.entries(dades)) {
+        carpetaDades.file(`${nom}.json`, JSON.stringify(documents, null, 1))
+        totalFitxers += 1
+      }
+      carpetaDades.file('manifest.json', JSON.stringify({
+        versio: 1,
+        generat: new Date().toISOString(),
+        comptadors,
+      }, null, 1))
+
       zip.file(
         'LLEGIU-ME.txt',
         'Còpia de seguretat de l\'Escola Mestre Enric Gibert i Camins\n' +
@@ -173,7 +241,10 @@ export default function Backup() {
         '  absentisme/<curs>/<trimestre>/<classe>.csv     informe d\'absentisme ja calculat, per trimestre\n' +
         '  calendari/<curs>.json                          calendari escolar de cada curs\n' +
         '  avaluacio/<classe>.csv                         notes (si n\'hi ha)\n' +
-        '  documentacio.csv                               documentació (si n\'hi ha)\n'
+        '  documentacio.csv                               documentació (si n\'hi ha)\n' +
+        '  dades/<col·lecció>.json                        les dades en cru, per poder restaurar\n\n' +
+        'Els CSV són per llegir i obrir amb l\'Excel. La carpeta dades/ és la que fa\n' +
+        'servir l\'app si un dia has de recuperar aquest backup.\n'
       )
 
       const blob = await zip.generateAsync({ type: 'blob' })
@@ -385,6 +456,109 @@ documentacio.csv (quan hi hagi dades)`}
         pagament de Firebase (Blaze), que igualment surt gratuït fins a un volum d'ús molt
         superior al que tindrà el centre.
       </p>
+
+      {/* ── Recuperar una còpia ─────────────────────────────────────── */}
+      <div style={{ marginTop: 32, borderTop: '1px solid var(--line)', paddingTop: 20 }}>
+        <p className="module-eyebrow" style={{ marginTop: 0 }}>Recuperació</p>
+        <h3 style={{ marginTop: 4, fontSize: 18 }}>Carrega una còpia de seguretat</h3>
+        <p className="module-lead">
+          Obre un .zip d'aquests mateixos i torna a entrar-ne les dades. Primer et dirà què hi ha
+          a dins i podràs triar què vols recuperar; no es toca res fins que ho confirmis.
+        </p>
+
+        <label
+          className="btn-ghost"
+          style={{ display: 'inline-block', marginTop: 8, border: '1px solid', borderRadius: 8, padding: '8px 14px', fontSize: 13, cursor: 'pointer' }}
+        >
+          📂 Tria el fitxer .zip
+          <input
+            type="file"
+            accept=".zip"
+            style={{ display: 'none' }}
+            onChange={(e) => { llegeixBackup(e.target.files?.[0]); e.target.value = '' }}
+          />
+        </label>
+
+        {backupLlegit && (
+          <div className="caixa" style={{ marginTop: 14 }}>
+            <strong style={{ fontSize: 13 }}>{backupLlegit.nom}</strong>
+            <p className="nota">Tria què vols recuperar:</p>
+            <ul style={{ listStyle: 'none', padding: 0, margin: '8px 0 0' }}>
+              {backupLlegit.contingut.map((c) => (
+                <li key={c.id} style={{ padding: '4px 0' }}>
+                  <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 13 }}>
+                    <input
+                      type="checkbox"
+                      checked={triades.has(c.id)}
+                      onChange={(e) => setTriades((prev) => {
+                        const nou = new Set(prev)
+                        if (e.target.checked) nou.add(c.id)
+                        else nou.delete(c.id)
+                        return nou
+                      })}
+                    />
+                    <span>
+                      {c.nom} — <strong>{c.documents}</strong> registres
+                      {!c.sobreescriu && (
+                        <span className="nota" style={{ display: 'block', marginTop: 0 }}>
+                          Només s'hi afegirà el que falti: l'historial que ja hi ha no es toca.
+                        </span>
+                      )}
+                    </span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+
+            <p className="nota nota-avis" style={{ marginTop: 10 }}>
+              Les col·leccions sense l'avís de sobre <strong>se substituiran</strong> pel que hi
+              hagi al .zip. Si tens dubtes, fes una còpia nova abans de recuperar aquesta.
+            </p>
+
+            <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+              <input
+                type="text"
+                value={confirmaRestaura2}
+                onChange={(e) => setConfirmaRestaura2(e.target.value)}
+                placeholder="RECUPERA"
+                style={{ border: '1px solid var(--red)', borderRadius: 8, padding: '8px 10px', maxWidth: 160 }}
+              />
+              <button
+                type="button"
+                onClick={apliquaRestauracio}
+                disabled={confirmaRestaura2 !== 'RECUPERA' || triades.size === 0 || restaurantZip !== null}
+                className="btn-perill"
+              >
+                {restaurantZip ? `Recuperant… ${restaurantZip}` : 'Recupera les dades triades'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {resultatRestaura && (
+          <div className="caixa" style={{ marginTop: 14 }}>
+            <strong style={{ fontSize: 13 }}>Recuperació acabada</strong>
+            <ul style={{ fontSize: 13, marginTop: 8, paddingLeft: 18 }}>
+              {Object.entries(resultatRestaura.escrits).map(([col, n]) => (
+                <li key={col}>
+                  {col}: {n} registres recuperats
+                  {resultatRestaura.omesos[col] > 0 && (
+                    <span className="nota" style={{ display: 'inline', marginLeft: 6 }}>
+                      ({resultatRestaura.omesos[col]} ja hi eren i no s'han tocat)
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+            {resultatRestaura.errors.length > 0 && (
+              <ul style={{ fontSize: 13, color: 'var(--red)', marginTop: 8, paddingLeft: 18 }}>
+                {resultatRestaura.errors.map((e, i) => <li key={i}>{e}</li>)}
+              </ul>
+            )}
+          </div>
+        )}
+      </div>
+
     </div>
   )
 }
