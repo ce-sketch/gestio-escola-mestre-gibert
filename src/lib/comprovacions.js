@@ -19,6 +19,8 @@ import { NIVELLS_GRAU, festaBuida, mitjanaObjectiuGrup, mitjanaGrup, mitjanaGene
 import { escalaDeFormula, escalaDeText } from './excelLectura'
 import { indexAlumne, graellaAbsencies } from './indexAbsencies'
 import { primerNom, generaInformeQualitatiu } from './informeQualitatiu'
+import { cerca } from './cercaApp'
+import { nomAmbData } from './cursEscolar'
 import {
   cooperatiuBuit, grauNivell, grauCicle, grauGlobal, grauObjectiu, TOTS_ELS_NIVELLS,
 } from './aprenentatgeCooperatiu'
@@ -578,6 +580,50 @@ function grupInforme() {
   return { titol: 'Informe qualitatiu', proves }
 }
 
+
+// ── Buscador de l'Inici ─────────────────────────────────────────────────
+
+function grupCerca() {
+  const proves = []
+  const moduls = [
+    { id: 'avaluacio', label: 'Avaluació' }, { id: 'documentacio', label: 'Valoracions' },
+    { id: 'alumnes', label: 'Alumnes' }, { id: 'assistencia', label: 'Assistència' },
+    { id: 'absentisme', label: 'Absentisme' }, { id: 'pgac', label: 'PGAC' },
+  ]
+
+  proves.push(comprova(
+    'Buscar "castanyada" porta a les festes',
+    'documentacio',
+    () => cerca('castanyada', moduls)[0]?.modul
+  ))
+
+  proves.push(comprova(
+    'La cerca de dues paraules troba "Ajuts de menjador"',
+    'Ajuts de menjador',
+    () => cerca('ajuts menjador', moduls)[0]?.titol
+  ))
+
+  proves.push(comprova(
+    'Els accents no compten: "avaluacio" troba "Avaluació"',
+    true,
+    () => cerca('avaluacio', moduls).some((r) => r.modul === 'avaluacio')
+  ))
+
+  proves.push(comprova(
+    'No es proposa res de mòduls que aquest usuari no pot veure',
+    0,
+    () => cerca('ajuts', moduls.filter((m) => m.id !== 'alumnes')).length
+  ))
+
+  proves.push(comprova(
+    'El nom per defecte de la còpia porta data i hora',
+    'Còpia del 13/08/2026 a les 22:30',
+    () => nomAmbData(new Date(2026, 7, 13, 22, 30))
+  ))
+
+  return { titol: "Inici: buscador i còpies", proves }
+}
+
 export function executaComprovacions() {
-  return [grupPgac(), grupValoracions(), grupFestes(), grupCooperatiu(), grupAbsencies(), grupInforme(), grupEscales(), grupLectors()]
+  return [grupPgac(), grupValoracions(), grupFestes(), grupCooperatiu(), grupAbsencies(), grupInforme(), grupCerca(), grupEscales(), grupLectors()]
 }

@@ -29,3 +29,11 @@ export function nivellEscolarDe(curs) {
   const digit = curs.trim()[0]
   return NIVELLS_ESCOLARS.find((n) => n.id === digit)?.label ?? curs
 }
+
+/** El nom que es posa per defecte a una còpia: la data i l'hora d'ara,
+ *  perquè es pugui distingir de les altres sense haver-hi de pensar. */
+export function nomAmbData(ara = new Date()) {
+  const data = ara.toLocaleDateString('ca-ES', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  const hora = ara.toLocaleTimeString('ca-ES', { hour: '2-digit', minute: '2-digit' })
+  return `Còpia del ${data} a les ${hora}`
+}
