@@ -18,6 +18,7 @@ import { opcionsDe, ESCALES } from './escales'
 import { NIVELLS_GRAU, festaBuida, mitjanaObjectiuGrup, mitjanaGrup, mitjanaGeneralFesta } from './festesDetall'
 import { escalaDeFormula, escalaDeText } from './excelLectura'
 import { indexAlumne, graellaAbsencies } from './indexAbsencies'
+import { primerNom, generaInformeQualitatiu } from './informeQualitatiu'
 import {
   cooperatiuBuit, grauNivell, grauCicle, grauGlobal, grauObjectiu, TOTS_ELS_NIVELLS,
 } from './aprenentatgeCooperatiu'
@@ -498,6 +499,62 @@ function grupAbsencies() {
   return { titol: "Índex d'absències", proves }
 }
 
+
+// ── Informe qualitatiu ──────────────────────────────────────────────────
+
+function grupInforme() {
+  const proves = []
+
+  proves.push(comprova(
+    "De 'Cognom1 Cognom2, Nom' només se n'agafa el nom de fonts",
+    ['Aleix', 'Amélie', 'Marc'],
+    () => ['Torrades Barrantes, Aleix', 'Gómez Rico, Amélie', 'Marc Puig'].map(primerNom)
+  ))
+
+  const informe = () => generaInformeQualitatiu({
+    nom: 'Torrades Barrantes, Aleix',
+    trimestres: ['1r', '2n', '3r'],
+    teePerTrimestre: {
+      '1r': { global: 'as', criteris: { coherencia: 'an', presentacio: 'na' } },
+      '2n': { global: 'an', criteris: { coherencia: 'ae', presentacio: 'as' } },
+      '3r': { global: 'an', criteris: { coherencia: 'ae', ortografia: 'as' } },
+    },
+    criterisTee: [{ id: 'coherencia' }, { id: 'presentacio' }, { id: 'ortografia' }],
+    nivellsCicle: [
+      { id: 'ae', label: 'AE', punts: 1 }, { id: 'an', label: 'AN', punts: 2 },
+      { id: 'as', label: 'AS', punts: 3 }, { id: 'na', label: 'NA', punts: 4 },
+    ],
+    momentsLectura: [
+      { id: 'inicial', label: 'Avaluació Inicial', teCL: false },
+      { id: 'final', label: 'Avaluació Final', teCL: true },
+    ],
+    lecturaPerMoment: {
+      inicial: { vl: 62, nivellVl: 'Baix' },
+      final: { vl: 84, nivellVl: 'Mitjà', cl: 6, nivellCl: 'Mitjà' },
+    },
+  })
+
+  proves.push(comprova(
+    "El nom no surt més de dues vegades a tot l'informe",
+    true,
+    () => (informe().match(/Aleix/g) ?? []).length <= 2
+  ))
+
+  proves.push(comprova(
+    "Els cognoms no apareixen enlloc de l'informe",
+    false,
+    () => /Torrades|Barrantes/.test(informe())
+  ))
+
+  proves.push(comprova(
+    "L'article s'apostrofa davant de vocal (a l'avaluació, no a la avaluació)",
+    false,
+    () => /a la avaluació/i.test(informe())
+  ))
+
+  return { titol: 'Informe qualitatiu', proves }
+}
+
 export function executaComprovacions() {
-  return [grupPgac(), grupValoracions(), grupFestes(), grupCooperatiu(), grupAbsencies(), grupEscales(), grupLectors()]
+  return [grupPgac(), grupValoracions(), grupFestes(), grupCooperatiu(), grupAbsencies(), grupInforme(), grupEscales(), grupLectors()]
 }
