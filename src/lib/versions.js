@@ -5,7 +5,7 @@
 
 import { collection, doc, getDocs, limit, orderBy, query, serverTimestamp, setDoc, writeBatch } from 'firebase/firestore'
 import { db, auth } from '../firebase'
-import { cursEscolarActual } from './cursEscolar'
+import { cursEscolarActual, nomAmbData } from './cursEscolar'
 
 export async function carregaVersions(n = 10) {
   try {
@@ -20,7 +20,7 @@ export async function desaVersio(nom) {
   const alumnesSnap = await getDocs(collection(db, 'alumnes'))
   const alumnes = alumnesSnap.docs.map((d) => ({ id: d.id, ...d.data() }))
   await setDoc(doc(collection(db, 'versions')), {
-    nom: nom?.trim() || `Còpia del ${new Date().toLocaleDateString('ca-ES')}`,
+    nom: nom?.trim() || nomAmbData(),
     cursEscolar: cursEscolarActual(),
     creatEl: serverTimestamp(),
     creatPer: auth.currentUser?.email ?? null,
