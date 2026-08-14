@@ -511,8 +511,8 @@ function grupInforme() {
     () => ['Torrades Barrantes, Aleix', 'Gómez Rico, Amélie', 'Marc Puig'].map(primerNom)
   ))
 
-  const informe = () => generaInformeQualitatiu({
-    nom: 'Torrades Barrantes, Aleix',
+  const informe = (qui = 'Torrades Barrantes, Aleix') => generaInformeQualitatiu({
+    nom: qui,
     trimestres: ['1r', '2n', '3r'],
     teePerTrimestre: {
       '1r': { global: 'as', criteris: { coherencia: 'an', presentacio: 'na' } },
@@ -544,6 +544,29 @@ function grupInforme() {
     "Els cognoms no apareixen enlloc de l'informe",
     false,
     () => /Torrades|Barrantes/.test(informe())
+  ))
+
+  proves.push(comprova(
+    'El mateix alumne genera sempre el mateix text',
+    true,
+    () => {
+      // Generar-lo dues vegades ha de donar el mateix: si el text canviés
+      // cada cop que s'obre l'informe, ningú s'hi podria refiar.
+      const primera = informe()
+      const segona = informe()
+      return primera === segona
+    }
+  ))
+
+  proves.push(comprova(
+    'Dotze alumnes amb notes idèntiques donen dotze textos diferents',
+    12,
+    () => {
+      const noms = ['Torrades, Aleix', 'Gómez, Amélie', 'Puig, Bernat', 'Roca, Clara',
+        'Vila, Dídac', 'Mas, Elna', 'Serra, Ferran', 'Costa, Gisela',
+        'Font, Hug', 'Prat, Irene', 'Sala, Jan', 'Ribas, Laia']
+      return new Set(noms.map((n) => informe(n))).size
+    }
   ))
 
   proves.push(comprova(
