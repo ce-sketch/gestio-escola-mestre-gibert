@@ -17,6 +17,7 @@ import { mitjanaObjectiu, mitjanaValoracio, pendentsValoracio, valoracioBuida } 
 import { opcionsDe, ESCALES } from './escales'
 import { NIVELLS_GRAU, festaBuida, mitjanaObjectiuGrup, mitjanaGrup, mitjanaGeneralFesta } from './festesDetall'
 import { escalaDeFormula, escalaDeText } from './excelLectura'
+import { indexAlumne, graellaAbsencies } from './indexAbsencies'
 import {
   cooperatiuBuit, grauNivell, grauCicle, grauGlobal, grauObjectiu, TOTS_ELS_NIVELLS,
 } from './aprenentatgeCooperatiu'
@@ -441,6 +442,62 @@ function grupCooperatiu() {
   return { titol: 'Aprenentatge cooperatiu', proves }
 }
 
+
+// ── Índex d'absències ───────────────────────────────────────────────────
+// Els números surten del full "Assistència" de l'Eina d'avaluació, on un
+// alumne amb 31 sessions d'absència sobre 162 té un índex del 19,14%.
+
+function grupAbsencies() {
+  const proves = []
+  const absencies = (n, estat, prefix = 'x') =>
+    Array.from({ length: n }, (_, i) => ({
+      alumneId: 'a1', data: `2026-10-${String(i + 1).padStart(2, '0')}`,
+      torn: prefix, estat,
+    }))
+
+  proves.push(comprova(
+    "31 absències sobre 162 sessions donen el 19,14% del full",
+    19.14,
+    () => Math.round(indexAlumne(absencies(31, 'absent_justificat'), 162).total * 10000) / 100
+  ))
+
+  proves.push(comprova(
+    "8 absències sense justificar sobre 162 donen el 4,94% del full",
+    4.94,
+    () => Math.round(indexAlumne(absencies(8, 'absent_injustificat'), 162).injustificades * 10000) / 100
+  ))
+
+  proves.push(comprova(
+    'Una absència corregida després a present ja no compta',
+    0,
+    () => indexAlumne([
+      { alumneId: 'a', data: '2026-10-01', torn: 'mati', estat: 'absent_injustificat', creatEl: { seconds: 100 } },
+      { alumneId: 'a', data: '2026-10-01', torn: 'mati', estat: 'present', creatEl: { seconds: 200 } },
+    ], 162).absencies
+  ))
+
+  proves.push(comprova(
+    'La graella compta els alumnes per sobre de cada llindar',
+    { deu: 2, vint: 1 },
+    () => {
+      const alumnes = [
+        { id: '1', nom: 'A', curs: 'I3 A' },
+        { id: '2', nom: 'B', curs: 'I3 A' },
+        { id: '3', nom: 'C', curs: 'I3 A' },
+      ]
+      const registres = [
+        ...absencies(50, 'absent_justificat').map((r) => ({ ...r, alumneId: '1' })),
+        ...absencies(25, 'absent_justificat').map((r) => ({ ...r, alumneId: '2', torn: 'y' })),
+        ...absencies(5, 'absent_justificat').map((r) => ({ ...r, alumneId: '3', torn: 'z' })),
+      ]
+      const g = graellaAbsencies({ alumnes, registres, sessions: 162 })
+      return { deu: g.total.llindars[10], vint: g.total.llindars[25] }
+    }
+  ))
+
+  return { titol: "Índex d'absències", proves }
+}
+
 export function executaComprovacions() {
-  return [grupPgac(), grupValoracions(), grupFestes(), grupCooperatiu(), grupEscales(), grupLectors()]
+  return [grupPgac(), grupValoracions(), grupFestes(), grupCooperatiu(), grupAbsencies(), grupEscales(), grupLectors()]
 }
