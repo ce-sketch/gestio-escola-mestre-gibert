@@ -102,7 +102,9 @@ export default function InformeCatala() {
       if (reg) lecturaPerMoment[m.id] = reg
     }
     const text = generaInformeQualitatiu({
-      nom: alumneActual.nom.split(',').reverse().join(' ').trim(), // "Cognoms, Nom" -> "Nom Cognoms"
+      // El generador ja se n'agafa només el nom de fonts: als informes
+      // d'infants no hi posem els cognoms.
+      nom: alumneActual.nom,
       trimestres: TRIMESTRES,
       teePerTrimestre,
       criterisTee: CRITERIS_TEE,
