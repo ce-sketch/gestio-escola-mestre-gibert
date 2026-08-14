@@ -5,6 +5,7 @@ import { comptaDiesLectius } from '../../lib/calendar'
 import { carregaRegistresPeriode, calculaIndexos, nivellAlerta } from '../../lib/absentisme'
 import { cursEscolarActual } from '../../lib/cursEscolar'
 import { enviaAvis, WORKER_AVISOS_URL } from '../../lib/email'
+import GraellaAbsencies from './GraellaAbsencies'
 
 const CURS_ESCOLAR = cursEscolarActual()
 
@@ -372,6 +373,8 @@ export default function Absentisme() {
           {missatge.text}
         </p>
       )}
+      <GraellaAbsencies cursEscolarId={CURS_ESCOLAR} calendari={calendari} />
+
     </div>
   )
 }
