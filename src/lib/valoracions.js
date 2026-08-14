@@ -58,14 +58,19 @@ export const NOMS_SUGGERITS = [
   'Comissió TAC', 'Comissió Material', 'Comissió Anglès', 'Comissió Biblioteca',
   'Comissió Espais',
   "Equip d'Atenció a la Diversitat", 'Coordinació de Riscos Laborals', 'Equip LIC',
-  // Aquestes dues no són comissions però els seus fulls tenen la mateixa
-  // estructura (Resum + un full per objectiu), així que van aquí mateix.
-  'Equip Directiu', 'Jardins. AREP',
+  // L'Equip Directiu no és una comissió, però el seu full té la mateixa
+  // estructura (Resum + un full per objectiu), així que va aquí mateix.
+  'Equip Directiu',
 ]
 
 // Comissions mixtes (amb participació de famílies/AFA) — es mostren en un
 // botó a part dins de Valoracions, en comptes de barrejar-se amb la resta.
-export const NOMS_AFA = ['Comissió Comunicació', 'Comissió Espai de migdia', 'Comissió de Transformem els Patis']
+// L'AREP hi va perquè és un projecte amb una entitat de fora de l'escola,
+// com les altres tres tenen participació de famílies o de l'AFA.
+export const NOMS_AFA = [
+  'Comissió Comunicació', 'Comissió Espai de migdia',
+  'Comissió de Transformem els Patis', 'Jardins. AREP',
+]
 
 /**
  * Resultat d'un objectiu, tal com el calculen els fulls originals:
