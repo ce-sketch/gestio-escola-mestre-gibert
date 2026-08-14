@@ -17,6 +17,9 @@ import { mitjanaObjectiu, mitjanaValoracio, pendentsValoracio, valoracioBuida } 
 import { opcionsDe, ESCALES } from './escales'
 import { NIVELLS_GRAU, festaBuida, mitjanaObjectiuGrup, mitjanaGrup, mitjanaGeneralFesta } from './festesDetall'
 import { escalaDeFormula, escalaDeText } from './excelLectura'
+import {
+  cooperatiuBuit, grauNivell, grauCicle, grauGlobal, grauObjectiu, TOTS_ELS_NIVELLS,
+} from './aprenentatgeCooperatiu'
 
 const arrodoneix = (n) => (typeof n === 'number' ? Math.round(n * 100) / 100 : n)
 
@@ -217,6 +220,12 @@ function grupEscales() {
   ))
 
   proves.push(comprova(
+    "El recompte 0-4 de l'AREP val 0 / 25 / 50 / 75 / 100",
+    [0, 25, 50, 75, 100],
+    () => opcionsDe({ escala: 'recompte4' }).map((o) => o.valor)
+  ))
+
+  proves.push(comprova(
     'Cap escala del catàleg té dos cops el mateix percentatge',
     true,
     () => ESCALES.every((e) => new Set(e.opcions.map((o) => o.valor)).size === e.opcions.length)
@@ -247,6 +256,12 @@ function grupLectors() {
     'Llegeix una actuació binària',
     [0, 100],
     () => escalaDeFormula('if(F9="no fet", 0%, if(F9="fet", 100%))').map((o) => o.valor)
+  ))
+
+  proves.push(comprova(
+    "Llegeix el recompte de sessions del full de l'AREP",
+    [0, 25, 50, 75, 100],
+    () => escalaDeFormula('if(F7=0,0%, if(F7=1,25%, if(F7=2,50%, if(F7=3,75%, if(F7=4,100%)))))').map((o) => o.valor)
   ))
 
   proves.push(comprova(
@@ -354,6 +369,78 @@ function grupFestes() {
 
 // ── Punts oberts, marcats a posta com a pendents ────────────────────────
 
+
+// ── Aprenentatge cooperatiu ─────────────────────────────────────────────
+// Els pesos surten del full "APRENENTATGE COOPERATIU" de l'Eina
+// d'avaluació: objectius 30/30/40 i els quatre cicles al 25%.
+
+function grupCooperatiu() {
+  const proves = []
+  const posa = (d, nivell, vals) => {
+    d.valors[nivell].linia.gener = vals[0]
+    d.valors[nivell].metodologia.gener = vals[1]
+    d.valors[nivell].projectes.gener = vals[2]
+    return d
+  }
+
+  proves.push(comprova(
+    'Els tres objectius pesen 30 / 30 / 40',
+    [30, 30, 40],
+    () => cooperatiuBuit().objectius.map((o) => o.pes)
+  ))
+
+  proves.push(comprova(
+    'Els nou nivells van d\'I-3 a 6è',
+    ['I-3', 'I-4', 'I-5', '1r', '2n', '3r', '4t', '5è', '6è'],
+    () => TOTS_ELS_NIVELLS
+  ))
+
+  proves.push(comprova(
+    'Tot al 100% dona 100% global',
+    100,
+    () => {
+      const d = cooperatiuBuit()
+      TOTS_ELS_NIVELLS.forEach((n) => posa(d, n, [100, 100, 100]))
+      return grauGlobal(d, 'gener')
+    }
+  ))
+
+  proves.push(comprova(
+    'Només el tercer objectiu fet en un nivell dona el 40% del seu pes',
+    40,
+    () => grauNivell(posa(cooperatiuBuit(), 'I-3', [0, 0, 100]), 'I-3', 'gener')
+  ))
+
+  proves.push(comprova(
+    'Un cicle sencer al 100% aporta el seu 25% al global',
+    25,
+    () => {
+      const d = cooperatiuBuit()
+      posa(d, '1r', [100, 100, 100])
+      posa(d, '2n', [100, 100, 100])
+      return grauGlobal(d, 'gener')
+    }
+  ))
+
+  proves.push(comprova(
+    "El grau del cicle és la mitjana dels seus nivells, no la suma",
+    13.33,
+    () => grauCicle(posa(cooperatiuBuit(), 'I-3', [0, 0, 100]), 'ei', 'gener')
+  ))
+
+  proves.push(comprova(
+    "El grau d'un objectiu concret respecta el pes dels cicles",
+    80,
+    () => {
+      const d = cooperatiuBuit()
+      TOTS_ELS_NIVELLS.forEach((n) => posa(d, n, [80, 0, 0]))
+      return grauObjectiu(d, 'linia', 'gener')
+    }
+  ))
+
+  return { titol: 'Aprenentatge cooperatiu', proves }
+}
+
 export function executaComprovacions() {
-  return [grupPgac(), grupValoracions(), grupFestes(), grupEscales(), grupLectors()]
+  return [grupPgac(), grupValoracions(), grupFestes(), grupCooperatiu(), grupEscales(), grupLectors()]
 }

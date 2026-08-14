@@ -55,7 +55,9 @@ function llegeixComissio(wb, fullsObjectiu) {
     return ''
   }
 
-  const nom = camp('Departament/comissió/servei')
+  // Els fulls no diuen tots el mateix: les comissions posen
+  // "Departament/comissió/servei:" i l'AREP, "Projecte:".
+  const nom = camp('Departament/comissió/servei') || camp('^Projecte')
   const objectius = []
 
   // Els fulls van "Objectiu 1", "Objectiu 2"… i cal ordenar-los pel número,

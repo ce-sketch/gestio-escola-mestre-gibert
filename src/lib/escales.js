@@ -175,6 +175,18 @@ export const ESCALES = [
     ],
   },
   {
+    id: 'recompte4',
+    nom: 'Recompte de 0 a 4 (de 25 en 25)',
+    ajuda: "Surt al full de l'AREP per comptar sessions del taller de jardineria.",
+    opcions: [
+      { id: 'r0', label: '0', valor: 0 },
+      { id: 'r1', label: '1', valor: 25 },
+      { id: 'r2', label: '2', valor: 50 },
+      { id: 'r3', label: '3', valor: 75 },
+      { id: 'r4', label: '4', valor: 100 },
+    ],
+  },
+  {
     id: 'recompte10',
     nom: 'Recompte de 0 a 10 (de 10 en 10)',
     ajuda: 'Surt a la Comissió TAC per comptar elements: 0 = 0%, 5 = 50%, 10 = 100%.',
