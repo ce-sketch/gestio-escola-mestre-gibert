@@ -21,6 +21,7 @@ import { indexAlumne, graellaAbsencies } from './indexAbsencies'
 import { primerNom, generaInformeQualitatiu } from './informeQualitatiu'
 import { cerca } from './cercaApp'
 import { llegeixCosmos, resumClasse, rendimentAPercentatge } from './cosmosParser'
+import { claueDeNom, nivellAPercentatge, distribucio, casaAmbAlumnes } from './conmatParser'
 import { nomAmbData } from './cursEscolar'
 import {
   cooperatiuBuit, grauNivell, grauCicle, grauGlobal, grauObjectiu, TOTS_ELS_NIVELLS,
@@ -679,6 +680,73 @@ function grupCosmos() {
   return { titol: 'COSMOS (Innovamat)', proves }
 }
 
+
+// ── ConMat (Innovamat) ──────────────────────────────────────────────────
+// El PDF dona els noms enganxats i en ordre invers al de la fitxa d'alumne.
+// Casar-los bé és el punt més delicat de tot el lector.
+
+function grupConmat() {
+  const proves = []
+
+  proves.push(comprova(
+    "Els noms del PDF casen amb els de la fitxa tot i venir enganxats i invertits",
+    [true, true, true],
+    () => [
+      ['AhmedHaniya', 'Ahmed, Haniya'],
+      ['AndrésRubioIan', 'Andrés Rubio, Ian'],
+      ['GómezRicoAmélie', 'Gómez Rico, Amélie'],
+    ].map(([pdf, fitxa]) => claueDeNom(pdf) === claueDeNom(fitxa))
+  ))
+
+  proves.push(comprova(
+    'Dos alumnes diferents no es confonen entre ells',
+    false,
+    () => claueDeNom('GarciaPerePau') === claueDeNom('Garcia Pere, Pol')
+  ))
+
+  proves.push(comprova(
+    "L'escala del ConMat va de 25 en 25",
+    [25, 50, 75, 100],
+    () => ['Baix', 'Mitjà-baix', 'Mitjà-alt', 'Alt'].map(nivellAPercentatge)
+  ))
+
+  proves.push(comprova(
+    'Un nivell que no es reconeix no es converteix en cap número',
+    null,
+    () => nivellAPercentatge('Vés a saber')
+  ))
+
+  proves.push(comprova(
+    'La distribució de 3rB del curs 25-26 quadra amb el PDF',
+    '27 · alt 8 · mitjà-alt 7 · mitjà-baix 4 · baix 8',
+    () => {
+      const alumnes = [
+        ...Array(8).fill({ nivell: 'Alt' }), ...Array(7).fill({ nivell: 'Mitjà-alt' }),
+        ...Array(4).fill({ nivell: 'Mitjà-baix' }), ...Array(8).fill({ nivell: 'Baix' }),
+      ]
+      const d = distribucio(alumnes)
+      // En text i no com a objecte: comparar objectes faria dependre la
+      // prova de l'ordre de les claus, que no té cap importància.
+      return `${d.total} · alt ${d.recompte.alt} · mitjà-alt ${d.recompte.mitja_alt} · mitjà-baix ${d.recompte.mitja_baix} · baix ${d.recompte.baix}`
+    }
+  ))
+
+  proves.push(comprova(
+    "Els alumnes que no casen queden a part i no es desen",
+    { casats: 1, sensCasar: 1 },
+    () => {
+      const r = casaAmbAlumnes(
+        [{ nomPdf: 'AhmedHaniya', clau: claueDeNom('AhmedHaniya') },
+         { nomPdf: 'AlgúQueNoHiEs', clau: claueDeNom('AlgúQueNoHiEs') }],
+        [{ id: 'x1', nom: 'Ahmed, Haniya' }]
+      )
+      return { casats: r.casats.length, sensCasar: r.sensCasar.length }
+    }
+  ))
+
+  return { titol: 'ConMat (Innovamat)', proves }
+}
+
 export function executaComprovacions() {
-  return [grupPgac(), grupValoracions(), grupFestes(), grupCooperatiu(), grupAbsencies(), grupInforme(), grupCerca(), grupCosmos(), grupEscales(), grupLectors()]
+  return [grupPgac(), grupValoracions(), grupFestes(), grupCooperatiu(), grupAbsencies(), grupInforme(), grupCerca(), grupCosmos(), grupConmat(), grupEscales(), grupLectors()]
 }

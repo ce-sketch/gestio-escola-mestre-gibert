@@ -15,6 +15,8 @@ export const DESTINACIONS = [
     paraules: ['tee', 'text escrit', 'expressió escrita', 'redacció', 'ortografia', 'rúbrica'] },
   { modul: 'avaluacio', nom: 'Lectura: velocitat i comprensió', on: 'Avaluació',
     paraules: ['lectura', 'velocitat lectora', 'vl', 'comprensió lectora', 'cl', 'paraules per minut'] },
+  { modul: 'avaluacio', nom: 'Matemàtiques (ConMat i COSMOS)', on: 'Avaluació',
+    paraules: ['matemàtiques', 'conmat', 'cosmos', 'innovamat', 'càlcul', 'numeració'] },
   { modul: 'avaluacio', nom: "Nota d'àrea de Català", on: 'Avaluació',
     paraules: ['nota àrea', 'català', 'llengua catalana', 'qualificació'] },
   { modul: 'avaluacio', nom: 'Notes generals', on: 'Avaluació',
