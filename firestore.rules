@@ -158,6 +158,12 @@ service cloud.firestore {
     // pot llegir (per saber quines opcions els han de sortir).
     // Aprenentatge cooperatiu: un document per curs escolar. L'omplen els
     // cicles, com la resta de valoracions.
+    // Matemàtiques: resultats del ConMat i del COSMOS, un document per
+    // alumne i curs. Es pugen dels informes de l'Innovamat.
+    match /matematiques/{registreId} {
+      allow read, write: if esComptePersonal();
+    }
+
     match /aprenentatgeCooperatiu/{cursEscolarId} {
       allow read, write: if esComptePersonal();
     }
