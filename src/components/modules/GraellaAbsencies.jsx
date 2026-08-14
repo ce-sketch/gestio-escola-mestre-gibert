@@ -96,7 +96,7 @@ export default function GraellaAbsencies({ cursEscolarId, calendari }) {
     .find((g) => g.grup === obert.grup)?.quiSupera[obert.llindar]
 
   return (
-    <div style={{ marginTop: 28 }}>
+    <div style={{ marginTop: 20 }}>
       <h3 style={{ fontSize: 16 }}>Índex d'absències del centre</h3>
       <p className="nota" style={{ maxWidth: '100%' }}>
         Quants alumnes de cada grup superen el 10% i el 25% d'absències, calculat sobre els dies

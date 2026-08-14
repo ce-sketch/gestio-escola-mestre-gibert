@@ -201,6 +201,8 @@ export default function Absentisme() {
         superen el 10% o el 25% (calculat sobre absències i retards sense justificar).
       </p>
 
+      <GraellaAbsencies cursEscolarId={CURS_ESCOLAR} calendari={calendari} />
+
       {!WORKER_AVISOS_URL && (
         <div className="placeholder-box" style={{ borderStyle: 'solid', marginTop: 16, borderColor: 'var(--amber-dark)' }}>
           <strong>El servei d'enviament de correus encara no està configurat.</strong> Pots consultar
@@ -373,8 +375,6 @@ export default function Absentisme() {
           {missatge.text}
         </p>
       )}
-      <GraellaAbsencies cursEscolarId={CURS_ESCOLAR} calendari={calendari} />
-
     </div>
   )
 }
