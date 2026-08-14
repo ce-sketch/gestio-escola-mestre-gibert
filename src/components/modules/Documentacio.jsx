@@ -7,6 +7,7 @@ import { carregaConfigValoracions } from '../../lib/valoracionsConfig'
 import ValoracioObjectius from './valoracions/ValoracioObjectius'
 import ValoracioFesta from './valoracions/ValoracioFesta'
 import ValoracioActivitats from './valoracions/ValoracioActivitats'
+import ValoracioCooperatiu from './valoracions/ValoracioCooperatiu'
 
 /**
  * Mòdul "Valoracions". Aquest fitxer només fa de contenidor: el curs
@@ -16,7 +17,7 @@ import ValoracioActivitats from './valoracions/ValoracioActivitats'
  */
 export default function Documentacio() {
   const [cursEscolarId, setCursEscolarId] = useState(cursEscolarActual())
-  const [tipus, setTipus] = useState('cicle') // cicle · comissio · afa · festa · activitats
+  const [tipus, setTipus] = useState('cicle') // cicle · comissio · afa · festa · activitats · cooperatiu
   const [nom, setNom] = useState('')
   const [festaId, setFestaId] = useState('')
   const [cicleActivitats, setCicleActivitats] = useState('')
@@ -44,20 +45,7 @@ export default function Documentacio() {
     <div className="module">
       <h2>Valoracions</h2>
 
-      <div style={{ marginTop: 8 }}>
-        <p className="module-eyebrow">Mòdul en construcció</p>
-        <p className="module-lead">
-          Aquí es guardaran també els documents de cada alumne (autoritzacions, informes,
-          certificats). Els fitxers s'emmagatzemaran a Cloudflare R2, i cada document quedarà
-          enllaçat a l'alumne corresponent sense afectar la resta del mòdul.
-        </p>
-        <div className="placeholder-box">
-          Properament: pujada de documents, categorització per tipus i cerca per alumne.
-        </div>
-      </div>
-
-      <div style={{ marginTop: 32, borderTop: '1px solid var(--line)', paddingTop: 20 }}>
-        <h3 style={{ marginTop: 4, fontSize: 18 }}>Valoracions</h3>
+      <div>
         <p className="module-lead" style={{ maxWidth: '100%' }}>
           Cicles, comissions i equips, comissions mixtes (amb l'AFA), festes i celebracions, i
           activitats complementàries — tria la pestanya que et correspongui. Mateixa estructura
@@ -119,10 +107,20 @@ export default function Documentacio() {
           >
             Activitats complementàries
           </button>
+          <button
+            type="button"
+            onClick={() => { setTipus('cooperatiu'); setNom('') }}
+            className={tipus === 'cooperatiu' ? 'btn-primary' : 'btn-ghost'}
+            style={{ maxWidth: 220 }}
+          >
+            Aprenentatge cooperatiu
+          </button>
         </div>
 
         <div style={{ marginTop: 12 }}>
-          {tipus === 'cicle' ? (
+          {/* L'aprenentatge cooperatiu és un de sol per curs: no hi ha res
+              a triar i el selector no hi pinta res. */}
+          {tipus === 'cooperatiu' ? null : tipus === 'cicle' ? (
             <label className="field" style={{ maxWidth: 320 }}>
               <span>Cicle</span>
               <select
@@ -193,7 +191,9 @@ export default function Documentacio() {
         </div>
 
 
-        {tipus === 'festa' ? (
+        {tipus === 'cooperatiu' ? (
+          <ValoracioCooperatiu cursEscolarId={cursEscolarId} />
+        ) : tipus === 'festa' ? (
           <ValoracioFesta cursEscolarId={cursEscolarId} festaId={festaId} />
         ) : tipus === 'activitats' ? (
           <ValoracioActivitats cursEscolarId={cursEscolarId} cicleActivitats={cicleActivitats} />
