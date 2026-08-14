@@ -20,6 +20,7 @@ import { escalaDeFormula, escalaDeText } from './excelLectura'
 import { indexAlumne, graellaAbsencies } from './indexAbsencies'
 import { primerNom, generaInformeQualitatiu } from './informeQualitatiu'
 import { cerca } from './cercaApp'
+import { llegeixCosmos, resumClasse, rendimentAPercentatge } from './cosmosParser'
 import { nomAmbData } from './cursEscolar'
 import {
   cooperatiuBuit, grauNivell, grauCicle, grauGlobal, grauObjectiu, TOTS_ELS_NIVELLS,
@@ -624,6 +625,60 @@ function grupCerca() {
   return { titol: "Inici: buscador i còpies", proves }
 }
 
+
+// ── COSMOS (Innovamat) ──────────────────────────────────────────────────
+
+function grupCosmos() {
+  const proves = []
+  const csv = [
+    "Nom,Cognoms,Resultat de la intervenció,Mitjana setmanal de sessions (intervenció),Data del COSMOS inicial,COSMOS inicial completat,Fiabilitat dels resultats del COSMOS inicial,Puntuació habilitats numèriques COSMOS inicial,Rendiment habilitats numèriques COSMOS inicial,Percentil fluïdesa aritmètica COSMOS inicial,Rendiment fluïdesa aritmètica COSMOS inicial,Data del COSMOS final,COSMOS final completat,Fiabilitat dels resultats del COSMOS final,Puntuació habilitats numèriques COSMOS final,Rendiment habilitats numèriques COSMOS final,Percentil fluïdesa aritmètica COSMOS final,Rendiment fluïdesa aritmètica COSMOS final",
+    "Alba,Prims,,,2025-10-20,Sí,Resultats fiables,2.68,Alt,98,Alt,2026-05-04,Sí,Resultats fiables,3.00,Alt,99,Alt",
+    "Bru,Segon,Èxit,2.5625,2025-10-20,Sí,Resultats fiables,1.14,Mitjà,25,Baix,2026-05-04,Sí,Resultats fiables,1.65,Mitjà,37,Mitjà",
+    "Dana,Quart,,,2025-10-20,No,-,,,,,2026-05-04,No,-,,,,",
+  ].join('\n')
+
+  proves.push(comprova(
+    'Les dimensions es dedueixen de la capçalera, no estan clavades al codi',
+    ['fluïdesa aritmètica'],
+    () => llegeixCosmos(csv).dimensions.map((d) => d.nom)
+  ))
+
+  proves.push(comprova(
+    "L'identificador de la dimensió conserva les lletres, sense accents",
+    'fluidesa_aritmetica',
+    () => llegeixCosmos(csv).dimensions[0].id
+  ))
+
+  proves.push(comprova(
+    'Un alumne sense la prova feta es marca com a no completada',
+    false,
+    () => llegeixCosmos(csv).alumnes.find((a) => a.nom === 'Dana').moments.final.completat
+  ))
+
+  proves.push(comprova(
+    'El nom es guarda com a "Cognoms, Nom", com a la resta de l\'app',
+    'Prims, Alba',
+    () => llegeixCosmos(csv).alumnes[0].nomComplet
+  ))
+
+  proves.push(comprova(
+    'El resum compta els alumnes que milloren entre les dues proves',
+    { total: 3, ambTotesDues: 2, milloren: 2 },
+    () => {
+      const r = resumClasse(llegeixCosmos(csv).alumnes)
+      return { total: r.total, ambTotesDues: r.ambTotesDues, milloren: r.milloren }
+    }
+  ))
+
+  proves.push(comprova(
+    "L'escala Baix/Mitjà/Alt es pot llegir com a percentatge",
+    [33, 66, 100],
+    () => ['Baix', 'Mitjà', 'Alt'].map(rendimentAPercentatge)
+  ))
+
+  return { titol: 'COSMOS (Innovamat)', proves }
+}
+
 export function executaComprovacions() {
-  return [grupPgac(), grupValoracions(), grupFestes(), grupCooperatiu(), grupAbsencies(), grupInforme(), grupCerca(), grupEscales(), grupLectors()]
+  return [grupPgac(), grupValoracions(), grupFestes(), grupCooperatiu(), grupAbsencies(), grupInforme(), grupCerca(), grupCosmos(), grupEscales(), grupLectors()]
 }
