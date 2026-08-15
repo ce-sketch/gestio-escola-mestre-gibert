@@ -9,12 +9,7 @@ import {
 import { activitatsDelCicle } from '../../../lib/activitatsComplementariesParser'
 import { descarregaDocumentSortides, URL_DOC_SORTIDES } from '../../../lib/documentSortides'
 import BotoDrive from '../../BotoDrive'
-
-// El `xlsx` pesa 429 kB i només fa falta quan algú puja un fitxer. Es
-// carrega en aquell moment, no en obrir el mòdul.
-async function carregaXLSX() {
-  return import('xlsx')
-}
+import { carregaXLSX } from '../../../lib/carregaLlibreries'
 
 /** Valoració de les activitats complementàries d'un cicle, amb els 10
  *  criteris de la plantilla oficial de sortides. */
