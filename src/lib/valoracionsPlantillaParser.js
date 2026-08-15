@@ -15,9 +15,9 @@
 // objectiu es valora amb un percentatge directe.
 
 
-import {
-  carregaExcelJS, text, formula, neteja, escalaDeFormula, identificaEscala,
+import { text, formula, neteja, escalaDeFormula, identificaEscala,
 } from './excelLectura'
+import { carregaExcelJS } from './carregaLlibreries'
 
 /**
  * @param {ArrayBuffer} buffer  el .xlsx pujat

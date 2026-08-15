@@ -1,6 +1,6 @@
 // Text real dels objectius (i, quan es coneixen, les actuacions) de cada
 // cicle/comissió/equip, tal com surten a les plantilles del curs 2026-27.
-// Nomès s'utilitza com a punt de partida la primera vegada que s'obre
+// Només s'utilitza com a punt de partida la primera vegada que s'obre
 // aquell nom EXACTE en aquest curs concret — després tot és lliurement
 // editable. Per a qualsevol altre curs escolar (27-28 i següents), o per a
 // un nom que no hi surti aquí, es comença en blanc.

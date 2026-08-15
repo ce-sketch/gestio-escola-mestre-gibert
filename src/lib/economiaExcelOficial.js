@@ -1,3 +1,4 @@
+import { carregaExcelJS } from './carregaLlibreries'
 import { ENSENYAMENTS, CONCEPTES, conceptaBuit } from './economia'
 
 const BLAU = 'FF1E3A5F'
@@ -23,12 +24,6 @@ function estilCapçalera(cell) {
   cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true }
 }
 
-// L'exceljs pesa gairebé un mega. Es carrega només quan de debò cal
-// (exportar o llegir un fitxer), no en obrir l'app: així la primera càrrega
-// no l'arrossega.
-async function carregaExcelJS() {
-  return (await import('exceljs')).default
-}
 
 /**
  * Genera l'Excel amb la mateixa estructura, capçaleres i fórmules que la

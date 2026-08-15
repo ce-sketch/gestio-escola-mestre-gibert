@@ -1,3 +1,4 @@
+import { carregaExcelJS } from './carregaLlibreries'
 import { afegeixCapcalera, ajustaColumnes, NOM_ESCOLA } from './excelCapcalera'
 
 const BLAU_ESCOLA = 'FF1E3A5F' // mateix blau marí de l'app (--navy)
@@ -32,12 +33,6 @@ function comprovaDades(dades, nomFuncio) {
   return { cursEscolarId: dades.cursEscolarId, fulls: dades.fulls ?? [] }
 }
 
-// L'exceljs pesa gairebé un mega. Es carrega només quan de debò cal
-// (exportar o llegir un fitxer), no en obrir l'app: així la primera càrrega
-// no l'arrossega.
-async function carregaExcelJS() {
-  return (await import('exceljs')).default
-}
 
 export async function exportaExcel(nomFitxer, dades) {
   const ExcelJS = await carregaExcelJS()

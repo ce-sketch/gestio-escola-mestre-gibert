@@ -14,7 +14,8 @@
 //
 // Per això aquí es fa servir `escalaDeText` i no `escalaDeFormula`.
 
-import { carregaExcelJS, text, neteja, escalaDeText, identificaEscala } from './excelLectura'
+import { text, neteja, escalaDeText, identificaEscala } from './excelLectura'
+import { carregaExcelJS } from './carregaLlibreries'
 import { OBJECTIUS_COOPERATIU, TOTS_ELS_NIVELLS } from './aprenentatgeCooperatiu'
 
 /** Al document els nivells d'infantil es diuen P-3, P-4 i P-5; a l'app,

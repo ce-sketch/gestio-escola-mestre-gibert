@@ -23,16 +23,8 @@
 // Comprovat contra l'informe de 3r del curs 25-26: 27 alumnes detectats,
 // exactament els 27 que declara la pàgina de participació.
 
-/** El pdfjs pesa uns 300 kB: es carrega només quan algú puja un informe. */
-async function carregaPdfjs() {
-  const pdfjs = await import('pdfjs-dist')
-  // El "worker" del pdfjs s'ha de dir on és; amb aquesta forma el Vite
-  // l'empaqueta ell mateix i no depèn de cap CDN.
-  const { default: WorkerUrl } = await import('pdfjs-dist/build/pdf.worker.min.mjs?url')
-  pdfjs.GlobalWorkerOptions.workerSrc = WorkerUrl
-  return pdfjs
-}
 
+import { carregaPdfjs } from './carregaLlibreries'
 /** Els quatre nivells del ConMat, amb el seu equivalent en percentatge per
  *  poder-los barrejar amb la resta d'indicadors de l'app. */
 export const NIVELLS_CONMAT = [

@@ -14,10 +14,10 @@
 // Com que cap lectura automàtica és infal·lible, retorna també una llista
 // d'avisos perquè es pugui ensenyar tot abans de desar res.
 
-import {
-  carregaExcelJS, text, neteja as netejaText, numero,
+import { text, neteja as netejaText, numero,
   aPercentatge, escalaDeText as escalaDelText, identificaEscala,
 } from './excelLectura'
+import { carregaExcelJS } from './carregaLlibreries'
 
 
 const CODI_OPERATIU = /^Operatiu\s*(\d+\.\d+)\s*[-–—]?\s*(.*)$/i

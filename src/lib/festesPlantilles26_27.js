@@ -2,7 +2,7 @@ import { GRUPS, objectiuFestaBuit } from './festesDetall'
 
 // Text real dels objectius (i, quan es coneixen, les activitats
 // d'Educació Infantil / Cicle Inicial) de cada festa, tal com surten a les
-// plantilles del curs 2026-27. Nomès s'utilitza com a punt de partida la
+// plantilles del curs 2026-27. Només s'utilitza com a punt de partida la
 // primera vegada que s'obre aquella festa en aquest curs concret — després
 // tot és lliurement editable.
 

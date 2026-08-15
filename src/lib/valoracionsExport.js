@@ -1,3 +1,4 @@
+import { carregaExcelJS } from './carregaLlibreries'
 import { FESTES, mitjanaObjectiu, mitjanaValoracio } from './valoracions'
 import { afegeixCapcalera, ajustaColumnes } from './excelCapcalera'
 
@@ -21,12 +22,6 @@ function pct(v) {
   return v === '' || v === null || v === undefined ? '' : `${v}%`
 }
 
-// L'exceljs pesa gairebé un mega. Es carrega només quan de debò cal
-// (exportar o llegir un fitxer), no en obrir l'app: així la primera càrrega
-// no l'arrossega.
-async function carregaExcelJS() {
-  return (await import('exceljs')).default
-}
 
 /**
  * Descarrega totes les valoracions (cicles, comissions i equips) d'un curs

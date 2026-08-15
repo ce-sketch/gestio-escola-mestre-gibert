@@ -11,11 +11,6 @@
 
 import { ESCALES } from './escales'
 
-/** L'exceljs pesa gairebé un mega: es carrega només quan de debò cal. */
-export async function carregaExcelJS() {
-  return (await import('exceljs')).default
-}
-
 /**
  * El text d'un valor de cel·la, sigui quin sigui el format que hi hagi.
  *
