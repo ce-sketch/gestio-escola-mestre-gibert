@@ -86,7 +86,7 @@ export function objectiusPerDefecte() {
       operatius: [
         operatiu('Operatiu 2.1', 'Elaborar i desplegar el PAD: fase preparatòria (normativa + diagnòsi).', [
           ['I.2.1.1. Normativa llegida i analitzada.', 20],
-          ['I.2.1.2. Diagnòsi de la diversitat al centre elaborada.', 20],
+          ['I.2.1.2. Diagnosi de la diversitat al centre elaborada.', 20],
           ['I.2.1.3. Publicació del nou PAD a la pàgina web.', 60],
         ], 50),
         operatiu('Operatiu 2.2', "Revisar i actualitzar l'Estratègia Digital de Centre (EDC). Actuacions del curs 26-27: revisió de l'EDC i projectes digitals.", [

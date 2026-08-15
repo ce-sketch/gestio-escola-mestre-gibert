@@ -12,7 +12,7 @@ function act(text) {
   return { id: crypto.randomUUID(), text, grau: '' }
 }
 
-// [objectiuIndex]: llista d'activitats — nomès pels grups on tenim el text
+// [objectiuIndex]: llista d'activitats — només pels grups on tenim el text
 // real (Educació Infantil i Cicle Inicial, majoritàriament).
 export const FESTES_PLANTILLES_26_27 = {
   castanyada: {

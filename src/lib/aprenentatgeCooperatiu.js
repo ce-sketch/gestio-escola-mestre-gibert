@@ -50,9 +50,9 @@ export const TOTS_ELS_NIVELLS = CICLES_COOPERATIU.flatMap((c) => c.nivells)
 
 /** El nom sencer de cada nivell, tal com encapçala el full del centre. */
 export const NOM_LLARG = {
-  'I-3': 'Educació Infantil. Nivell P-3',
-  'I-4': 'Educació Infantil. Nivell P-4',
-  'I-5': 'Educació Infantil. Nivell P-5',
+  'I-3': 'Educació Infantil. Nivell I-3',
+  'I-4': 'Educació Infantil. Nivell I-4',
+  'I-5': 'Educació Infantil. Nivell I-5',
   '1r': 'Educació Primària. Nivell 1r',
   '2n': 'Educació Primària. Nivell 2n',
   '3r': 'Educació Primària. Nivell 3r',
