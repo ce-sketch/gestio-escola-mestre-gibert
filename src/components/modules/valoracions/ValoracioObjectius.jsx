@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'
 import { db, auth } from '../../../firebase'
 import { slug } from '../../../lib/slug'
@@ -9,6 +9,7 @@ import {
 import { CURS_AMB_PLANTILLA, PLANTILLES_26_27 } from '../../../lib/valoracionsPlantilles26_27'
 import { ESCALES, opcionsDe } from '../../../lib/escales'
 import { llegeixPlantillaValoracio } from '../../../lib/valoracionsPlantillaParser'
+import BotoDrive from '../../BotoDrive'
 
 
 
@@ -202,7 +203,17 @@ export default function ValoracioObjectius({ cursEscolarId, tipus, nom, onDesat 
     desa(nova)
   }
 
+  /** Esborrar un objectiu se'n porta el text i totes les seves actuacions,
+   *  i no hi ha desfer. Val la pena preguntar-ho. */
   function esborraObjectiu(objectiuId) {
+    const objectiu = valoracio.objectius.find((o) => o.id === objectiuId)
+    const quantes = objectiu?.actuacions?.length ?? 0
+    const detall = quantes > 0 ? ` i les seves ${quantes} actuacions` : ''
+    if (!window.confirm(`Segur que vols esborrar aquest objectiu${detall}? No es pot desfer.`)) return
+    return esborraObjectiuConfirmat(objectiuId)
+  }
+
+  function esborraObjectiuConfirmat(objectiuId) {
     const nova = actualitza({ objectius: valoracio.objectius.filter((o) => o.id !== objectiuId) })
     desa(nova)
   }
@@ -217,6 +228,13 @@ export default function ValoracioObjectius({ cursEscolarId, tipus, nom, onDesat 
   }
 
   function esborraActuacio(objectiuId, actuacioId) {
+    const actuacio = valoracio.objectius
+      .find((o) => o.id === objectiuId)?.actuacions.find((a) => a.id === actuacioId)
+    if (actuacio?.text?.trim() && !window.confirm(`Segur que vols esborrar «${actuacio.text.slice(0, 60)}»?`)) return
+    return esborraActuacioConfirmada(objectiuId, actuacioId)
+  }
+
+  function esborraActuacioConfirmada(objectiuId, actuacioId) {
     const nova = {
       ...valoracio,
       objectius: valoracio.objectius.map((o) => o.id !== objectiuId ? o : { ...o, actuacions: o.actuacions.filter((a) => a.id !== actuacioId) }),
@@ -225,6 +243,13 @@ export default function ValoracioObjectius({ cursEscolarId, tipus, nom, onDesat 
     desa(nova)
   }
 
+
+  // Els totals de la valoració recorren tots els objectius i actuacions:
+  // es calculen un cop per canvi, no un cop per dibuixat.
+  const totals = useMemo(() => ({
+    gener: { total: mitjanaValoracio(valoracio, 'gener'), p: pendentsValoracio(valoracio, 'gener') },
+    juny: { total: mitjanaValoracio(valoracio, 'juny'), p: pendentsValoracio(valoracio, 'juny') },
+  }), [valoracio])
 
   if (!nom.trim()) {
     return (
@@ -265,8 +290,7 @@ export default function ValoracioObjectius({ cursEscolarId, tipus, nom, onDesat 
 
             <div style={{ display: 'flex', gap: 24, marginTop: 16, fontSize: 13, flexWrap: 'wrap' }}>
               {['gener', 'juny'].map((camp) => {
-                const total = mitjanaValoracio(valoracio, camp)
-                const p = pendentsValoracio(valoracio, camp)
+                const { total, p } = totals[camp]
                 return (
                   <span key={camp}>
                     TOTAL GENERAL — {camp === 'gener' ? 'Gener' : 'Juny'}:{' '}
@@ -282,7 +306,86 @@ export default function ValoracioObjectius({ cursEscolarId, tipus, nom, onDesat 
             </div>
 
             <p style={{ fontSize: 13, fontWeight: 600, marginTop: 24 }}>Objectius</p>
-            {valoracio.objectius.map((objectiu, oi) => (
+            {/* La plantilla, a dalt: amb deu objectius i les seves
+                actuacions, al final del tot no la trobava ningú. */}
+            <div className="caixa-discreta" style={{ marginTop: 14 }}>
+              <strong style={{ fontSize: 13 }}>Carrega els objectius d'una plantilla</strong>
+              <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 4, maxWidth: '100%' }}>
+                Puja el full de valoració del centre i l'app en treu els objectius, les actuacions
+                i l'escala de cada una. Des del Google Sheets: Fitxer → Baixa → Microsoft Excel.
+              </p>
+              <BotoDrive
+                onFitxer={(e) => pujaPlantilla(e.target.files?.[0])}
+                tipus="fulls"
+                etiqueta="Tria la plantilla del Drive"
+                onError={setErrorPlantilla}
+                disabled={llegintPlantilla}
+              />
+              <label
+                className="btn-ghost"
+                style={{ display: 'inline-block', marginTop: 8, color: 'var(--navy)', borderColor: 'var(--navy)', border: '1px solid', borderRadius: 8, padding: '8px 14px', fontSize: 13, cursor: 'pointer' }}
+              >
+                {llegintPlantilla ? 'Llegint…' : 'Puja la plantilla Excel'}
+                <input
+                  type="file"
+                  accept=".xlsx"
+                  style={{ display: 'none' }}
+                  onChange={(e) => { pujaPlantilla(e.target.files?.[0]); e.target.value = '' }}
+                />
+              </label>
+
+              {errorPlantilla && (
+                <p style={{ fontSize: 12, color: 'var(--red)', marginTop: 8 }}>{errorPlantilla}</p>
+              )}
+
+              {plantilla && (
+                <div className="placeholder-box" style={{ marginTop: 12, padding: '12px 14px' }}>
+                  <strong style={{ fontSize: 13 }}>
+                    {plantilla.valoracio.nom ? `${plantilla.valoracio.nom} — ` : ''}
+                    {plantilla.valoracio.objectius.length} objectius
+                  </strong>
+                  {plantilla.avisos.length > 0 && (
+                    <ul style={{ fontSize: 12, color: 'var(--amber-dark)', marginTop: 6, paddingLeft: 18 }}>
+                      {plantilla.avisos.map((a, i) => <li key={i}>{a}</li>)}
+                    </ul>
+                  )}
+                  <ul style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 8, paddingLeft: 18, maxHeight: 220, overflowY: 'auto' }}>
+                    {plantilla.valoracio.objectius.map((o, i) => (
+                      <li key={i}>{o.text || '(sense text)'} — {o.actuacions.length} actuacions</li>
+                    ))}
+                  </ul>
+                  <p style={{ fontSize: 12, color: 'var(--red)', marginTop: 8 }}>
+                    Això substituirà els objectius que hi ha ara en aquesta valoració.
+                  </p>
+                  <div style={{ display: 'flex', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      onClick={aplicaPlantilla}
+                      style={{ background: 'var(--navy)', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 14px', fontSize: 13, cursor: 'pointer' }}
+                    >
+                      Carrega-ho
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPlantilla(null)}
+                      className="btn-ghost"
+                      style={{ color: 'var(--navy)', borderColor: 'var(--navy)', maxWidth: 130, fontSize: 13 }}
+                    >
+                      Cancel·la
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+
+            {valoracio.objectius.map((objectiu, oi) => {
+              // Un sol càlcul per objectiu: abans es refeia quatre vegades
+              // a la mateixa línia, i amb una comissió de 60 actuacions es
+              // notava a cada tecla.
+              const p = pendentsObjectiu(objectiu, 'juny')
+              const pendents = p.total - p.valorats
+              return (
               <div key={objectiu.id} style={{ marginTop: 10, padding: '12px 14px', border: '1px solid var(--line)', borderRadius: 10 }}>
                 <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', flexWrap: 'wrap' }}>
                   <span style={{ fontSize: 12, color: 'var(--ink-soft)', minWidth: 20, marginTop: 8 }}>{oi + 1}.</span>
@@ -318,9 +421,9 @@ export default function ValoracioObjectius({ cursEscolarId, tipus, nom, onDesat 
                   {objectiu.actuacions.length > 0 && (
                     <div style={{ fontSize: 12, fontWeight: 600 }}>
                       TOTAL objectiu — Gener {mitjanaObjectiu(objectiu, 'gener') !== null ? `${Math.round(mitjanaObjectiu(objectiu, 'gener'))}%` : '—'} · Juny {mitjanaObjectiu(objectiu, 'juny') !== null ? `${Math.round(mitjanaObjectiu(objectiu, 'juny'))}%` : '—'}
-                      {pendentsObjectiu(objectiu, 'juny').total - pendentsObjectiu(objectiu, 'juny').valorats > 0 && (
+                      {pendents > 0 && (
                         <span style={{ fontWeight: 400, color: 'var(--ink-soft)' }}>
-                          {' '}· {pendentsObjectiu(objectiu, 'juny').total - pendentsObjectiu(objectiu, 'juny').valorats} sense valorar al juny
+                          {' '}· {pendents} sense valorar al juny
                         </span>
                       )}
                     </div>
@@ -434,70 +537,8 @@ export default function ValoracioObjectius({ cursEscolarId, tipus, nom, onDesat 
                   + Afegeix actuació (opcional)
                 </button>
               </div>
-            ))}
-            <div style={{ marginTop: 20, paddingTop: 14, borderTop: '1px solid var(--line)' }}>
-              <strong style={{ fontSize: 13 }}>Carrega els objectius d'una plantilla</strong>
-              <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 4, maxWidth: '100%' }}>
-                Puja el full de valoració del centre i l'app en treu els objectius, les actuacions
-                i l'escala de cada una. Des del Google Sheets: Fitxer → Baixa → Microsoft Excel.
-              </p>
-              <label
-                className="btn-ghost"
-                style={{ display: 'inline-block', marginTop: 8, color: 'var(--navy)', borderColor: 'var(--navy)', border: '1px solid', borderRadius: 8, padding: '8px 14px', fontSize: 13, cursor: 'pointer' }}
-              >
-                {llegintPlantilla ? 'Llegint…' : 'Puja la plantilla Excel'}
-                <input
-                  type="file"
-                  accept=".xlsx"
-                  style={{ display: 'none' }}
-                  onChange={(e) => { pujaPlantilla(e.target.files?.[0]); e.target.value = '' }}
-                />
-              </label>
-
-              {errorPlantilla && (
-                <p style={{ fontSize: 12, color: 'var(--red)', marginTop: 8 }}>{errorPlantilla}</p>
-              )}
-
-              {plantilla && (
-                <div className="placeholder-box" style={{ marginTop: 12, padding: '12px 14px' }}>
-                  <strong style={{ fontSize: 13 }}>
-                    {plantilla.valoracio.nom ? `${plantilla.valoracio.nom} — ` : ''}
-                    {plantilla.valoracio.objectius.length} objectius
-                  </strong>
-                  {plantilla.avisos.length > 0 && (
-                    <ul style={{ fontSize: 12, color: 'var(--amber-dark)', marginTop: 6, paddingLeft: 18 }}>
-                      {plantilla.avisos.map((a, i) => <li key={i}>{a}</li>)}
-                    </ul>
-                  )}
-                  <ul style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 8, paddingLeft: 18, maxHeight: 220, overflowY: 'auto' }}>
-                    {plantilla.valoracio.objectius.map((o, i) => (
-                      <li key={i}>{o.text || '(sense text)'} — {o.actuacions.length} actuacions</li>
-                    ))}
-                  </ul>
-                  <p style={{ fontSize: 12, color: 'var(--red)', marginTop: 8 }}>
-                    Això substituirà els objectius que hi ha ara en aquesta valoració.
-                  </p>
-                  <div style={{ display: 'flex', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
-                    <button
-                      type="button"
-                      onClick={aplicaPlantilla}
-                      style={{ background: 'var(--navy)', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 14px', fontSize: 13, cursor: 'pointer' }}
-                    >
-                      Carrega-ho
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPlantilla(null)}
-                      className="btn-ghost"
-                      style={{ color: 'var(--navy)', borderColor: 'var(--navy)', maxWidth: 130, fontSize: 13 }}
-                    >
-                      Cancel·la
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-
+            )
+            })}
             <button type="button" onClick={afegeixObjectiu} className="btn-ghost" style={{ marginTop: 10, color: 'var(--navy)', borderColor: 'var(--navy)', maxWidth: 180 }}>
               + Afegeix objectiu
             </button>
