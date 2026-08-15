@@ -168,10 +168,15 @@ export default function Documentacio() {
                 style={{ border: '1px solid var(--line)', borderRadius: 8, padding: '8px 10px' }}
               />
               <datalist id="noms-valoracio">
+                {/* Les comissions mixtes i els cicles es desen a la mateixa
+                    col·lecció, i per això sortien també aquí. Es treuen: cada
+                    pestanya ha de suggerir només el que li pertoca. */}
                 {[...new Set([
                   ...(configActiva?.comissions.filter((c) => c.activa).map((c) => c.nom) ?? NOMS_SUGGERITS),
-                  ...nomsExistents.filter((n) => !CICLES.includes(n)),
-                ])].map((n) => <option key={n} value={n} />)}
+                  ...nomsExistents,
+                ])]
+                  .filter((n) => !CICLES.includes(n) && !NOMS_AFA.includes(n))
+                  .map((n) => <option key={n} value={n} />)}
               </datalist>
             </label>
           ) : (
