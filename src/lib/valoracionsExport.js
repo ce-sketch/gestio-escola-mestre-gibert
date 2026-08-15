@@ -140,7 +140,9 @@ export async function exportaValoracionsExcel(valoracions, cursEscolarId) {
   document.body.appendChild(a)
   a.click()
   document.body.removeChild(a)
-  URL.revokeObjectURL(url)
+  // Alliberar l'adreça immediatament després del clic pot cancel·lar la
+  // descàrrega en alguns navegadors: se li dona un moment.
+  setTimeout(() => URL.revokeObjectURL(url), 5000)
 }
 
 /**
