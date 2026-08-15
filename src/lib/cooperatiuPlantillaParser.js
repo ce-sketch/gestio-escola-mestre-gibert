@@ -21,6 +21,23 @@ import { OBJECTIUS_COOPERATIU, TOTS_ELS_NIVELLS } from './aprenentatgeCooperatiu
  *  I-3, I-4 i I-5. */
 const EQUIVALENCIES = { 'p-3': 'I-3', 'p-4': 'I-4', 'p-5': 'I-5' }
 
+/** Files que tenen text però no són cap actuació: capçaleres de la taula,
+ *  instruccions per a qui l'omple i el peu de pàgina del centre. */
+const NO_SON_ACTUACIONS = [
+  /^-?\s*Recorda que si copies/i,
+  /^Seguiment\s+gener/i,
+  /^Grau\s+d.assoliment/i,
+  /^Escola Mestre/i,
+  /^Valoraci\u00f3 PGAC/i,
+  /^Curs:/i,
+  /^Nivell:?$/i,
+  /^Activitat:/i,
+  /^Data:/i,
+  /^Objectius?$/i,
+  /^Criteris$/i,
+  /^(No assolit|Baix|Poc satisfactori|Satisfactori|Bo|Alt|Fet|No fet)$/i,
+]
+
 function nivellDelFull(linies) {
   for (const linia of linies.slice(0, 10)) {
     const m = neteja(linia).match(/Nivell\s+(P-?\s?[345]|1r|2n|3r|4t|5è|6è)/i)
@@ -73,12 +90,12 @@ export async function llegeixPlantillaCooperatiu(buffer) {
       if (quin) { objectiuActual = quin; objectius[quin] = objectius[quin] ?? []; continue }
       if (!objectiuActual) continue
       if (/^Comentaris i propostes/i.test(titol)) { objectiuActual = null; continue }
-      if (/^-?Recorda que si copies/i.test(titol)) continue
+      if (NO_SON_ACTUACIONS.some((p) => p.test(titol))) continue
 
-      // Una actuació és una fila amb text i amb un estat al costat
-      // ("No fet", "No assolit", "Fet"…): és el desplegable de seguiment.
-      const estat = neteja(text(ws.getCell(`C${f}`)))
-      if (!estat) continue
+      // Tota la resta de files amb text, dins d'un objectiu, són
+      // actuacions. Abans es demanava que la casella de seguiment del
+      // costat tingués alguna cosa escrita, però en una plantilla en blanc
+      // està buida i no se'n detectava ni una.
 
       const { escala, opcions } = identificaEscala(escalaDeText(titol), 'binaria')
       objectius[objectiuActual].push({
