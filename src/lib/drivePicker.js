@@ -75,14 +75,23 @@ export async function triaDocumentDelDrive(tipus = 'fulls') {
   const token = await demanaPermis()
 
   const fitxer = await new Promise((resol) => {
-    // Els mòduls que llegeixen preus o el calendari treballen amb
-    // documents de text; la resta, amb fulls de càlcul.
+    // Cada mòdul busca una cosa diferent: els preus i el calendari són
+    // documents de text, els informes de l'Innovamat arriben en CSV, i la
+    // resta són fulls de càlcul. Un CSV no surt a la vista de fulls de
+    // Google, perquè per al Drive és un fitxer qualsevol.
     const idVista = tipus === 'documents'
       ? window.google.picker.ViewId.DOCUMENTS
-      : window.google.picker.ViewId.SPREADSHEETS
+      : tipus === 'csv'
+        ? window.google.picker.ViewId.DOCS
+        : window.google.picker.ViewId.SPREADSHEETS
     const vista = new window.google.picker.DocsView(idVista)
       .setIncludeFolders(true)
       .setSelectFolderEnabled(false)
+    if (tipus === 'csv') {
+      // Els CSV pujats i els fulls de Google, que també es poden exportar
+      // a CSV. La resta de fitxers queden fora per no despistar.
+      vista.setMimeTypes('text/csv,text/plain,application/vnd.google-apps.spreadsheet')
+    }
 
     const picker = new window.google.picker.PickerBuilder()
       .setOAuthToken(token)
@@ -112,7 +121,9 @@ async function baixa(fitxer, tipus, token) {
   // fulls, a Excel; els documents de text, a text pla, que és el que
   // esperen els lectors de preus i de calendari.
   const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-  const mimeExport = tipus === 'documents' ? 'text/plain' : XLSX_MIME
+  const mimeExport = tipus === 'documents' ? 'text/plain'
+    : tipus === 'csv' ? 'text/csv'
+    : XLSX_MIME
   const esDeGoogle = (fitxer.mimeType ?? '').startsWith('application/vnd.google-apps.')
   const url = esDeGoogle
     ? `https://www.googleapis.com/drive/v3/files/${fitxer.id}/export?mimeType=${encodeURIComponent(mimeExport)}`
