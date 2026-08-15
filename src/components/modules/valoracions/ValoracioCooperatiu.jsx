@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'
 import { db, auth } from '../../../firebase'
 import {
@@ -10,7 +10,13 @@ import { llegeixPlantillaCooperatiu, aplicaPlantilla, resumPlantilla } from '../
 import { opcionsDe, ESCALES } from '../../../lib/escales'
 import BotoDrive from '../../BotoDrive'
 
-const pct = (v) => `${Math.round(v)}%`
+const pct = (v) => `${(Math.round(v * 100) / 100).toFixed(2).replace('.', ',')}%`
+
+// Estils de les taules de resum, calcats del full: vora fina a totes les
+// caselles i els percentatges centrats i en vermell, com allà.
+const CEL = { border: '1px solid var(--line)', padding: '5px 8px', textAlign: 'left' }
+const CAP = { ...CEL, textAlign: 'center', background: 'var(--sand)', fontWeight: 600 }
+const NUM = { ...CEL, textAlign: 'center', color: 'var(--red)' }
 
 /** Barreta de color, igual que a la resta de mòduls. */
 function Barra({ valor }) {
@@ -370,9 +376,23 @@ export default function ValoracioCooperatiu({ cursEscolarId }) {
                     <tbody>
                       {actuacions.length === 0 ? (
                         <tr>
-                          <td colSpan={5} style={{ padding: '8px 10px', border: '1px solid var(--line)', color: 'var(--ink-soft)' }}>
-                            Cap actuació. El percentatge d'aquest objectiu s'escriu directament a la graella de dalt.
+                          <td style={{ padding: '8px 10px', border: '1px solid var(--line)', color: 'var(--ink-soft)' }}>
+                            Aquest objectiu no té actuacions: escriu-hi directament el percentatge,
+                            o carrega la plantilla del centre perquè les hi posi.
                           </td>
+                          {['gener', 'juny'].map((m) => (
+                            <td key={m} colSpan={2} style={{ padding: '6px 8px', border: '1px solid var(--line)', textAlign: 'center' }}>
+                              <input
+                                type="number" min={0} max={100}
+                                value={dades.valors[nivellObert]?.[o.id]?.[m] ?? ''}
+                                placeholder="—"
+                                onChange={(e) => canviaValor(nivellObert, o.id, m, e.target.value)}
+                                onBlur={() => desa(dades)}
+                                style={{ width: 70, border: '1px solid var(--line)', borderRadius: 6, padding: '4px 6px', fontSize: 12, textAlign: 'right' }}
+                              />
+                              <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}> %</span>
+                            </td>
+                          ))}
                         </tr>
                       ) : actuacions.map((a) => {
                         const opcions = opcionsDe(a)
@@ -473,98 +493,103 @@ export default function ValoracioCooperatiu({ cursEscolarId }) {
       )}
 
 
-      {/* ── Resum de tota l'escola ── */}
-      <h3 style={{ fontSize: 15, marginTop: 28 }}>Resum de tota l'escola</h3>
-      {/* ── Graella per nivell ── */}
-      <div className="taula-scroll" style={{ marginTop: 12 }}>
+      {/* ── Resum de tota l'escola ─────────────────────────────────
+          Disposat com la pàgina de resum del full: un bloc general i un
+          per cicle, amb les columnes de gener i juny una al costat de
+          l'altra i els tres objectius desglossats a cada nivell.
+      */}
+      <h3 style={{ fontSize: 15, marginTop: 30 }}>Resum de tota l'escola</h3>
+
+      <div className="taula-scroll" style={{ marginTop: 10, maxWidth: 420 }}>
         <table style={{ borderCollapse: 'collapse', fontSize: 12, width: '100%' }}>
           <thead>
             <tr>
-              <th style={{ textAlign: 'left', padding: '6px 10px 6px 0' }}>Nivell</th>
-              {dades.objectius.map((o, i) => (
-                <th key={o.id} style={{ textAlign: 'center', padding: '6px 10px', minWidth: 90 }}>
-                  Objectiu {i + 1}
-                  <div style={{ fontWeight: 400, fontSize: 10, color: 'var(--ink-soft)' }}>{o.pes}%</div>
-                </th>
-              ))}
-              <th style={{ textAlign: 'left', padding: '6px 10px' }}>Grau del nivell</th>
+              <th style={CEL} />
+              <th style={CAP}>Gener</th>
+              <th style={CAP}>Juny</th>
             </tr>
           </thead>
           <tbody>
-            {dades.cicles.map((cicle) => (
-              <Fragment key={cicle.id}>
-                {cicle.nivells.map((nivell, idx) => (
-                  <tr key={nivell}>
-                    <td style={{ padding: '4px 10px 4px 0', fontWeight: 600 }}>
-                      <button
-                        type="button"
-                        onClick={() => setNivellObert(nivell)}
-                        title="Ves a valorar aquest nivell"
-                        style={{
-                          background: 'none', border: 'none', padding: 0, font: 'inherit',
-                          color: nivell === nivellObert ? 'var(--navy)' : 'inherit',
-                          cursor: 'pointer', textDecoration: 'underline dotted',
-                        }}
-                      >
-                        {nivell}
-                      </button>
-                      {idx === 0 && (
-                        <div style={{ fontWeight: 400, fontSize: 10, color: 'var(--ink-soft)' }}>{cicle.nom}</div>
-                      )}
-                    </td>
-                    {dades.objectius.map((o) => {
-                      const actuacions = dades.valors[nivell]?.[o.id]?.actuacions ?? []
-                      // Si l'objectiu té actuacions, el número surt d'elles i
-                      // no s'escriu: es toquen des del detall del nivell.
-                      return (
-                        <td key={o.id} style={{ padding: '4px 10px', textAlign: 'center' }}>
-                          {actuacions.length > 0 ? (
-                            <span title={`${actuacions.length} actuacions`}>
-                              {Math.round(grauObjectiuNivell(dades, nivell, o.id, camp))}%
-                              <span style={{ fontSize: 10, color: 'var(--ink-soft)' }}> ({actuacions.length})</span>
-                            </span>
-                          ) : (
-                            <input
-                              type="number" min={0} max={100}
-                              value={dades.valors[nivell]?.[o.id]?.[camp] ?? ''}
-                              placeholder="—"
-                              onChange={(e) => canviaValor(nivell, o.id, camp, e.target.value)}
-                              onBlur={() => desa(dades)}
-                              style={{ width: 64, border: '1px solid var(--line)', borderRadius: 6, padding: '4px 6px', fontSize: 12, textAlign: 'right' }}
-                            />
-                          )}
-                        </td>
-                      )
-                    })}
-                    <td style={{ padding: '4px 10px' }}>
-                      <Barra valor={grauNivell(dades, nivell, camp)} />
-                    </td>
-                  </tr>
+            <tr>
+              <td style={{ ...CEL, fontWeight: 600 }}>Grau d'assoliment:</td>
+              {['gener', 'juny'].map((m) => (
+                <td key={m} style={NUM}>{pct(grauGlobal(dades, m))}</td>
+              ))}
+            </tr>
+            {dades.objectius.map((o, i) => (
+              <tr key={o.id}>
+                <td style={CEL}>Objectiu {i + 1}</td>
+                {['gener', 'juny'].map((m) => (
+                  <td key={m} style={NUM}>{pct(grauObjectiu(dades, o.id, m))}</td>
                 ))}
-                <tr style={{ background: 'var(--paper)' }}>
-                  <td style={{ padding: '6px 10px 6px 0', fontSize: 11, color: 'var(--ink-soft)' }}>
-                    Grau de {cicle.nom}
-                  </td>
-                  <td colSpan={dades.objectius.length} style={{ padding: '6px 10px', textAlign: 'right' }}>
-                    <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}>pes del cicle</span>{' '}
-                    <input
-                      type="number" min={0} max={100}
-                      value={cicle.pes}
-                      onChange={(e) => canviaPesCicle(cicle.id, e.target.value)}
-                      onBlur={() => desa(dades)}
-                      style={{ width: 56, border: '1px solid var(--line)', borderRadius: 6, padding: '3px 5px', fontSize: 11, textAlign: 'right' }}
-                    />
-                    <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}> %</span>
-                  </td>
-                  <td style={{ padding: '6px 10px' }}>
-                    <Barra valor={grauCicle(dades, cicle.id, camp)} />
-                  </td>
-                </tr>
-              </Fragment>
+              </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {dades.cicles.map((cicle) => (
+        <div key={cicle.id} className="taula-scroll" style={{ marginTop: 16 }}>
+          <table style={{ borderCollapse: 'collapse', fontSize: 12 }}>
+            <thead>
+              <tr>
+                <th style={{ ...CEL, textAlign: 'left', minWidth: 240 }}>
+                  Grau d'assoliment: ({cicle.id.toUpperCase()})
+                </th>
+                <th colSpan={cicle.nivells.length} style={CAP}>Grau d'assoliment gener</th>
+                <th colSpan={cicle.nivells.length} style={CAP}>Grau d'assoliment juny</th>
+              </tr>
+              <tr>
+                <th style={{ ...CEL, textAlign: 'left', color: 'var(--ink-soft)', fontWeight: 400 }}>Nivell</th>
+                {['gener', 'juny'].flatMap((m) => cicle.nivells.map((n) => (
+                  <th key={`${m}-${n}`} style={{ ...CAP, minWidth: 62 }}>{n}</th>
+                )))}
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style={{ ...CEL, fontWeight: 600 }}>
+                  Grau d'assoliment dels nivells {cicle.nivells.join(' i ')}
+                </td>
+                {['gener', 'juny'].flatMap((m) => cicle.nivells.map((n) => (
+                  <td key={`${m}-${n}`} style={{ ...NUM, fontWeight: 600 }}>
+                    {pct(grauNivell(dades, n, m))}
+                  </td>
+                )))}
+              </tr>
+              {dades.objectius.map((o, i) => (
+                <tr key={o.id}>
+                  <td style={CEL}>Objectiu {i + 1}</td>
+                  {['gener', 'juny'].flatMap((m) => cicle.nivells.map((n) => (
+                    <td key={`${m}-${n}`} style={NUM}>
+                      {pct(grauObjectiuNivell(dades, n, o.id, m))}
+                    </td>
+                  )))}
+                </tr>
+              ))}
+              <tr>
+                <td style={{ ...CEL, color: 'var(--ink-soft)' }}>
+                  Grau del cicle{' '}
+                  <input
+                    type="number" min={0} max={100}
+                    value={cicle.pes}
+                    onChange={(e) => canviaPesCicle(cicle.id, e.target.value)}
+                    onBlur={() => desa(dades)}
+                    title="Pes d'aquest cicle dins del total de l'escola"
+                    style={{ width: 50, border: '1px solid var(--line)', borderRadius: 6, padding: '2px 4px', fontSize: 11, textAlign: 'right' }}
+                  />
+                  <span style={{ fontSize: 11 }}> % del total</span>
+                </td>
+                {['gener', 'juny'].map((m) => (
+                  <td key={m} colSpan={cicle.nivells.length} style={{ ...NUM, fontWeight: 600, background: 'var(--sand)' }}>
+                    {pct(grauCicle(dades, cicle.id, m))}
+                  </td>
+                ))}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      ))}
 
       {Math.abs(pesCicles - 100) > 0.5 && (
         <p className="nota nota-avis">Els pesos dels cicles sumen {pesCicles}%, no 100%.</p>

@@ -5,8 +5,11 @@
 export const ENSENYAMENTS = ['Infantil', 'Primària', 'ESO', 'Batxillerat', 'CFGB', 'CFGM', 'CFGS', 'Altres']
 
 // Llista de "curs" genèrica (coincideix amb el full "Llistes" de la
-// plantilla oficial) — es combina lliurement amb l'Ensenyament.
-export const CURSOS = ['1r', '2n', '3r', '4t', '5è', '6è']
+// plantilla oficial) — es combina lliurement amb l'Ensenyament. Inclou
+// Infantil (I3-I5) perquè hi coincideixin els documents d'Activitats
+// Complementàries, encara que el registre d'alumnat de l'app només cobreixi
+// Primària de moment.
+export const CURSOS = ['I3', 'I4', 'I5', '1r', '2n', '3r', '4t', '5è', '6è']
 
 // Els 8 conceptes de la plantilla oficial, amb el mateix ordre i noms.
 export const CONCEPTES = [
