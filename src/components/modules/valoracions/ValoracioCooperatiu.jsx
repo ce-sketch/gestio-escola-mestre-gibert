@@ -4,6 +4,7 @@ import { db, auth } from '../../../firebase'
 import {
   normalitzaCooperatiu, grauNivell, grauCicle, grauGlobal, grauObjectiu,
   grauObjectiuNivell, pendentsCooperatiu, actuacioCooperativaBuida, NOM_LLARG,
+  TOTS_ELS_NIVELLS, CICLES_COOPERATIU,
 } from '../../../lib/aprenentatgeCooperatiu'
 import { llegeixPlantillaCooperatiu, aplicaPlantilla, resumPlantilla } from '../../../lib/cooperatiuPlantillaParser'
 import { opcionsDe, ESCALES } from '../../../lib/escales'
@@ -37,7 +38,7 @@ export default function ValoracioCooperatiu({ cursEscolarId }) {
   const [desant, setDesant] = useState(false)
   const [missatge, setMissatge] = useState(null)
   const [momentObert, setMomentObert] = useState('gener')
-  const [nivellObert, setNivellObert] = useState(null)
+  const [nivellObert, setNivellObert] = useState(TOTS_ELS_NIVELLS[0])
   const [plantilla, setPlantilla] = useState(null)
   const [llegint, setLlegint] = useState(false)
 
@@ -288,110 +289,41 @@ export default function ValoracioCooperatiu({ cursEscolarId }) {
         )}
       </div>
 
-      {/* ── Selector de moment ── */}
-      <div style={{ display: 'flex', gap: 8, marginTop: 20 }}>
-        {['gener', 'juny'].map((m) => (
-          <button
-            key={m}
-            type="button"
-            onClick={() => setMomentObert(m)}
-            className={momentObert === m ? 'btn-primary' : 'btn-ghost'}
+      {/* ── Quin nivell es valora ──────────────────────────────────
+          Primer es tria el nivell i s'omple; el resum de tota l'escola va
+          després, que és la conseqüència i no el punt de partida.
+      */}
+      <div style={{ display: 'flex', gap: 16, marginTop: 18, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <label className="field" style={{ maxWidth: 300 }}>
+          <span>Nivell que estàs valorant</span>
+          <select
+            value={nivellObert ?? ''}
+            onChange={(e) => setNivellObert(e.target.value || null)}
+            style={{ border: '1px solid var(--line)', borderRadius: 8, padding: '8px 10px', fontWeight: 600 }}
           >
-            {m === 'gener' ? 'Gener' : 'Juny'}
-          </button>
-        ))}
-      </div>
-
-      {/* ── Graella per nivell ── */}
-      <div className="taula-scroll" style={{ marginTop: 12 }}>
-        <table style={{ borderCollapse: 'collapse', fontSize: 12, width: '100%' }}>
-          <thead>
-            <tr>
-              <th style={{ textAlign: 'left', padding: '6px 10px 6px 0' }}>Nivell</th>
-              {dades.objectius.map((o, i) => (
-                <th key={o.id} style={{ textAlign: 'center', padding: '6px 10px', minWidth: 90 }}>
-                  Objectiu {i + 1}
-                  <div style={{ fontWeight: 400, fontSize: 10, color: 'var(--ink-soft)' }}>{o.pes}%</div>
-                </th>
-              ))}
-              <th style={{ textAlign: 'left', padding: '6px 10px' }}>Grau del nivell</th>
-            </tr>
-          </thead>
-          <tbody>
-            {dades.cicles.map((cicle) => (
-              <Fragment key={cicle.id}>
-                {cicle.nivells.map((nivell, idx) => (
-                  <tr key={nivell}>
-                    <td style={{ padding: '4px 10px 4px 0', fontWeight: 600 }}>
-                      <button
-                        type="button"
-                        onClick={() => setNivellObert(nivellObert === nivell ? null : nivell)}
-                        style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', color: 'var(--navy)', cursor: 'pointer', textDecoration: 'underline' }}
-                      >
-                        {nivell}
-                      </button>
-                      {idx === 0 && (
-                        <div style={{ fontWeight: 400, fontSize: 10, color: 'var(--ink-soft)' }}>{cicle.nom}</div>
-                      )}
-                    </td>
-                    {dades.objectius.map((o) => {
-                      const actuacions = dades.valors[nivell]?.[o.id]?.actuacions ?? []
-                      // Si l'objectiu té actuacions, el número surt d'elles i
-                      // no s'escriu: es toquen des del detall del nivell.
-                      return (
-                        <td key={o.id} style={{ padding: '4px 10px', textAlign: 'center' }}>
-                          {actuacions.length > 0 ? (
-                            <span title={`${actuacions.length} actuacions`}>
-                              {Math.round(grauObjectiuNivell(dades, nivell, o.id, camp))}%
-                              <span style={{ fontSize: 10, color: 'var(--ink-soft)' }}> ({actuacions.length})</span>
-                            </span>
-                          ) : (
-                            <input
-                              type="number" min={0} max={100}
-                              value={dades.valors[nivell]?.[o.id]?.[camp] ?? ''}
-                              placeholder="—"
-                              onChange={(e) => canviaValor(nivell, o.id, camp, e.target.value)}
-                              onBlur={() => desa(dades)}
-                              style={{ width: 64, border: '1px solid var(--line)', borderRadius: 6, padding: '4px 6px', fontSize: 12, textAlign: 'right' }}
-                            />
-                          )}
-                        </td>
-                      )
-                    })}
-                    <td style={{ padding: '4px 10px' }}>
-                      <Barra valor={grauNivell(dades, nivell, camp)} />
-                    </td>
-                  </tr>
+            {CICLES_COOPERATIU.map((c) => (
+              <optgroup key={c.id} label={c.nom}>
+                {c.nivells.map((n) => (
+                  <option key={n} value={n}>{NOM_LLARG[n] ?? n}</option>
                 ))}
-                <tr style={{ background: 'var(--paper)' }}>
-                  <td style={{ padding: '6px 10px 6px 0', fontSize: 11, color: 'var(--ink-soft)' }}>
-                    Grau de {cicle.nom}
-                  </td>
-                  <td colSpan={dades.objectius.length} style={{ padding: '6px 10px', textAlign: 'right' }}>
-                    <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}>pes del cicle</span>{' '}
-                    <input
-                      type="number" min={0} max={100}
-                      value={cicle.pes}
-                      onChange={(e) => canviaPesCicle(cicle.id, e.target.value)}
-                      onBlur={() => desa(dades)}
-                      style={{ width: 56, border: '1px solid var(--line)', borderRadius: 6, padding: '3px 5px', fontSize: 11, textAlign: 'right' }}
-                    />
-                    <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}> %</span>
-                  </td>
-                  <td style={{ padding: '6px 10px' }}>
-                    <Barra valor={grauCicle(dades, cicle.id, camp)} />
-                  </td>
-                </tr>
-              </Fragment>
+              </optgroup>
             ))}
-          </tbody>
-        </table>
+          </select>
+        </label>
+
+        <div style={{ display: 'flex', gap: 8 }}>
+          {['gener', 'juny'].map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => setMomentObert(m)}
+              className={momentObert === m ? 'btn-primary' : 'btn-ghost'}
+            >
+              {m === 'gener' ? 'Gener' : 'Juny'}
+            </button>
+          ))}
+        </div>
       </div>
-
-      {Math.abs(pesCicles - 100) > 0.5 && (
-        <p className="nota nota-avis">Els pesos dels cicles sumen {pesCicles}%, no 100%.</p>
-      )}
-
 
       {/* ── Detall d'un nivell ──────────────────────────────────────
           Disposat com el full del centre: cada objectiu amb les seves
@@ -399,14 +331,18 @@ export default function ValoracioCooperatiu({ cursEscolarId }) {
           juny— alhora, per no haver de canviar de moment per veure'n una.
       */}
       {nivellObert && (
-        <div className="caixa" style={{ marginTop: 16 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+        <div style={{ marginTop: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', alignItems: 'baseline' }}>
             <strong style={{ fontSize: 15 }}>
               {NOM_LLARG[nivellObert] ?? `Nivell ${nivellObert}`}
             </strong>
-            <button type="button" onClick={() => setNivellObert(null)} className="btn-ghost" style={{ maxWidth: 100 }}>
-              Tanca
-            </button>
+            <span style={{ fontSize: 13 }}>
+              Grau del nivell:{' '}
+              <strong>{Math.round(grauNivell(dades, nivellObert, camp))}%</strong>
+              <span className="nota" style={{ display: 'inline', marginLeft: 6 }}>
+                ({camp === 'gener' ? 'gener' : 'juny'})
+              </span>
+            </span>
           </div>
 
           {dades.objectius.map((o) => {
@@ -535,6 +471,105 @@ export default function ValoracioCooperatiu({ cursEscolarId }) {
           })}
         </div>
       )}
+
+
+      {/* ── Resum de tota l'escola ── */}
+      <h3 style={{ fontSize: 15, marginTop: 28 }}>Resum de tota l'escola</h3>
+      {/* ── Graella per nivell ── */}
+      <div className="taula-scroll" style={{ marginTop: 12 }}>
+        <table style={{ borderCollapse: 'collapse', fontSize: 12, width: '100%' }}>
+          <thead>
+            <tr>
+              <th style={{ textAlign: 'left', padding: '6px 10px 6px 0' }}>Nivell</th>
+              {dades.objectius.map((o, i) => (
+                <th key={o.id} style={{ textAlign: 'center', padding: '6px 10px', minWidth: 90 }}>
+                  Objectiu {i + 1}
+                  <div style={{ fontWeight: 400, fontSize: 10, color: 'var(--ink-soft)' }}>{o.pes}%</div>
+                </th>
+              ))}
+              <th style={{ textAlign: 'left', padding: '6px 10px' }}>Grau del nivell</th>
+            </tr>
+          </thead>
+          <tbody>
+            {dades.cicles.map((cicle) => (
+              <Fragment key={cicle.id}>
+                {cicle.nivells.map((nivell, idx) => (
+                  <tr key={nivell}>
+                    <td style={{ padding: '4px 10px 4px 0', fontWeight: 600 }}>
+                      <button
+                        type="button"
+                        onClick={() => setNivellObert(nivell)}
+                        title="Ves a valorar aquest nivell"
+                        style={{
+                          background: 'none', border: 'none', padding: 0, font: 'inherit',
+                          color: nivell === nivellObert ? 'var(--navy)' : 'inherit',
+                          cursor: 'pointer', textDecoration: 'underline dotted',
+                        }}
+                      >
+                        {nivell}
+                      </button>
+                      {idx === 0 && (
+                        <div style={{ fontWeight: 400, fontSize: 10, color: 'var(--ink-soft)' }}>{cicle.nom}</div>
+                      )}
+                    </td>
+                    {dades.objectius.map((o) => {
+                      const actuacions = dades.valors[nivell]?.[o.id]?.actuacions ?? []
+                      // Si l'objectiu té actuacions, el número surt d'elles i
+                      // no s'escriu: es toquen des del detall del nivell.
+                      return (
+                        <td key={o.id} style={{ padding: '4px 10px', textAlign: 'center' }}>
+                          {actuacions.length > 0 ? (
+                            <span title={`${actuacions.length} actuacions`}>
+                              {Math.round(grauObjectiuNivell(dades, nivell, o.id, camp))}%
+                              <span style={{ fontSize: 10, color: 'var(--ink-soft)' }}> ({actuacions.length})</span>
+                            </span>
+                          ) : (
+                            <input
+                              type="number" min={0} max={100}
+                              value={dades.valors[nivell]?.[o.id]?.[camp] ?? ''}
+                              placeholder="—"
+                              onChange={(e) => canviaValor(nivell, o.id, camp, e.target.value)}
+                              onBlur={() => desa(dades)}
+                              style={{ width: 64, border: '1px solid var(--line)', borderRadius: 6, padding: '4px 6px', fontSize: 12, textAlign: 'right' }}
+                            />
+                          )}
+                        </td>
+                      )
+                    })}
+                    <td style={{ padding: '4px 10px' }}>
+                      <Barra valor={grauNivell(dades, nivell, camp)} />
+                    </td>
+                  </tr>
+                ))}
+                <tr style={{ background: 'var(--paper)' }}>
+                  <td style={{ padding: '6px 10px 6px 0', fontSize: 11, color: 'var(--ink-soft)' }}>
+                    Grau de {cicle.nom}
+                  </td>
+                  <td colSpan={dades.objectius.length} style={{ padding: '6px 10px', textAlign: 'right' }}>
+                    <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}>pes del cicle</span>{' '}
+                    <input
+                      type="number" min={0} max={100}
+                      value={cicle.pes}
+                      onChange={(e) => canviaPesCicle(cicle.id, e.target.value)}
+                      onBlur={() => desa(dades)}
+                      style={{ width: 56, border: '1px solid var(--line)', borderRadius: 6, padding: '3px 5px', fontSize: 11, textAlign: 'right' }}
+                    />
+                    <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}> %</span>
+                  </td>
+                  <td style={{ padding: '6px 10px' }}>
+                    <Barra valor={grauCicle(dades, cicle.id, camp)} />
+                  </td>
+                </tr>
+              </Fragment>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {Math.abs(pesCicles - 100) > 0.5 && (
+        <p className="nota nota-avis">Els pesos dels cicles sumen {pesCicles}%, no 100%.</p>
+      )}
+
 
       <label className="field" style={{ marginTop: 20, maxWidth: '100%' }}>
         <span>Observacions</span>
