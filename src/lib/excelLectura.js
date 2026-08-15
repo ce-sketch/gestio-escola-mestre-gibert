@@ -90,7 +90,7 @@ export function escalaDeText(descripcio) {
   const net = neteja(descripcio).replace(/,(\d)/g, '.$1') // 66,7% → 66.7%
 
   const parells = [...net.matchAll(/([^=/·,;]+?)\s*=\s*(\d+(?:\.\d+)?)\s*%/g)]
-    .map((m) => ({ label: neteja(m[1]).replace(/^[-–·\s]+/, ''), valor: Number(m[2]) }))
+    .map((m) => ({ label: etiquetaNeta(m[1]), valor: Number(m[2]) }))
     .filter((o) => o.label && o.label.length < 40)
   if (parells.length >= 2) return ordena(parells)
 
@@ -100,6 +100,20 @@ export function escalaDeText(descripcio) {
     e.opcions.length >= 2 &&
     e.opcions.every((o) => new RegExp(`\\b${escapa(o.label)}\\b`, 'i').test(net)))
   return coneguda ? coneguda.opcions.map((o) => ({ ...o })) : null
+}
+
+/**
+ * L'etiqueta d'un nivell dins d'un criteri llarg.
+ *
+ * Als fulls, el criteri sovint explica el recompte abans del nom:
+ *   "Utilitzo entre 1 i 2 dinàmiques de cohesió: Baix = 20%"
+ * El que ens interessa és "Baix", no tota la frase. Si hi ha dos punts,
+ * ens quedem amb el que ve després.
+ */
+function etiquetaNeta(text) {
+  let net = neteja(text).replace(/^[-–·\s]+/, '')
+  if (net.includes(':')) net = net.split(':').pop().trim()
+  return net
 }
 
 const escapa = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')

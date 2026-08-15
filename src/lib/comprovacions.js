@@ -24,7 +24,8 @@ import { llegeixCosmos, resumClasse, rendimentAPercentatge } from './cosmosParse
 import { claueDeNom, nivellAPercentatge, distribucio, casaAmbAlumnes } from './conmatParser'
 import { nomAmbData } from './cursEscolar'
 import {
-  cooperatiuBuit, grauNivell, grauCicle, grauGlobal, grauObjectiu, TOTS_ELS_NIVELLS,
+  cooperatiuBuit, grauNivell, grauCicle, grauGlobal, grauObjectiu,
+  grauObjectiuNivell, TOTS_ELS_NIVELLS,
 } from './aprenentatgeCooperatiu'
 
 const arrodoneix = (n) => (typeof n === 'number' ? Math.round(n * 100) / 100 : n)
@@ -441,6 +442,35 @@ function grupCooperatiu() {
       const d = cooperatiuBuit()
       TOTS_ELS_NIVELLS.forEach((n) => posa(d, n, [80, 0, 0]))
       return grauObjectiu(d, 'linia', 'gener')
+    }
+  ))
+
+  // ── Amb actuacions ────────────────────────────────────────────────
+  const ambActuacions = (graus) => {
+    const d = cooperatiuBuit()
+    d.valors['1r'].linia.actuacions = graus.map((g, i) => ({ id: `a${i}`, text: '', gener: g, juny: '' }))
+    return d
+  }
+
+  proves.push(comprova(
+    "Amb actuacions, l'objectiu és la mitjana d'elles i no el número escrit",
+    66.67,
+    () => Math.round(grauObjectiuNivell(ambActuacions([100, 100, 0]), '1r', 'linia', 'gener') * 100) / 100
+  ))
+
+  proves.push(comprova(
+    'Una actuació sense valorar compta 0, com als fulls del centre',
+    50,
+    () => grauObjectiuNivell(ambActuacions([100, '']), '1r', 'linia', 'gener')
+  ))
+
+  proves.push(comprova(
+    "Sense actuacions, el percentatge escrit segueix valent",
+    80,
+    () => {
+      const d = cooperatiuBuit()
+      d.valors['1r'].linia.gener = 80
+      return grauObjectiuNivell(d, '1r', 'linia', 'gener')
     }
   ))
 
