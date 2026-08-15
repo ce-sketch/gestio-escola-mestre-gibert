@@ -3,8 +3,11 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'
 import { db, auth } from '../../../firebase'
 import {
   normalitzaCooperatiu, grauNivell, grauCicle, grauGlobal, grauObjectiu,
-  pendentsCooperatiu,
+  grauObjectiuNivell, pendentsCooperatiu, actuacioCooperativaBuida,
 } from '../../../lib/aprenentatgeCooperatiu'
+import { llegeixPlantillaCooperatiu, aplicaPlantilla, resumPlantilla } from '../../../lib/cooperatiuPlantillaParser'
+import { opcionsDe, ESCALES } from '../../../lib/escales'
+import BotoDrive from '../../BotoDrive'
 
 const pct = (v) => `${Math.round(v)}%`
 
@@ -34,6 +37,9 @@ export default function ValoracioCooperatiu({ cursEscolarId }) {
   const [desant, setDesant] = useState(false)
   const [missatge, setMissatge] = useState(null)
   const [momentObert, setMomentObert] = useState('gener')
+  const [nivellObert, setNivellObert] = useState(null)
+  const [plantilla, setPlantilla] = useState(null)
+  const [llegint, setLlegint] = useState(false)
 
   useEffect(() => {
     carrega()
@@ -76,6 +82,64 @@ export default function ValoracioCooperatiu({ cursEscolarId }) {
     } finally {
       setDesant(false)
     }
+  }
+
+  /** Llegeix la plantilla del centre i n'ensenya el contingut. */
+  async function pujaPlantilla(e) {
+    const fitxer = e.target.files?.[0]
+    if (!fitxer) return
+    setLlegint(true)
+    setMissatge(null)
+    setPlantilla(null)
+    try {
+      setPlantilla(await llegeixPlantillaCooperatiu(await fitxer.arrayBuffer()))
+    } catch (err) {
+      setMissatge({ type: 'error', text: err.message })
+    } finally {
+      setLlegint(false)
+    }
+  }
+
+  function aplicaLaPlantilla() {
+    if (!plantilla) return
+    const noves = aplicaPlantilla(dades, plantilla.nivells)
+    setDades(noves)
+    desa(noves)
+    setPlantilla(null)
+    setMissatge({ type: 'ok', text: 'Actuacions carregades de la plantilla.' })
+  }
+
+  function canviaActuacio(nivell, objectiuId, actuacioId, camp, valor) {
+    const actuacions = (dades.valors[nivell][objectiuId].actuacions ?? [])
+      .map((a) => (a.id === actuacioId ? { ...a, [camp]: valor } : a))
+    const noves = {
+      ...dades,
+      valors: {
+        ...dades.valors,
+        [nivell]: {
+          ...dades.valors[nivell],
+          [objectiuId]: { ...dades.valors[nivell][objectiuId], actuacions },
+        },
+      },
+    }
+    setDades(noves)
+    return noves
+  }
+
+  function afegeixActuacio(nivell, objectiuId) {
+    const actuacions = [...(dades.valors[nivell][objectiuId].actuacions ?? []), actuacioCooperativaBuida()]
+    const noves = {
+      ...dades,
+      valors: {
+        ...dades.valors,
+        [nivell]: {
+          ...dades.valors[nivell],
+          [objectiuId]: { ...dades.valors[nivell][objectiuId], actuacions },
+        },
+      },
+    }
+    setDades(noves)
+    desa(noves)
   }
 
   function canviaValor(nivell, objectiuId, camp, valor) {
@@ -128,6 +192,56 @@ export default function ValoracioCooperatiu({ cursEscolarId }) {
         surt de la mitjana dels seus nivells, i el global surt dels quatre cicles amb el seu pes.
         Igual que al full de l'Eina d'avaluació.
       </p>
+
+      {/* ── Carregar la plantilla ── */}
+      <div className="caixa-discreta" style={{ marginTop: 14 }}>
+        <strong style={{ fontSize: 13 }}>Carrega les actuacions d'una plantilla</strong>
+        <p className="nota" style={{ maxWidth: '100%' }}>
+          Puja el document "Valoració Aprenentatge Cooperatiu" del centre i l'app en treu les
+          actuacions de cada nivell amb la seva escala. Les actuacions no són les mateixes a tots
+          els nivells, i per això val més llegir-les del full que escriure-les a mà.
+        </p>
+        <div style={{ display: 'flex', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
+          <BotoDrive
+            onFitxer={pujaPlantilla}
+            tipus="fulls"
+            etiqueta="Tria la plantilla del Drive"
+            onError={(t) => setMissatge({ type: 'error', text: t })}
+            disabled={llegint}
+          />
+          <label className="btn-ghost" style={{ color: 'var(--navy)', borderColor: 'var(--navy)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center' }}>
+            {llegint ? 'Llegint…' : '📤 Puja la plantilla Excel'}
+            <input type="file" accept=".xlsx" style={{ display: 'none' }}
+              onChange={(e) => { pujaPlantilla(e); e.target.value = '' }} />
+          </label>
+        </div>
+
+        {plantilla && (
+          <div className="caixa" style={{ marginTop: 12 }}>
+            <strong style={{ fontSize: 13 }}>
+              {Object.keys(plantilla.nivells).length} nivells llegits
+            </strong>
+            {plantilla.avisos.map((a, i) => <p key={i} className="nota nota-avis">{a}</p>)}
+            <ul style={{ fontSize: 12, color: 'var(--ink-soft)', paddingLeft: 18, marginTop: 6 }}>
+              {resumPlantilla(plantilla.nivells).map((r) => (
+                <li key={r.nivell}>{r.nivell}: {r.total} actuacions</li>
+              ))}
+            </ul>
+            <p className="nota nota-avis">
+              Substituirà les actuacions dels nivells que porti la plantilla. Els altres es queden
+              com estan.
+            </p>
+            <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
+              <button type="button" onClick={aplicaLaPlantilla} className="btn-primary" style={{ maxWidth: 160 }}>
+                Carrega-ho
+              </button>
+              <button type="button" onClick={() => setPlantilla(null)} className="btn-ghost" style={{ maxWidth: 130 }}>
+                Cancel·la
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* ── Totals ── */}
       <div className="caixa" style={{ marginTop: 16 }}>
@@ -209,23 +323,41 @@ export default function ValoracioCooperatiu({ cursEscolarId }) {
                 {cicle.nivells.map((nivell, idx) => (
                   <tr key={nivell}>
                     <td style={{ padding: '4px 10px 4px 0', fontWeight: 600 }}>
-                      {nivell}
+                      <button
+                        type="button"
+                        onClick={() => setNivellObert(nivellObert === nivell ? null : nivell)}
+                        style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', color: 'var(--navy)', cursor: 'pointer', textDecoration: 'underline' }}
+                      >
+                        {nivell}
+                      </button>
                       {idx === 0 && (
                         <div style={{ fontWeight: 400, fontSize: 10, color: 'var(--ink-soft)' }}>{cicle.nom}</div>
                       )}
                     </td>
-                    {dades.objectius.map((o) => (
-                      <td key={o.id} style={{ padding: '4px 10px', textAlign: 'center' }}>
-                        <input
-                          type="number" min={0} max={100}
-                          value={dades.valors[nivell]?.[o.id]?.[camp] ?? ''}
-                          placeholder="—"
-                          onChange={(e) => canviaValor(nivell, o.id, camp, e.target.value)}
-                          onBlur={() => desa(dades)}
-                          style={{ width: 64, border: '1px solid var(--line)', borderRadius: 6, padding: '4px 6px', fontSize: 12, textAlign: 'right' }}
-                        />
-                      </td>
-                    ))}
+                    {dades.objectius.map((o) => {
+                      const actuacions = dades.valors[nivell]?.[o.id]?.actuacions ?? []
+                      // Si l'objectiu té actuacions, el número surt d'elles i
+                      // no s'escriu: es toquen des del detall del nivell.
+                      return (
+                        <td key={o.id} style={{ padding: '4px 10px', textAlign: 'center' }}>
+                          {actuacions.length > 0 ? (
+                            <span title={`${actuacions.length} actuacions`}>
+                              {Math.round(grauObjectiuNivell(dades, nivell, o.id, camp))}%
+                              <span style={{ fontSize: 10, color: 'var(--ink-soft)' }}> ({actuacions.length})</span>
+                            </span>
+                          ) : (
+                            <input
+                              type="number" min={0} max={100}
+                              value={dades.valors[nivell]?.[o.id]?.[camp] ?? ''}
+                              placeholder="—"
+                              onChange={(e) => canviaValor(nivell, o.id, camp, e.target.value)}
+                              onBlur={() => desa(dades)}
+                              style={{ width: 64, border: '1px solid var(--line)', borderRadius: 6, padding: '4px 6px', fontSize: 12, textAlign: 'right' }}
+                            />
+                          )}
+                        </td>
+                      )
+                    })}
                     <td style={{ padding: '4px 10px' }}>
                       <Barra valor={grauNivell(dades, nivell, camp)} />
                     </td>
@@ -258,6 +390,99 @@ export default function ValoracioCooperatiu({ cursEscolarId }) {
 
       {Math.abs(pesCicles - 100) > 0.5 && (
         <p className="nota nota-avis">Els pesos dels cicles sumen {pesCicles}%, no 100%.</p>
+      )}
+
+
+      {/* ── Detall d'un nivell: les seves actuacions ── */}
+      {nivellObert && (
+        <div className="caixa" style={{ marginTop: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+            <strong style={{ fontSize: 14 }}>
+              {nivellObert} — actuacions ({camp === 'gener' ? 'Gener' : 'Juny'})
+            </strong>
+            <button type="button" onClick={() => setNivellObert(null)} className="btn-ghost" style={{ maxWidth: 100 }}>
+              Tanca
+            </button>
+          </div>
+
+          {dades.objectius.map((o, i) => {
+            const actuacions = dades.valors[nivellObert]?.[o.id]?.actuacions ?? []
+            return (
+              <div key={o.id} style={{ marginTop: 14, borderTop: '1px dashed var(--line)', paddingTop: 10 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                  <strong style={{ fontSize: 12 }}>Objectiu {i + 1}</strong>
+                  <span style={{ fontSize: 12, fontWeight: 600 }}>
+                    {Math.round(grauObjectiuNivell(dades, nivellObert, o.id, camp))}%
+                  </span>
+                </div>
+                <p className="nota">{o.text}</p>
+
+                {actuacions.length === 0 ? (
+                  <p className="nota">
+                    Cap actuació: el percentatge d'aquest objectiu s'escriu directament a la graella.
+                  </p>
+                ) : actuacions.map((a) => {
+                  const opcions = opcionsDe(a)
+                  const actual = opcions.find((op) => op.valor === Number(a[camp])) ?? null
+                  return (
+                    <div key={a.id} style={{ marginTop: 8, padding: '8px 10px', border: '1px solid var(--line)', borderRadius: 8 }}>
+                      <input
+                        type="text"
+                        value={a.text}
+                        placeholder="Text de l'actuació"
+                        onChange={(e) => canviaActuacio(nivellObert, o.id, a.id, 'text', e.target.value)}
+                        onBlur={() => desa(dades)}
+                        style={{ width: '100%', border: '1px solid var(--line)', borderRadius: 6, padding: '5px 8px', fontSize: 12 }}
+                      />
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', marginTop: 6 }}>
+                        {opcions.map((op) => (
+                          <button
+                            key={op.id}
+                            type="button"
+                            onClick={() => { const n = canviaActuacio(nivellObert, o.id, a.id, camp, op.valor); desa(n) }}
+                            style={{
+                              fontSize: 11, padding: '4px 10px', borderRadius: 6, cursor: 'pointer',
+                              border: `1px solid ${actual?.id === op.id ? 'var(--navy)' : 'var(--line)'}`,
+                              background: actual?.id === op.id ? 'var(--navy)' : 'transparent',
+                              color: actual?.id === op.id ? '#fff' : 'var(--ink)',
+                            }}
+                          >
+                            {op.label}
+                          </button>
+                        ))}
+                        <input
+                          type="number" min={0} max={100}
+                          value={a[camp]}
+                          onChange={(e) => canviaActuacio(nivellObert, o.id, a.id, camp, e.target.value)}
+                          onBlur={() => desa(dades)}
+                          style={{ width: 56, border: '1px solid var(--line)', borderRadius: 6, padding: '4px 6px', fontSize: 11 }}
+                        />
+                        <span style={{ fontSize: 10, color: 'var(--ink-soft)' }}>%</span>
+                        <select
+                          value={a.escala ?? 'execucio50'}
+                          onChange={(e) => { const n = canviaActuacio(nivellObert, o.id, a.id, 'escala', e.target.value); desa(n) }}
+                          style={{ border: '1px solid var(--line)', borderRadius: 6, padding: '3px 5px', fontSize: 10, maxWidth: 190 }}
+                        >
+                          {a.escala === 'propia' && <option value="propia">Escala pròpia del full</option>}
+                          {ESCALES.map((es) => <option key={es.id} value={es.id}>{es.nom}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                  )
+                })}
+
+                <button
+                  type="button"
+                  onClick={() => afegeixActuacio(nivellObert, o.id)}
+                  className="btn-ghost"
+                  style={{ marginTop: 8, fontSize: 12, padding: '4px 10px', maxWidth: 180 }}
+                >
+                  + Afegeix actuació
+                </button>
+              </div>
+            )
+          })}
+        </div>
       )}
 
       <label className="field" style={{ marginTop: 20, maxWidth: '100%' }}>
