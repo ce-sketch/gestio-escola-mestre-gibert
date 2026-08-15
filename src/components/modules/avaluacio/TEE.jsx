@@ -9,6 +9,7 @@ import { cursEscolarActual } from '../../../lib/cursEscolar'
 import { normalitza } from '../../../lib/text'
 import { esAdmin } from '../../../lib/roles'
 import BotoDrive from '../../BotoDrive'
+import { carregaXLSX } from '../../../lib/carregaLlibreries'
 
 // Paraules clau per reconèixer cada columna de criteri a la capçalera del
 // fitxer Excel pujat, siguin quin siguin l'ordre o els espais exactes.
@@ -18,15 +19,6 @@ const PARAULES_CAPÇALERA = {
   presentacio: ['presentacio'],
   ortografia: ['ortografia'],
   morfosintaxis: ['morfosintaxi'],
-}
-
-// El `xlsx` pesa 429 kB i només fa falta quan algú puja un fitxer. Es
-// carrega en aquell moment, no en obrir el mòdul.
-// (No es pot canviar per l'`exceljs`: aquest no retorna el valor calculat
-// de les cel·les amb fórmula, i les plantilles omplertes del centre en van
-// plenes. Comprovat comparant els dos lectors sobre fitxers reals.)
-async function carregaXLSX() {
-  return import('xlsx')
 }
 
 export default function TEE() {
