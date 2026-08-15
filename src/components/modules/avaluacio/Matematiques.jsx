@@ -281,6 +281,13 @@ export default function Matematiques() {
           el rendiment i el percentil de cada dimensió.
         </p>
         <div style={{ display: 'flex', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
+          <BotoDrive
+            onFitxer={pujaCosmos}
+            tipus="csv"
+            etiqueta="Tria el CSV del Drive"
+            onError={(t) => setMissatge({ type: 'error', text: t })}
+            disabled={llegint}
+          />
           <label className="btn-ghost" style={{ color: 'var(--navy)', borderColor: 'var(--navy)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center' }}>
             📤 Puja el CSV del COSMOS
             <input type="file" accept=".csv" style={{ display: 'none' }}
