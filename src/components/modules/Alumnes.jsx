@@ -103,7 +103,7 @@ export default function Alumnes() {
     }
   }
 
-  /** Pujada opcional del fitxer "Motxilles i Pla de Xoc" — nomès afegeix
+  /** Pujada opcional del fitxer "Motxilles i Pla de Xoc" — només afegeix
    *  una etiqueta de seguiment (quin ajut i, per tant, qui el finança) als
    *  alumnes que ja existeixen (fets coincidir per IDALU). No canvia qui té
    *  dret a la reducció de les quotes — això ja es calcula a partir de
