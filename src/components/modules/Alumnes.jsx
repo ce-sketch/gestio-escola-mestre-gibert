@@ -6,6 +6,7 @@ import { db } from '../../firebase'
 import { slug } from '../../lib/slug'
 import { cursEscolarActual } from '../../lib/cursEscolar'
 import BotoDrive from '../BotoDrive'
+import { carregaXLSX } from '../../lib/carregaLlibreries'
 
 const DEFAULT_CLASSES = ['1r A', '1r B']
 
@@ -23,15 +24,6 @@ const COL_NESE_MOTIU = 9
 // activitats — no pas qualsevol alumne NESE (una discapacitat o altes
 // capacitats, per exemple, no donen aquest dret).
 const MOTIU_NESE_REDUCCIO = 'situacions socioeconòmiques'
-
-// El `xlsx` pesa 429 kB i només fa falta quan algú puja un fitxer. Es
-// carrega en aquell moment, no en obrir el mòdul.
-// (No es pot canviar per l'`exceljs`: aquest no retorna el valor calculat
-// de les cel·les amb fórmula, i les plantilles omplertes del centre en van
-// plenes. Comprovat comparant els dos lectors sobre fitxers reals.)
-async function carregaXLSX() {
-  return import('xlsx')
-}
 
 export default function Alumnes() {
   const [classes, setClasses] = useState(
@@ -519,7 +511,7 @@ export default function Alumnes() {
           Opcional: puja el fitxer "Motxilles i Pla de Xoc"
         </p>
         <p className="module-note" style={{ marginTop: 0 }}>
-          Nomès afegeix una etiqueta de seguiment (quin ajut té cada alumne — Motxilles
+          Només afegeix una etiqueta de seguiment (quin ajut té cada alumne — Motxilles
           Escolars o Pla de Xoc — i per tant qui el finança, CEB o Generalitat segons la
           promoció). No canvia qui té dret a la reducció de les quotes.
         </p>

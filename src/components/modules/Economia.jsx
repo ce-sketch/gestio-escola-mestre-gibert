@@ -8,6 +8,7 @@ import { fetchDocText } from '../../lib/officialCalendarDoc'
 import { parseOfficialQuotesText, parseResumSortides } from '../../lib/officialQuotesDoc'
 import { DOC_SORTIDES_OFICIAL_ID, descarregaDocumentSortides } from '../../lib/documentSortides'
 import BotoDrive from '../BotoDrive'
+import { carregaXLSX } from '../../lib/carregaLlibreries'
 
 // ID del document "Recull informatiu de les famílies" a Google Docs, amb
 // els preus de quotes. Ha d'estar compartit com "Qualsevol persona amb
@@ -22,15 +23,6 @@ const DOC_QUOTES_OFICIAL_ID = '11d6iuGeB3MhBuy_fzAJJQSXDxom8x4cVtDk4FqTq-U0'
 // segons el criteri del centre: material escolar i activitats
 // complementàries — no s'aplica a la resta de conceptes.
 const CONCEPTES_REDUCCIO_NESE = ['materialEscolar', 'activitatsComplementaries']
-
-// El `xlsx` pesa 429 kB i només fa falta quan algú puja un fitxer. Es
-// carrega en aquell moment, no en obrir el mòdul.
-// (No es pot canviar per l'`exceljs`: aquest no retorna el valor calculat
-// de les cel·les amb fórmula, i les plantilles omplertes del centre en van
-// plenes. Comprovat comparant els dos lectors sobre fitxers reals.)
-async function carregaXLSX() {
-  return import('xlsx')
-}
 
 export default function Economia() {
   const [cursEscolarId, setCursEscolarId] = useState(cursEscolarActual())
@@ -293,7 +285,7 @@ export default function Economia() {
     return alumnesTots.filter((a) => a.neseEconomic && a.curs?.trim().toLowerCase().startsWith(cg)).length
   }
 
-  /** Nomès informatiu: quants alumnes NESE d'aquest curs tenen cada tipus
+  /** Només informatiu: quants alumnes NESE d'aquest curs tenen cada tipus
    *  d'ajut (Motxilles Escolars / Pla de Xoc), per portar-ne el seguiment
    *  de cara a qui el finança (CEB o Generalitat). No afecta el càlcul. */
   function desglossamentAjut(cursGeneric) {
