@@ -38,6 +38,7 @@ export default function MatriuGeneral() {
   const [config, setConfig] = useState(null)
   const [nomNouComissio, setNomNouComissio] = useState('')
   const [nomNovaFesta, setNomNovaFesta] = useState('')
+  const [descarregant, setDescarregant] = useState(null)
   const [desantConfig, setDesantConfig] = useState(false)
 
   useEffect(() => {
@@ -123,6 +124,29 @@ export default function MatriuGeneral() {
 
   /** Afegeix una festa que no és a la llista de sempre. L'identificador
    *  surt del nom, com a la resta de l'app. */
+  /**
+   * Genera la descàrrega i, sobretot, ensenya què passa.
+   *
+   * Abans es cridava la funció d'exportació directament des de l'onClick:
+   * si petava, el navegador s'empassava l'error i no passava
+   * absolutament res, sense cap pista de per què.
+   */
+  async function descarrega(quin, fes) {
+    setDescarregant(quin)
+    setMissatge(null)
+    try {
+      if (valoracions.length === 0) {
+        throw new Error('No hi ha cap valoració desada en aquest curs escolar.')
+      }
+      await fes()
+      setMissatge({ type: 'ok', text: `Descàrrega generada amb ${valoracions.length} valoracions.` })
+    } catch (err) {
+      setMissatge({ type: 'error', text: `No s'ha pogut generar la descàrrega: ${err.message}` })
+    } finally {
+      setDescarregant(null)
+    }
+  }
+
   function afegeixFesta() {
     const label = nomNovaFesta.trim()
     if (!label) return
@@ -454,7 +478,7 @@ export default function MatriuGeneral() {
 
       <details style={{ marginTop: 20 }}>
         <summary style={{ cursor: 'pointer', fontWeight: 600 }}>
-          ⚙ Quines comissions i festes surten activades per als docents {desantConfig && <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--ink-soft)' }}>(desant…)</span>}
+          ⚙ Afegir, treure i activar comissions i festes {desantConfig && <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--ink-soft)' }}>(desant…)</span>}
         </summary>
         {!config ? (
           <p style={{ marginTop: 10, fontSize: 13, color: 'var(--ink-soft)' }}>Carregant…</p>
@@ -599,18 +623,20 @@ export default function MatriuGeneral() {
           <button
             className="btn-ghost"
             style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
-            onClick={() => exportaValoracionsExcel(valoracions, cursEscolarId)}
+            onClick={() => descarrega('excel', () => exportaValoracionsExcel(valoracions, cursEscolarId))}
+            disabled={descarregant !== null}
             type="button"
           >
-            📥 Descarrega totes en Excel (amb totes les pestanyes)
+            {descarregant === 'excel' ? 'Generant l\'Excel…' : '📥 Descarrega totes en Excel (amb totes les pestanyes)'}
           </button>
           <button
             className="btn-ghost"
             style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
-            onClick={() => exportaValoracionsPDF(valoracions, cursEscolarId)}
+            onClick={() => descarrega('pdf', () => exportaValoracionsPDF(valoracions, cursEscolarId))}
+            disabled={descarregant !== null}
             type="button"
           >
-            📄 Descarrega totes en PDF
+            {descarregant === 'pdf' ? 'Generant el PDF…' : '📄 Descarrega totes en PDF'}
           </button>
         </div>
       )}
