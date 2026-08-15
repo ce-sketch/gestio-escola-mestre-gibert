@@ -20,12 +20,15 @@ export async function carregaConfigValoracions(cursEscolarId) {
     const dades = snap.data()
     return {
       comissions: dades.comissions ?? NOMS_SUGGERITS.map((nom) => ({ nom, activa: true })),
-      festes: dades.festes ?? FESTES.map((f) => ({ id: f.id, activa: true })),
+      // Les festes desades poden ser-ne de noves, que no surten a la
+      // llista fixa: per això cada una porta la seva etiqueta.
+      festes: (dades.festes ?? FESTES.map((f) => ({ id: f.id, activa: true })))
+        .map((f) => ({ ...f, label: f.label ?? FESTES.find((x) => x.id === f.id)?.label ?? f.id })),
     }
   }
   return {
     comissions: NOMS_SUGGERITS.map((nom) => ({ nom, activa: true })),
-    festes: FESTES.map((f) => ({ id: f.id, activa: true })),
+    festes: FESTES.map((f) => ({ id: f.id, label: f.label, activa: true })),
   }
 }
 
