@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { collection, doc, getDocs, query, setDoc, serverTimestamp, where } from 'firebase/firestore'
+import { collection, deleteDoc, doc, getDocs, query, setDoc, serverTimestamp, where } from 'firebase/firestore'
 import { db, auth } from '../../firebase'
 import { cursEscolarActual } from '../../lib/cursEscolar'
 import { FESTES, mitjanaValoracio, mitjanaObjectiu, objectiuBuit, actuacioBuida } from '../../lib/valoracions'
@@ -71,6 +71,53 @@ export default function MatriuGeneral() {
 
   function toggleFesta(id) {
     desaConfig({ ...config, festes: config.festes.map((f) => f.id === id ? { ...f, activa: !f.activa } : f) })
+  }
+
+  /**
+   * Treu una comissió de la llista, i opcionalment esborra també la
+   * valoració que hi hagi desada.
+   *
+   * Es demana confirmació escrivint el nom perquè, si hi ha dades, es
+   * perden: una valoració és feina de tot un curs. Les regles de Firestore
+   * només permeten esborrar-la des del compte de direcció.
+   */
+  async function esborraComissio(nom) {
+    const teDades = valoracions.some((v) => v.nom === nom)
+    const avis = teDades
+      ? `"${nom}" té una valoració desada d'aquest curs.\n\nEscriu-ne el nom per confirmar que vols esborrar-la. No es pot desfer.`
+      : `Vols treure "${nom}" de la llista? No hi ha cap valoració desada, així que no es perd res.`
+
+    if (teDades) {
+      const escrit = window.prompt(avis)
+      if (escrit?.trim() !== nom) return
+    } else if (!window.confirm(avis)) {
+      return
+    }
+
+    setDesantConfig(true)
+    setMissatge(null)
+    try {
+      if (teDades) {
+        for (const v of valoracions.filter((x) => x.nom === nom)) {
+          await deleteDoc(doc(db, 'valoracions', v.id))
+        }
+      }
+      await desaConfig({ ...config, comissions: config.comissions.filter((c) => c.nom !== nom) })
+      setMissatge({
+        type: 'ok',
+        text: teDades ? `"${nom}" i la seva valoració s'han esborrat.` : `"${nom}" s'ha tret de la llista.`,
+      })
+      carrega()
+    } catch (err) {
+      setMissatge({
+        type: 'error',
+        text: err.code === 'permission-denied'
+          ? "Només el compte de direcció pot esborrar valoracions."
+          : `No s'ha pogut esborrar: ${err.message}`,
+      })
+    } finally {
+      setDesantConfig(false)
+    }
   }
 
   function afegeixComissio() {
@@ -388,10 +435,24 @@ export default function MatriuGeneral() {
             <p style={{ fontSize: 13, fontWeight: 600, marginTop: 20 }}>Comissions i equips</p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 6 }}>
               {config.comissions.map((c) => (
-                <label key={c.nom} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, opacity: c.activa ? 1 : 0.5 }}>
-                  <input type="checkbox" checked={c.activa} onChange={() => toggleComissio(c.nom)} />
-                  {c.nom}
-                </label>
+                <span key={c.nom} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, opacity: c.activa ? 1 : 0.5 }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <input type="checkbox" checked={c.activa} onChange={() => toggleComissio(c.nom)} />
+                    {c.nom}
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => esborraComissio(c.nom)}
+                    title={`Esborra "${c.nom}"`}
+                    aria-label={`Esborra ${c.nom}`}
+                    style={{
+                      background: 'none', border: 'none', color: 'var(--red)',
+                      cursor: 'pointer', fontSize: 13, lineHeight: 1, padding: '0 2px',
+                    }}
+                  >
+                    ✕
+                  </button>
+                </span>
               ))}
             </div>
             <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center', flexWrap: 'wrap' }}>
