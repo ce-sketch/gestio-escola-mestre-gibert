@@ -188,8 +188,13 @@ export default function Documentacio() {
                 style={{ border: '1px solid var(--line)', borderRadius: 8, padding: '10px 12px' }}
               >
                 <option value="">Tria una festa…</option>
-                {FESTES.filter((f) => configActiva ? configActiva.festes.find((cf) => cf.id === f.id)?.activa !== false : true)
-                  .map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
+                {(configActiva?.festes ?? FESTES.map((f) => ({ ...f, activa: true })))
+                  .filter((f) => f.activa !== false)
+                  .map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.label ?? FESTES.find((x) => x.id === f.id)?.label ?? f.id}
+                    </option>
+                  ))}
               </select>
             </label>
           )}
@@ -199,7 +204,11 @@ export default function Documentacio() {
         {tipus === 'cooperatiu' ? (
           <ValoracioCooperatiu cursEscolarId={cursEscolarId} />
         ) : tipus === 'festa' ? (
-          <ValoracioFesta cursEscolarId={cursEscolarId} festaId={festaId} />
+          <ValoracioFesta
+            cursEscolarId={cursEscolarId}
+            festaId={festaId}
+            etiquetaFesta={configActiva?.festes.find((f) => f.id === festaId)?.label}
+          />
         ) : tipus === 'activitats' ? (
           <ValoracioActivitats cursEscolarId={cursEscolarId} cicleActivitats={cicleActivitats} />
         ) : (

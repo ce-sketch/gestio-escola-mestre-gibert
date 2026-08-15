@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { collection, deleteDoc, doc, getDocs, query, setDoc, serverTimestamp, where } from 'firebase/firestore'
+import { collection, deleteDoc, doc, getDoc, getDocs, query, setDoc, serverTimestamp, where } from 'firebase/firestore'
 import { db, auth } from '../../firebase'
 import { cursEscolarActual } from '../../lib/cursEscolar'
 import { FESTES, mitjanaValoracio, mitjanaObjectiu, objectiuBuit, actuacioBuida } from '../../lib/valoracions'
@@ -37,6 +37,7 @@ export default function MatriuGeneral() {
 
   const [config, setConfig] = useState(null)
   const [nomNouComissio, setNomNouComissio] = useState('')
+  const [nomNovaFesta, setNomNovaFesta] = useState('')
   const [desantConfig, setDesantConfig] = useState(false)
 
   useEffect(() => {
@@ -113,6 +114,55 @@ export default function MatriuGeneral() {
         type: 'error',
         text: err.code === 'permission-denied'
           ? "Només el compte de direcció pot esborrar valoracions."
+          : `No s'ha pogut esborrar: ${err.message}`,
+      })
+    } finally {
+      setDesantConfig(false)
+    }
+  }
+
+  /** Afegeix una festa que no és a la llista de sempre. L'identificador
+   *  surt del nom, com a la resta de l'app. */
+  function afegeixFesta() {
+    const label = nomNovaFesta.trim()
+    if (!label) return
+    const id = slug(label)
+    if (config.festes.some((f) => f.id === id)) return
+    desaConfig({ ...config, festes: [...config.festes, { id, label, activa: true }] })
+    setNomNovaFesta('')
+  }
+
+  /** Treu una festa de la llista, i la seva valoració si en té. */
+  async function esborraFesta(id, label) {
+    const idDoc = `${cursEscolarId}__festa-${id}`
+    let teDades = false
+    try {
+      teDades = (await getDoc(doc(db, 'festesDetall', idDoc))).exists()
+    } catch { teDades = false }
+
+    if (teDades) {
+      const escrit = window.prompt(
+        `"${label}" té una valoració desada d'aquest curs.\n\nEscriu-ne el nom per confirmar que vols esborrar-la. No es pot desfer.`
+      )
+      if (escrit?.trim() !== label) return
+    } else if (!window.confirm(`Vols treure "${label}" de la llista? No hi ha cap valoració desada.`)) {
+      return
+    }
+
+    setDesantConfig(true)
+    setMissatge(null)
+    try {
+      if (teDades) await deleteDoc(doc(db, 'festesDetall', idDoc))
+      await desaConfig({ ...config, festes: config.festes.filter((f) => f.id !== id) })
+      setMissatge({
+        type: 'ok',
+        text: teDades ? `"${label}" i la seva valoració s'han esborrat.` : `"${label}" s'ha tret de la llista.`,
+      })
+    } catch (err) {
+      setMissatge({
+        type: 'error',
+        text: err.code === 'permission-denied'
+          ? 'Només el compte de direcció pot esborrar valoracions.'
           : `No s'ha pogut esborrar: ${err.message}`,
       })
     } finally {
@@ -487,14 +537,37 @@ export default function MatriuGeneral() {
             <p style={{ fontSize: 13, fontWeight: 600, marginTop: 16 }}>Festes</p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 6 }}>
               {config.festes.map((f) => {
-                const label = FESTES.find((ff) => ff.id === f.id)?.label ?? f.id
+                const label = f.label ?? FESTES.find((ff) => ff.id === f.id)?.label ?? f.id
                 return (
-                  <label key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, opacity: f.activa ? 1 : 0.5 }}>
-                    <input type="checkbox" checked={f.activa} onChange={() => toggleFesta(f.id)} />
-                    {label}
-                  </label>
+                  <span key={f.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, opacity: f.activa ? 1 : 0.5 }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <input type="checkbox" checked={f.activa} onChange={() => toggleFesta(f.id)} />
+                      {label}
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => esborraFesta(f.id, label)}
+                      title={`Esborra "${label}"`}
+                      aria-label={`Esborra ${label}`}
+                      style={{ background: 'none', border: 'none', color: 'var(--red)', cursor: 'pointer', fontSize: 13, lineHeight: 1, padding: '0 2px' }}
+                    >
+                      ✕
+                    </button>
+                  </span>
                 )
               })}
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+              <input
+                type="text"
+                value={nomNovaFesta}
+                onChange={(e) => setNomNovaFesta(e.target.value)}
+                placeholder="Nom d'una festa nova"
+                style={{ border: '1px solid var(--line)', borderRadius: 6, padding: '6px 8px', fontSize: 12 }}
+              />
+              <button type="button" onClick={afegeixFesta} className="btn-ghost" style={{ fontSize: 12, padding: '5px 10px' }}>
+                + Afegeix festa
+              </button>
             </div>
             <BotoDrive
               onFitxer={pujaPlantillaFesta}
