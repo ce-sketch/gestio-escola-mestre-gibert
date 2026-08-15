@@ -3,7 +3,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'
 import { db, auth } from '../../../firebase'
 import {
   normalitzaCooperatiu, grauNivell, grauCicle, grauGlobal, grauObjectiu,
-  grauObjectiuNivell, pendentsCooperatiu, actuacioCooperativaBuida,
+  grauObjectiuNivell, pendentsCooperatiu, actuacioCooperativaBuida, NOM_LLARG,
 } from '../../../lib/aprenentatgeCooperatiu'
 import { llegeixPlantillaCooperatiu, aplicaPlantilla, resumPlantilla } from '../../../lib/cooperatiuPlantillaParser'
 import { opcionsDe, ESCALES } from '../../../lib/escales'
@@ -393,89 +393,140 @@ export default function ValoracioCooperatiu({ cursEscolarId }) {
       )}
 
 
-      {/* ── Detall d'un nivell: les seves actuacions ── */}
+      {/* ── Detall d'un nivell ──────────────────────────────────────
+          Disposat com el full del centre: cada objectiu amb les seves
+          actuacions a sota, i les dues columnes de seguiment —gener i
+          juny— alhora, per no haver de canviar de moment per veure'n una.
+      */}
       {nivellObert && (
         <div className="caixa" style={{ marginTop: 16 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
-            <strong style={{ fontSize: 14 }}>
-              {nivellObert} — actuacions ({camp === 'gener' ? 'Gener' : 'Juny'})
+            <strong style={{ fontSize: 15 }}>
+              {NOM_LLARG[nivellObert] ?? `Nivell ${nivellObert}`}
             </strong>
             <button type="button" onClick={() => setNivellObert(null)} className="btn-ghost" style={{ maxWidth: 100 }}>
               Tanca
             </button>
           </div>
 
-          {dades.objectius.map((o, i) => {
+          {dades.objectius.map((o) => {
             const actuacions = dades.valors[nivellObert]?.[o.id]?.actuacions ?? []
             return (
-              <div key={o.id} style={{ marginTop: 14, borderTop: '1px dashed var(--line)', paddingTop: 10 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
-                  <strong style={{ fontSize: 12 }}>Objectiu {i + 1}</strong>
-                  <span style={{ fontSize: 12, fontWeight: 600 }}>
-                    {Math.round(grauObjectiuNivell(dades, nivellObert, o.id, camp))}%
-                  </span>
-                </div>
-                <p className="nota">{o.text}</p>
+              <div key={o.id} style={{ marginTop: 18 }}>
+                <div className="taula-scroll">
+                  <table style={{ borderCollapse: 'collapse', fontSize: 12, width: '100%' }}>
+                    <thead>
+                      <tr>
+                        <th style={{
+                          textAlign: 'left', padding: '8px 10px', width: '45%',
+                          border: '1px solid var(--line)', verticalAlign: 'top', fontWeight: 600,
+                        }}>
+                          {o.text}
+                        </th>
+                        <th colSpan={2} style={{ padding: '8px 10px', border: '1px solid var(--line)' }}>
+                          Seguiment gener
+                        </th>
+                        <th colSpan={2} style={{ padding: '8px 10px', border: '1px solid var(--line)' }}>
+                          Grau d'assoliment juny
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {actuacions.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} style={{ padding: '8px 10px', border: '1px solid var(--line)', color: 'var(--ink-soft)' }}>
+                            Cap actuació. El percentatge d'aquest objectiu s'escriu directament a la graella de dalt.
+                          </td>
+                        </tr>
+                      ) : actuacions.map((a) => {
+                        const opcions = opcionsDe(a)
+                        return (
+                          <tr key={a.id}>
+                            <td style={{ padding: '6px 10px', border: '1px solid var(--line)', verticalAlign: 'top' }}>
+                              <textarea
+                                rows={Math.min(12, Math.max(2, Math.ceil(a.text.length / 45)))}
+                                value={a.text}
+                                placeholder="Text de l'actuació i el seu criteri"
+                                onChange={(e) => canviaActuacio(nivellObert, o.id, a.id, 'text', e.target.value)}
+                                onBlur={() => desa(dades)}
+                                style={{
+                                  width: '100%', border: 'none', background: 'transparent',
+                                  fontSize: 12, resize: 'vertical', fontFamily: 'inherit', color: 'inherit',
+                                }}
+                              />
+                              <select
+                                value={a.escala ?? 'execucio50'}
+                                onChange={(e) => { const n = canviaActuacio(nivellObert, o.id, a.id, 'escala', e.target.value); desa(n) }}
+                                title="Escala d'aquesta actuació"
+                                style={{ border: '1px solid var(--line)', borderRadius: 6, padding: '2px 4px', fontSize: 10, maxWidth: '100%' }}
+                              >
+                                {a.escala === 'propia' && <option value="propia">Escala pròpia del full</option>}
+                                {ESCALES.map((es) => <option key={es.id} value={es.id}>{es.nom}</option>)}
+                              </select>
+                            </td>
 
-                {actuacions.length === 0 ? (
-                  <p className="nota">
-                    Cap actuació: el percentatge d'aquest objectiu s'escriu directament a la graella.
-                  </p>
-                ) : actuacions.map((a) => {
-                  const opcions = opcionsDe(a)
-                  const actual = opcions.find((op) => op.valor === Number(a[camp])) ?? null
-                  return (
-                    <div key={a.id} style={{ marginTop: 8, padding: '8px 10px', border: '1px solid var(--line)', borderRadius: 8 }}>
-                      <input
-                        type="text"
-                        value={a.text}
-                        placeholder="Text de l'actuació"
-                        onChange={(e) => canviaActuacio(nivellObert, o.id, a.id, 'text', e.target.value)}
-                        onBlur={() => desa(dades)}
-                        style={{ width: '100%', border: '1px solid var(--line)', borderRadius: 6, padding: '5px 8px', fontSize: 12 }}
-                      />
-                      <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', marginTop: 6 }}>
-                        {opcions.map((op) => (
-                          <button
-                            key={op.id}
-                            type="button"
-                            onClick={() => { const n = canviaActuacio(nivellObert, o.id, a.id, camp, op.valor); desa(n) }}
-                            style={{
-                              fontSize: 11, padding: '4px 10px', borderRadius: 6, cursor: 'pointer',
-                              border: `1px solid ${actual?.id === op.id ? 'var(--navy)' : 'var(--line)'}`,
-                              background: actual?.id === op.id ? 'var(--navy)' : 'transparent',
-                              color: actual?.id === op.id ? '#fff' : 'var(--ink)',
-                            }}
-                          >
-                            {op.label}
-                          </button>
-                        ))}
-                        <input
-                          type="number" min={0} max={100}
-                          value={a[camp]}
-                          onChange={(e) => canviaActuacio(nivellObert, o.id, a.id, camp, e.target.value)}
-                          onBlur={() => desa(dades)}
-                          style={{ width: 56, border: '1px solid var(--line)', borderRadius: 6, padding: '4px 6px', fontSize: 11 }}
-                        />
-                        <span style={{ fontSize: 10, color: 'var(--ink-soft)' }}>%</span>
-                        <select
-                          value={a.escala ?? 'execucio50'}
-                          onChange={(e) => { const n = canviaActuacio(nivellObert, o.id, a.id, 'escala', e.target.value); desa(n) }}
-                          style={{ border: '1px solid var(--line)', borderRadius: 6, padding: '3px 5px', fontSize: 10, maxWidth: 190 }}
-                        >
-                          {a.escala === 'propia' && <option value="propia">Escala pròpia del full</option>}
-                          {ESCALES.map((es) => <option key={es.id} value={es.id}>{es.nom}</option>)}
-                        </select>
-                      </div>
-                    </div>
-                  )
-                })}
+                            {['gener', 'juny'].map((m) => {
+                              const actual = opcions.find((op) => op.valor === Number(a[m])) ?? null
+                              return [
+                                <td key={`${m}-sel`} style={{ padding: '6px 8px', border: '1px solid var(--line)', verticalAlign: 'middle', textAlign: 'center' }}>
+                                  {opcions.length > 0 ? (
+                                    <select
+                                      value={actual ? String(actual.valor) : ''}
+                                      onChange={(e) => {
+                                        const n = canviaActuacio(nivellObert, o.id, a.id, m, e.target.value === '' ? '' : Number(e.target.value))
+                                        desa(n)
+                                      }}
+                                      style={{ border: '1px solid var(--line)', borderRadius: 6, padding: '4px 6px', fontSize: 12, minWidth: 110 }}
+                                    >
+                                      <option value="">—</option>
+                                      {opcions.map((op) => (
+                                        <option key={op.id} value={op.valor}>{op.label}</option>
+                                      ))}
+                                    </select>
+                                  ) : (
+                                    <input
+                                      type="number" min={0} max={100}
+                                      value={a[m]}
+                                      onChange={(e) => canviaActuacio(nivellObert, o.id, a.id, m, e.target.value)}
+                                      onBlur={() => desa(dades)}
+                                      style={{ width: 70, border: '1px solid var(--line)', borderRadius: 6, padding: '4px 6px', fontSize: 12 }}
+                                    />
+                                  )}
+                                </td>,
+                                <td key={`${m}-pct`} style={{
+                                  padding: '6px 8px', border: '1px solid var(--line)',
+                                  textAlign: 'center', background: 'var(--paper)', minWidth: 56,
+                                }}>
+                                  {a[m] === '' || a[m] === null || a[m] === undefined
+                                    ? <span style={{ color: 'var(--ink-soft)' }}>—</span>
+                                    : `${Math.round(Number(a[m]))}%`}
+                                </td>,
+                              ]
+                            })}
+                          </tr>
+                        )
+                      })}
+
+                      <tr>
+                        <td style={{ padding: '6px 10px', border: '1px solid var(--line)', fontWeight: 600 }}>
+                          Grau de l'objectiu
+                        </td>
+                        <td colSpan={2} style={{ padding: '6px 10px', border: '1px solid var(--line)', textAlign: 'center', fontWeight: 600 }}>
+                          {Math.round(grauObjectiuNivell(dades, nivellObert, o.id, 'gener'))}%
+                        </td>
+                        <td colSpan={2} style={{ padding: '6px 10px', border: '1px solid var(--line)', textAlign: 'center', fontWeight: 600 }}>
+                          {Math.round(grauObjectiuNivell(dades, nivellObert, o.id, 'juny'))}%
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
 
                 <button
                   type="button"
                   onClick={() => afegeixActuacio(nivellObert, o.id)}
                   className="btn-ghost"
-                  style={{ marginTop: 8, fontSize: 12, padding: '4px 10px', maxWidth: 180 }}
+                  style={{ marginTop: 6, fontSize: 12, padding: '4px 10px', maxWidth: 180 }}
                 >
                   + Afegeix actuació
                 </button>
