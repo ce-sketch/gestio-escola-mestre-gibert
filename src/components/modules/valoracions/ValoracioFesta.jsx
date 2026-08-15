@@ -12,7 +12,7 @@ import {
 
 /** Valoració d'una festa: objectius amb pes, desglossats per grup
  *  (cicles + equip directiu) amb activitats i grau d'assoliment. */
-export default function ValoracioFesta({ cursEscolarId, festaId }) {
+export default function ValoracioFesta({ cursEscolarId, festaId, etiquetaFesta }) {
   const [festa, setFesta] = useState(null)
   const [grupObert, setGrupObert] = useState(GRUPS[0])
   const [carregant, setCarregant] = useState(false)
@@ -36,7 +36,7 @@ export default function ValoracioFesta({ cursEscolarId, festaId }) {
       } else if (cursEscolarId === CURS_FESTES && FESTES_PLANTILLES_26_27[festaId]) {
         setFesta(construeixFestaAmbPlantilla(FESTES_PLANTILLES_26_27[festaId]))
       } else {
-        const label = FESTES.find((f) => f.id === festaId)?.label ?? festaId
+        const label = etiquetaFesta ?? FESTES.find((f) => f.id === festaId)?.label ?? festaId
         setFesta(festaBuida(label))
       }
     } catch (err) {
@@ -123,6 +123,12 @@ export default function ValoracioFesta({ cursEscolarId, festaId }) {
   }
 
   function esborraActivitatFesta(grupNom, objectiuId, activitatId) {
+    const activitat = festa.grups?.[grupNom]?.[objectiuId]?.activitats?.find((a) => a.id === activitatId)
+    if (activitat?.text?.trim() && !window.confirm(`Segur que vols esborrar «${activitat.text.slice(0, 60)}»?`)) return
+    return esborraActivitatFestaConfirmada(grupNom, objectiuId, activitatId)
+  }
+
+  function esborraActivitatFestaConfirmada(grupNom, objectiuId, activitatId) {
     const nova = {
       ...festa,
       grups: {
