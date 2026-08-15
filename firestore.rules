@@ -137,20 +137,29 @@ service cloud.firestore {
     // Valoracions de cicle/comissió/equip i festes: qualsevol docent pot
     // llegir-les i escriure-hi (les omplen ells mateixos); el mòdul
     // "Matriu General" (nomès admin) les llegeix totes juntes.
+    // Les valoracions les omplen tots els docents, però **esborrar-les
+    // només ho pot fer l'administrador**: una valoració és feina d'un curs
+    // sencer i no s'ha de poder perdre per un clic de qualsevol.
     match /valoracions/{valoracioId} {
-      allow read, write: if esComptePersonal();
+      allow read: if esComptePersonal();
+      allow create, update: if esComptePersonal();
+      allow delete: if esAdmin();
     }
 
     // Valoracions detallades de festes (objectius + desglossament per
     // cicle/equip amb activitats i grau d'assoliment) — mateix accés.
     match /festesDetall/{festaId} {
-      allow read, write: if esComptePersonal();
+      allow read: if esComptePersonal();
+      allow create, update: if esComptePersonal();
+      allow delete: if esAdmin();
     }
 
     // Valoració detallada de les activitats complementàries/sortides, per
     // cicle — mateix accés que la resta de valoracions.
     match /activitatsComplementariesDetall/{activitatId} {
-      allow read, write: if esComptePersonal();
+      allow read: if esComptePersonal();
+      allow create, update: if esComptePersonal();
+      allow delete: if esAdmin();
     }
 
     // Configuració de quines comissions/equips i festes estan actives cada
@@ -161,11 +170,15 @@ service cloud.firestore {
     // Matemàtiques: resultats del ConMat i del COSMOS, un document per
     // alumne i curs. Es pugen dels informes de l'Innovamat.
     match /matematiques/{registreId} {
-      allow read, write: if esComptePersonal();
+      allow read: if esComptePersonal();
+      allow create, update: if esComptePersonal();
+      allow delete: if esAdmin();
     }
 
     match /aprenentatgeCooperatiu/{cursEscolarId} {
-      allow read, write: if esComptePersonal();
+      allow read: if esComptePersonal();
+      allow create, update: if esComptePersonal();
+      allow delete: if esAdmin();
     }
 
     match /valoracionsConfig/{cursEscolarId} {
