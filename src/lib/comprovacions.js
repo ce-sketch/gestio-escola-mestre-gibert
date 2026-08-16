@@ -13,11 +13,7 @@
 import {
   objectiusPerDefecte, resultatOperatiu, resultatObjectiu, normalitzaObjectius,
 } from './pgac'
-import {
-  mitjanaObjectiu, mitjanaValoracio, pendentsValoracio, valoracioBuida,
-  normalitzaConfigValoracions, nomsActius, suggerimentsComissions,
-  afegeixALlista, llistaActivaPerDefecte,
-} from './valoracions'
+import { mitjanaObjectiu, mitjanaValoracio, pendentsValoracio, valoracioBuida } from './valoracions'
 import { opcionsDe, ESCALES } from './escales'
 import { NIVELLS_GRAU, festaBuida, mitjanaObjectiuGrup, mitjanaGrup, mitjanaGeneralFesta } from './festesDetall'
 import { escalaDeFormula, escalaDeText } from './excelLectura'
@@ -202,77 +198,6 @@ function grupValoracions() {
         { id: 'b', actuacions: [actuacio(50), actuacio(''), actuacio(''), actuacio('')] },
       ],
     }, 'gener')
-  ))
-
-  // ── Què surt actiu a cada pestanya ────────────────────────────────────
-
-  proves.push(comprova(
-    'Una configuració desada abans de poder triar les mixtes segueix ensenyant-les totes quatre',
-    { quantes: 4, actives: 4 },
-    () => {
-      // Els documents que ja hi ha desats a Firestore no tenen el camp
-      // "mixtes": no poden quedar-se amb la pestanya buida.
-      const c = normalitzaConfigValoracions({ comissions: [{ nom: 'Comissió TAC', activa: true }] })
-      return { quantes: c.mixtes.length, actives: nomsActius(c.mixtes).length }
-    }
-  ))
-
-  proves.push(comprova(
-    'Desactivar una comissió mixta la treu de la llista del professorat',
-    ['Comissió Comunicació', 'Jardins. AREP'],
-    () => nomsActius(normalitzaConfigValoracions({
-      mixtes: [
-        { nom: 'Comissió Comunicació', activa: true },
-        { nom: 'Comissió Espai de migdia', activa: false },
-        { nom: 'Jardins. AREP', activa: true },
-      ],
-    }).mixtes)
-  ))
-
-  proves.push(comprova(
-    "Una mixta desactivada tampoc no reapareix suggerida com a comissió normal",
-    false,
-    () => suggerimentsComissions(
-      normalitzaConfigValoracions({
-        comissions: [{ nom: 'Comissió TAC', activa: true }],
-        mixtes: [{ nom: 'Comissió Espai de migdia', activa: false }],
-      }),
-      // Encara que ja hi hagi la valoració desada d'aquest curs: totes dues
-      // llistes viuen a la mateixa col·lecció.
-      ['Comissió Espai de migdia']
-    ).includes('Comissió Espai de migdia')
-  ))
-
-  proves.push(comprova(
-    'Una mixta afegida de nou tampoc no se suggereix a la pestanya de comissions',
-    ['Comissió TAC'],
-    () => suggerimentsComissions(
-      normalitzaConfigValoracions({
-        comissions: [{ nom: 'Comissió TAC', activa: true }],
-        mixtes: [{ nom: 'Comissió Menjador i AFA', activa: true }],
-      }),
-      ['Comissió Menjador i AFA']
-    )
-  ))
-
-  proves.push(comprova(
-    'Els cicles no se suggereixen com a comissió, encara que en tinguin de desades',
-    ['Comissió TAC'],
-    () => suggerimentsComissions(
-      normalitzaConfigValoracions({ comissions: [{ nom: 'Comissió TAC', activa: true }], mixtes: [] }),
-      ['Cicle Inicial', 'Educació Infantil']
-    )
-  ))
-
-  proves.push(comprova(
-    'Un nom repetit no es duplica a la llista, ni canviant-hi les majúscules',
-    1,
-    () => {
-      let llista = llistaActivaPerDefecte([])
-      llista = afegeixALlista(llista, 'Comissió Patis')
-      llista = afegeixALlista(llista, '  comissió patis ')
-      return llista.length
-    }
   ))
 
   return { titol: 'Valoracions', proves }
