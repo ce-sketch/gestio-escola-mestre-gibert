@@ -1,17 +1,47 @@
-// Model detallat de valoració de festes, fidel a les plantilles reals:
-// cada festa té uns Objectius (amb un pes % entre ells), i es desglossa
-// per grup (Educació Infantil, Cicle Inicial, Cicle Mitjà, Cicle Superior,
-// Equip Directiu, i a vegades Comissió festes / Equip de coordinació), amb
-// un pes % entre grups. Dins de cada grup, cada objectiu té una llista
-// d'activitats/indicadors, cadascuna amb un grau d'assoliment (escala de 6
-// nivells, igual que als fulls originals).
+// Model detallat de valoració de festes, fidel a les plantilles reals del
+// centre.
+//
+// Com és de debò un full de festa
+// -------------------------------
+// Cada festa es desglossa per grup: els quatre cicles, l'Equip Directiu i
+// l'Equip de coordinació. I **cada grup té els seus propis objectius**, que
+// no són els mateixos ni en text ni en nombre: els cicles comparteixen els
+// de la festa, però l'Equip Directiu en té de seus (valorar l'organització
+// de l'exposició, els aspectes tècnics...). Per això els objectius pengen
+// del grup i no de la festa.
+//
+// Dins de cada objectiu hi ha les activitats/indicadors, cadascuna amb el
+// seu grau d'assoliment en una escala de sis nivells.
+//
+// Els pesos entre grups surten escrits als criteris del full
+// ("Cicles: 80% · Equip de coordnació: 0% · Equip directiu: 20%") i són
+// editables: l'Equip de coordinació avui no avalua, però podria fer-ho.
 
-export const GRUPS = ['Educació Infantil', 'Cicle Inicial', 'Cicle Mitjà', 'Cicle Superior', 'Equip Directiu']
+export const TIPUS_GRUP = { CICLE: 'cicle', DIRECTIU: 'directiu', COORDINACIO: 'coordinacio' }
 
-// Escala de 6 nivells, CONFIRMADA amb el full de la Castanyada del curs
-// 2025-26, on cada nivell surt al costat del seu percentatge
-// (Alt 100%, Bo 80%, Satisfactori 60%, Poc satisfactori 40%, Baix 20%,
-// No assolit 0%).
+export const GRUPS_PER_DEFECTE = [
+  { nom: 'Educació Infantil', tipus: TIPUS_GRUP.CICLE },
+  { nom: 'Cicle Inicial', tipus: TIPUS_GRUP.CICLE },
+  { nom: 'Cicle Mitjà', tipus: TIPUS_GRUP.CICLE },
+  { nom: 'Cicle Superior', tipus: TIPUS_GRUP.CICLE },
+  { nom: 'Equip Directiu', tipus: TIPUS_GRUP.DIRECTIU },
+  { nom: 'Equip de coordinació', tipus: TIPUS_GRUP.COORDINACIO },
+]
+
+/** Els noms, per reconèixer els fulls d'una plantilla. Al full del centre
+ *  l'Equip de coordinació surt com a "Comissió de Festes". */
+export const GRUPS = GRUPS_PER_DEFECTE.map((g) => g.nom)
+export const NOMS_ALTERNATIUS = { 'Comissió de Festes': 'Equip de coordinació' }
+
+export const PESOS_PER_DEFECTE = {
+  [TIPUS_GRUP.CICLE]: 80,
+  [TIPUS_GRUP.COORDINACIO]: 0,
+  [TIPUS_GRUP.DIRECTIU]: 20,
+}
+
+// Escala de 6 nivells, CONFIRMADA amb el full de la Castanyada, on cada
+// nivell surt al costat del seu percentatge (Alt 100%, Bo 80%,
+// Satisfactori 60%, Poc satisfactori 40%, Baix 20%, No assolit 0%).
 export const NIVELLS_GRAU = [
   { id: 'no_assolit', label: 'No assolit', valor: 0 },
   { id: 'baix', label: 'Baix', valor: 20 },
@@ -21,43 +51,97 @@ export const NIVELLS_GRAU = [
   { id: 'alt', label: 'Alt', valor: 100 },
 ]
 
+/** El text del full ("Bo") passat a percentatge. */
+export function grauDeText(text) {
+  const net = (text ?? '').toString().trim().toLowerCase()
+  if (!net) return ''
+  const nivell = NIVELLS_GRAU.find((n) => n.label.toLowerCase() === net)
+  return nivell ? nivell.valor : ''
+}
+
 export function activitatBuida() {
   return { id: crypto.randomUUID(), text: '', grau: '' }
 }
 
 export function objectiuFestaBuit(pes = 0) {
-  return { id: crypto.randomUUID(), text: '', pes }
+  return { id: crypto.randomUUID(), text: '', pes, activitats: [], comentaris: '' }
 }
 
-function grupBuit(objectius) {
-  const perObjectiu = {}
-  for (const o of objectius) perObjectiu[o.id] = { activitats: [], comentaris: '' }
-  return perObjectiu
+export function grupBuit(nom, tipus, objectius = []) {
+  return { id: crypto.randomUUID(), nom, tipus, objectius }
+}
+
+/** Els tres objectius que porten els fulls de festa per defecte, amb els
+ *  pesos escrits als criteris ("Objectiu 1: 30% · 2: 30% · 3: 40%"). */
+export function objectiusPerDefecte() {
+  return [objectiuFestaBuit(30), objectiuFestaBuit(30), objectiuFestaBuit(40)]
 }
 
 export function festaBuida(festaLabel) {
-  // Els pesos entre objectius surten escrits als criteris dels fulls de
-  // festa: "Objectiu 1: 30% · Objectiu 2: 30% · Objectiu 3: 40%".
-  const objectius = [objectiuFestaBuit(30), objectiuFestaBuit(30), objectiuFestaBuit(40)]
-  const grups = {}
-  for (const g of GRUPS) grups[g] = grupBuit(objectius)
   return {
     activitat: festaLabel,
     data: '',
-    objectius,
-    pesCicles: 80,
-    pesEquipDirectiu: 20,
+    pesos: { ...PESOS_PER_DEFECTE },
+    grups: GRUPS_PER_DEFECTE.map((g) => grupBuit(g.nom, g.tipus, objectiusPerDefecte())),
+  }
+}
+
+/**
+ * Deixa qualsevol festa amb la forma d'ara.
+ *
+ * Les festes desades amb el model vell portaven els objectius a la festa i
+ * un mapa de grups a part; aquí es reparteixen perquè cada grup tingui els
+ * seus. Així el que ja s'hagi valorat no es perd.
+ */
+export function normalitzaFesta(festa) {
+  if (!festa) return null
+  if (Array.isArray(festa.grups)) {
+    return {
+      ...festa,
+      pesos: { ...PESOS_PER_DEFECTE, ...(festa.pesos ?? {}) },
+      grups: festa.grups.map((g) => ({
+        ...g,
+        objectius: (g.objectius ?? []).map((o) => ({
+          comentaris: '', activitats: [], ...o,
+        })),
+      })),
+    }
+  }
+
+  const objectiusFesta = festa.objectius ?? []
+  const grups = GRUPS_PER_DEFECTE.map((def) => {
+    const vell = festa.grups?.[def.nom] ?? {}
+    return grupBuit(def.nom, def.tipus, objectiusFesta.map((o) => ({
+      id: o.id,
+      text: o.text,
+      pes: o.pes,
+      activitats: vell[o.id]?.activitats ?? [],
+      comentaris: vell[o.id]?.comentaris ?? '',
+    })))
+  })
+
+  return {
+    activitat: festa.activitat ?? '',
+    data: festa.data ?? '',
+    pesos: {
+      [TIPUS_GRUP.CICLE]: Number(festa.pesCicles ?? PESOS_PER_DEFECTE[TIPUS_GRUP.CICLE]),
+      [TIPUS_GRUP.COORDINACIO]: PESOS_PER_DEFECTE[TIPUS_GRUP.COORDINACIO],
+      [TIPUS_GRUP.DIRECTIU]: Number(festa.pesEquipDirectiu ?? PESOS_PER_DEFECTE[TIPUS_GRUP.DIRECTIU]),
+    },
     grups,
   }
 }
 
-/** Mitjana d'un objectiu concret dins d'un grup — mitjana de les activitats
- *  que ja tenen un grau assignat. */
-export function mitjanaObjectiuGrup(festa, grupNom, objectiuId) {
-  const activitats = festa.grups?.[grupNom]?.[objectiuId]?.activitats ?? []
+export function grupDe(festa, grupNom) {
+  return (festa?.grups ?? []).find((g) => g.nom === grupNom) ?? null
+}
+
+/** Mitjana d'un objectiu: mitjana de les seves activitats. Als fulls les
+ *  activitats vénen pre-omplertes amb "No assolit", o sigui que les que no
+ *  s'han valorat compten 0, no s'ignoren. */
+export function mitjanaObjectiu(objectiu) {
+  const activitats = objectiu?.activitats ?? []
   if (activitats.length === 0) return null
-  // Als fulls de festa les activitats vénen pre-omplertes amb "No assolit":
-  // les que no s'han valorat compten 0, no s'ignoren.
   const suma = activitats.reduce((total, a) => {
     const n = Number(a.grau)
     return total + (a.grau === '' || a.grau === null || a.grau === undefined || Number.isNaN(n) ? 0 : n)
@@ -65,20 +149,27 @@ export function mitjanaObjectiuGrup(festa, grupNom, objectiuId) {
   return suma / activitats.length
 }
 
+export function mitjanaObjectiuGrup(festa, grupNom, objectiuId) {
+  const grup = grupDe(festa, grupNom)
+  return mitjanaObjectiu((grup?.objectius ?? []).find((o) => o.id === objectiuId))
+}
+
 /** Quantes activitats queden per valorar dins d'un objectiu d'un grup. */
 export function pendentsObjectiuGrup(festa, grupNom, objectiuId) {
-  const activitats = festa.grups?.[grupNom]?.[objectiuId]?.activitats ?? []
+  const grup = grupDe(festa, grupNom)
+  const objectiu = (grup?.objectius ?? []).find((o) => o.id === objectiuId)
+  const activitats = objectiu?.activitats ?? []
   return {
     total: activitats.length,
     valorats: activitats.filter((a) => a.grau !== '' && a.grau !== null && a.grau !== undefined).length,
   }
 }
 
-/** Mitjana ponderada de tots els objectius d'un grup (fent servir el pes
- *  de cada objectiu). */
+/** Mitjana ponderada dels objectius d'un grup, amb el pes de cada objectiu. */
 export function mitjanaGrup(festa, grupNom) {
-  const parts = festa.objectius
-    .map((o) => ({ valor: mitjanaObjectiuGrup(festa, grupNom, o.id), pes: Number(o.pes) || 0 }))
+  const grup = grupDe(festa, grupNom)
+  const parts = (grup?.objectius ?? [])
+    .map((o) => ({ valor: mitjanaObjectiu(o), pes: Number(o.pes) || 0 }))
     .filter((p) => p.valor !== null)
   if (parts.length === 0) return null
   const pesTotal = parts.reduce((a, p) => a + p.pes, 0)
@@ -86,19 +177,27 @@ export function mitjanaGrup(festa, grupNom) {
   return parts.reduce((a, p) => a + p.valor * p.pes, 0) / pesTotal
 }
 
-/** Mitjana general de la festa: mitjana dels cicles (Infantil+CI+CM+CS)
- *  ponderada amb "pesCicles", i l'Equip Directiu ponderat amb
- *  "pesEquipDirectiu" — igual que als fulls originals ("Cicles: 80% /
- *  Equip directiu: 20%"). */
+/**
+ * Mitjana general de la festa.
+ *
+ * Els cicles fan **mitjana** entre ells i el resultat entra amb el pes dels
+ * cicles; l'Equip Directiu i l'Equip de coordinació entren amb el seu.
+ * Un grup amb pes 0 no mou el resultat, que és el cas de la coordinació
+ * mentre no avaluï.
+ */
 export function mitjanaGeneralFesta(festa) {
-  const cicles = ['Educació Infantil', 'Cicle Inicial', 'Cicle Mitjà', 'Cicle Superior']
-  const valorsCicles = cicles.map((g) => mitjanaGrup(festa, g)).filter((v) => v !== null)
-  const mitjanaCicles = valorsCicles.length > 0 ? valorsCicles.reduce((a, b) => a + b, 0) / valorsCicles.length : null
-  const mitjanaDirectiu = mitjanaGrup(festa, 'Equip Directiu')
-
   const parts = []
-  if (mitjanaCicles !== null) parts.push({ valor: mitjanaCicles, pes: Number(festa.pesCicles) || 0 })
-  if (mitjanaDirectiu !== null) parts.push({ valor: mitjanaDirectiu, pes: Number(festa.pesEquipDirectiu) || 0 })
+  for (const tipus of [TIPUS_GRUP.CICLE, TIPUS_GRUP.DIRECTIU, TIPUS_GRUP.COORDINACIO]) {
+    const valors = (festa?.grups ?? [])
+      .filter((g) => g.tipus === tipus)
+      .map((g) => mitjanaGrup(festa, g.nom))
+      .filter((v) => v !== null)
+    if (valors.length === 0) continue
+    parts.push({
+      valor: valors.reduce((a, b) => a + b, 0) / valors.length,
+      pes: Number(festa?.pesos?.[tipus]) || 0,
+    })
+  }
   if (parts.length === 0) return null
   const pesTotal = parts.reduce((a, p) => a + p.pes, 0)
   if (pesTotal === 0) return parts.reduce((a, p) => a + p.valor, 0) / parts.length

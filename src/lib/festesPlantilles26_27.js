@@ -1,4 +1,4 @@
-import { GRUPS, objectiuFestaBuit } from './festesDetall'
+import { GRUPS_PER_DEFECTE, grupBuit, PESOS_PER_DEFECTE } from './festesDetall'
 
 // Text real dels objectius (i, quan es coneixen, les activitats
 // d'Educació Infantil / Cicle Inicial) de cada festa, tal com surten a les
@@ -130,30 +130,31 @@ export const FESTES_PLANTILLES_26_27 = {
 
 /** Converteix les dades de plantilla d'una festa (text pla) en l'estructura
  *  real que fa servir l'app (amb ids i comentaris buits), llesta per
- *  editar. Els grups sense text real (Cicle Mitjà, Cicle Superior, Equip
- *  Directiu) es deixen buits — el mestre hi pot afegir activitats igual. */
+ *  editar.
+ *
+ *  Tots els grups arrenquen amb els objectius de la festa; els que no tenen
+ *  text real d'activitats (Cicle Mitjà, Cicle Superior, Equip Directiu,
+ *  Equip de coordinació) queden amb els objectius però sense activitats. A
+ *  l'Equip Directiu i a la coordinació els objectius són seus i es poden
+ *  canviar: al full del centre no són els mateixos que els dels cicles. */
 export function construeixFestaAmbPlantilla(plantilla) {
-  const objectius = plantilla.objectiusText.map((o) => objectiuFestaBuit(o.pes))
-  objectius.forEach((o, i) => { o.text = plantilla.objectiusText[i].text })
-
-  const grups = {}
-  for (const g of GRUPS) {
-    grups[g] = {}
-    objectius.forEach((o, oi) => {
-      const activitatsText = plantilla.activitatsPerGrup[g]?.[oi] ?? []
-      grups[g][o.id] = {
-        activitats: activitatsText.map((a) => ({ id: crypto.randomUUID(), text: a.text, grau: '' })),
-        comentaris: '',
-      }
-    })
-  }
+  const grups = GRUPS_PER_DEFECTE.map((def) => grupBuit(
+    def.nom,
+    def.tipus,
+    plantilla.objectiusText.map((o, oi) => ({
+      id: crypto.randomUUID(),
+      text: o.text,
+      pes: o.pes,
+      activitats: (plantilla.activitatsPerGrup[def.nom]?.[oi] ?? [])
+        .map((a) => ({ id: crypto.randomUUID(), text: a.text, grau: '' })),
+      comentaris: '',
+    }))
+  ))
 
   return {
     activitat: plantilla.activitat,
     data: '',
-    objectius,
-    pesCicles: 80,
-    pesEquipDirectiu: 20,
+    pesos: { ...PESOS_PER_DEFECTE },
     grups,
   }
 }

@@ -21,10 +21,15 @@
 
 import {
   interpretaResum, interpretaFullObjectiu, interpretaResumCicle,
-  interpretaResumFesta, interpretaFullGrupFesta,
 } from './comissioTemplateParser'
+import {
+  interpretaFullGrupFesta, interpretaPesosFesta, interpretaPesosObjectius,
+  interpretaCapcaleraFesta,
+} from './festesPlantillaParser'
 import { CICLES, objectiuBuit, actuacioBuida } from './valoracions'
-import { GRUPS, festaBuida, objectiuFestaBuit, activitatBuida } from './festesDetall'
+import {
+  GRUPS, GRUPS_PER_DEFECTE, NOMS_ALTERNATIUS, PESOS_PER_DEFECTE, grupBuit,
+} from './festesDetall'
 
 const ES_RESUM = /resum/i
 const ES_OBJECTIU = /^objectiu\s*\d+$/i
@@ -42,7 +47,8 @@ export function classificaFulls(nomsDeFulls = []) {
   const noms = nomsDeFulls.map((n) => (n ?? '').trim()).filter(Boolean)
   const teResum = noms.some((n) => ES_RESUM.test(n))
   const teObjectius = noms.some((n) => ES_OBJECTIU.test(n))
-  const teGrups = noms.some((n) => GRUPS.some((g) => g.toLowerCase() === n.toLowerCase()))
+  const nomsDeGrup = [...GRUPS, ...Object.keys(NOMS_ALTERNATIUS)]
+  const teGrups = noms.some((n) => nomsDeGrup.some((g) => g.toLowerCase() === n.toLowerCase()))
 
   if (teResum && teObjectius) return 'comissio'
   if (teResum && teGrups) return 'festa'
@@ -82,44 +88,57 @@ export function analitzaLlibre(XLSX, workbook, { mixtes = [] } = {}) {
   const estructura = classificaFulls(fulls)
 
   if (estructura === 'festa') {
-    const resumFesta = interpretaResumFesta(files(busca(ES_RESUM) ?? fulls[0]))
-    if (!resumFesta.activitat || resumFesta.objectius.length === 0) {
-      return { tipus: 'desconegut', nom: '', resum: 'Sembla una festa, però no s\'hi troben els objectius.', dades: null }
-    }
+    const filesResum = files(busca(ES_RESUM) ?? fulls[0])
+    const { activitat, data } = interpretaCapcaleraFesta(filesResum)
+    const pesosGrup = interpretaPesosFesta(filesResum)
+    const pesosObjectiu = interpretaPesosObjectius(filesResum)
 
-    const festa = festaBuida(resumFesta.activitat)
-    festa.data = resumFesta.data
-    festa.pesCicles = resumFesta.pesCicles
-    festa.pesEquipDirectiu = resumFesta.pesEquipDirectiu
-    festa.objectius = resumFesta.objectius.map(({ num, text, pes }) => {
-      const o = objectiuFestaBuit(pes)
-      o.text = text
-      o._num = num // temporal, per emparellar amb els fulls de grup
-      return o
-    })
-
-    const grups = {}
-    let totalActivitats = 0
-    for (const g of GRUPS) {
-      grups[g] = {}
-      const nomFullGrup = fulls.find((n) => n.trim().toLowerCase() === g.toLowerCase())
-      const perObjectiu = nomFullGrup ? interpretaFullGrupFesta(files(nomFullGrup), resumFesta.objectius) : {}
-      for (const o of festa.objectius) {
-        const textos = perObjectiu[o._num] ?? []
-        totalActivitats += textos.length
-        grups[g][o.id] = {
-          activitats: textos.map(({ text }) => { const a = activitatBuida(); a.text = text; return a }),
-          comentaris: '',
-        }
+    // Cada full que sigui d'un grup es llegeix sencer: els seus objectius,
+    // les seves activitats i el grau que hi hagi marcat.
+    const llegits = {}
+    for (const nomFull of fulls) {
+      const llegit = interpretaFullGrupFesta(files(nomFull))
+      if (llegit && llegit.objectius.length > 0 && GRUPS.includes(llegit.nom)) {
+        llegits[llegit.nom] = llegit
       }
     }
-    festa.grups = grups
-    festa.objectius.forEach((o) => { delete o._num })
+
+    if (!activitat || Object.keys(llegits).length === 0) {
+      return { tipus: 'desconegut', nom: '', resum: "Sembla una festa, però no s'hi troben els fulls dels grups.", dades: null }
+    }
+
+    let totalActivitats = 0
+    let totalValorades = 0
+    const grups = GRUPS_PER_DEFECTE.map((def) => {
+      const llegit = llegits[def.nom]
+      const objectius = (llegit?.objectius ?? []).map((o, oi) => {
+        totalActivitats += o.activitats.length
+        totalValorades += o.activitats.filter((a) => a.grau !== '').length
+        return {
+          id: crypto.randomUUID(),
+          text: o.text,
+          // Els pesos només surten escrits per als tres objectius de la
+          // festa; si un grup en té més (l'Equip Directiu, per exemple),
+          // els que sobren queden a 0 i es reparteixen a mà.
+          pes: pesosObjectiu[oi + 1] ?? 0,
+          activitats: o.activitats.map((a) => ({ id: crypto.randomUUID(), text: a.text, grau: a.grau })),
+          comentaris: oi === 0 ? (llegit?.comentaris ?? '') : '',
+        }
+      })
+      return grupBuit(def.nom, def.tipus, objectius)
+    })
+
+    const festa = {
+      activitat,
+      data,
+      pesos: { ...PESOS_PER_DEFECTE, ...pesosGrup },
+      grups,
+    }
 
     return {
       tipus: 'festa',
-      nom: resumFesta.activitat,
-      resum: `${festa.objectius.length} objectius · ${totalActivitats} activitats`,
+      nom: activitat,
+      resum: `${Object.keys(llegits).length} grups · ${totalActivitats} activitats · ${totalValorades} ja valorades`,
       dades: { festa },
     }
   }

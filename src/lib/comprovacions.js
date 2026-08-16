@@ -19,7 +19,12 @@ import {
   afegeixALlista, llistaActivaPerDefecte,
 } from './valoracions'
 import { opcionsDe, ESCALES } from './escales'
-import { NIVELLS_GRAU, festaBuida, mitjanaObjectiuGrup, mitjanaGrup, mitjanaGeneralFesta } from './festesDetall'
+import {
+  NIVELLS_GRAU, TIPUS_GRUP, festaBuida, normalitzaFesta, grauDeText,
+  mitjanaObjectiuGrup, mitjanaGrup, mitjanaGeneralFesta,
+} from './festesDetall'
+import { objectiuFestaBuit } from './festesDetall'
+import { interpretaFullGrupFesta, interpretaPesosFesta } from './festesPlantillaParser'
 import { escalaDeFormula, escalaDeText } from './excelLectura'
 import { indexAlumne, graellaAbsencies } from './indexAbsencies'
 import { primerNom, generaInformeQualitatiu } from './informeQualitatiu'
@@ -376,6 +381,10 @@ function grupLectors() {
 
 function grupFestes() {
   const proves = []
+  const acts = (graus) => graus.map((g) => ({ id: Math.random().toString(), text: 'a', grau: g }))
+  const posa = (festa, grupNom, indexObjectiu, graus) => {
+    festa.grups.find((g) => g.nom === grupNom).objectius[indexObjectiu].activitats = acts(graus)
+  }
 
   proves.push(comprova(
     'Els 6 nivells valen 0 / 20 / 40 / 60 / 80 / 100',
@@ -386,7 +395,20 @@ function grupFestes() {
   proves.push(comprova(
     'Una festa nova neix amb els pesos 30/30/40 dels fulls del centre',
     [30, 30, 40],
-    () => festaBuida('Castanyada').objectius.map((o) => o.pes)
+    () => festaBuida('Castanyada').grups[0].objectius.map((o) => o.pes)
+  ))
+
+  proves.push(comprova(
+    'I amb els sis grups: quatre cicles, Equip Directiu i Equip de coordinació al 0%',
+    { grups: 6, cicles: 4, pesos: { cicle: 80, coordinacio: 0, directiu: 20 } },
+    () => {
+      const f = festaBuida('Castanyada')
+      return {
+        grups: f.grups.length,
+        cicles: f.grups.filter((g) => g.tipus === TIPUS_GRUP.CICLE).length,
+        pesos: f.pesos,
+      }
+    }
   ))
 
   // La Castanyada 25-26, Educació Infantil:
@@ -396,66 +418,195 @@ function grupFestes() {
   //   amb els pesos 30/30/40           = 98,00%  ← el que diu el full
   const castanyadaEI = () => {
     const festa = festaBuida('Castanyada')
-    const [o1, o2, o3] = festa.objectius
-    const posa = (objectiu, graus) => {
-      festa.grups['Educació Infantil'][objectiu.id].activitats =
-        graus.map((g) => ({ id: Math.random().toString(), text: '', grau: g }))
-    }
-    posa(o1, [100, 100, 80])
-    posa(o2, [100, 100, 100])
-    posa(o3, [100, 100, 100])
+    posa(festa, 'Educació Infantil', 0, [100, 100, 80])
+    posa(festa, 'Educació Infantil', 1, [100, 100, 100])
+    posa(festa, 'Educació Infantil', 2, [100, 100, 100])
     return festa
   }
 
   proves.push(comprova(
-    "Castanyada 25-26, Infantil, objectiu 1 (Alt/Alt/Bo) dona 93,33%",
+    'Castanyada 25-26, Infantil, objectiu 1 (Alt/Alt/Bo) dona 93,33%',
     93.33,
     () => {
       const festa = castanyadaEI()
-      return mitjanaObjectiuGrup(festa, 'Educació Infantil', festa.objectius[0].id)
+      const objectiu = festa.grups.find((g) => g.nom === 'Educació Infantil').objectius[0]
+      return mitjanaObjectiuGrup(festa, 'Educació Infantil', objectiu.id)
     }
   ))
 
   proves.push(comprova(
-    "Castanyada 25-26, Infantil: amb els pesos 30/30/40 dona el 98% del full",
+    'Castanyada 25-26, Infantil: amb els pesos 30/30/40 dona el 98% del full',
     98,
     () => mitjanaGrup(castanyadaEI(), 'Educació Infantil')
   ))
 
   // El total de l'objectiu 1 de la festa: mitjana dels 4 cicles al 80% i
   // Equip Directiu al 20%. Al full: 89,33%.
+  const castanyadaObjectiu1 = () => {
+    const festa = festaBuida('Castanyada')
+    // Només l'objectiu 1, i per això li donem tot el pes.
+    festa.grups = festa.grups.map((g) => ({ ...g, objectius: [{ ...g.objectius[0], pes: 100 }] }))
+    posa(festa, 'Educació Infantil', 0, [100, 100, 80])   // 93,33
+    posa(festa, 'Cicle Inicial', 0, [100, 80, 100])       // 93,33
+    posa(festa, 'Cicle Mitjà', 0, [100, 80, 80])          // 86,67
+    posa(festa, 'Cicle Superior', 0, [100, 100, 40])      // 80,00
+    posa(festa, 'Equip Directiu', 0, [80, 100, 100])      // 93,33
+    return festa
+  }
+
   proves.push(comprova(
-    "Castanyada 25-26: cicles al 80% i equip directiu al 20% donen el 89,33% del full",
+    'Castanyada 25-26: cicles al 80% i equip directiu al 20% donen el 89,33% del full',
+    89.33,
+    () => mitjanaGeneralFesta(castanyadaObjectiu1())
+  ))
+
+  proves.push(comprova(
+    "L'Equip de coordinació amb pes 0 no mou el resultat, encara que valori",
     89.33,
     () => {
-      const festa = festaBuida('Castanyada')
-      const [o1] = festa.objectius
-      const posa = (grup, graus) => {
-        festa.grups[grup][o1.id].activitats = graus.map((g) => ({ id: Math.random().toString(), text: '', grau: g }))
-      }
-      // Només l'objectiu 1, i per això li donem tot el pes.
-      festa.objectius = [{ ...o1, pes: 100 }]
-      for (const g of Object.keys(festa.grups)) {
-        festa.grups[g] = { [o1.id]: festa.grups[g][o1.id] }
-      }
-      posa('Educació Infantil', [100, 100, 80])   // 93,33
-      posa('Cicle Inicial', [100, 80, 100])       // 93,33
-      posa('Cicle Mitjà', [100, 80, 80])          // 86,67
-      posa('Cicle Superior', [100, 100, 40])      // 80,00
-      posa('Equip Directiu', [80, 100, 100])      // 93,33
+      const festa = castanyadaObjectiu1()
+      posa(festa, 'Equip de coordinació', 0, [0, 0, 0])
       return mitjanaGeneralFesta(festa)
     }
   ))
 
+  proves.push(comprova(
+    'I si algun dia la coordinació avalua, el pes hi entra',
+    // Cicles 88,33 × 80 + Directiu 93,33 × 20 + Coordinació 20 × 20 → /120
+    77.78,
+    () => {
+      const festa = castanyadaObjectiu1()
+      festa.pesos = { ...festa.pesos, coordinacio: 20 }
+      posa(festa, 'Equip de coordinació', 0, [20, 20, 20])
+      return mitjanaGeneralFesta(festa)
+    }
+  ))
+
+  proves.push(comprova(
+    "Cada grup té els seus objectius: l'Equip Directiu no arrossega els dels cicles",
+    { directiu: 60, infantil: 100 },
+    () => {
+      const festa = festaBuida('Castanyada')
+      const directiu = festa.grups.find((g) => g.nom === 'Equip Directiu')
+      directiu.objectius = [{ ...objectiuFestaBuit(100), text: "Valorar l'organització de l'exposició", activitats: acts([60, 60]) }]
+      posa(festa, 'Educació Infantil', 0, [100])
+      festa.grups.find((g) => g.nom === 'Educació Infantil').objectius = [
+        { ...festa.grups.find((g) => g.nom === 'Educació Infantil').objectius[0], pes: 100 },
+      ]
+      return {
+        directiu: mitjanaGrup(festa, 'Equip Directiu'),
+        infantil: mitjanaGrup(festa, 'Educació Infantil'),
+      }
+    }
+  ))
+
+  proves.push(comprova(
+    'Una festa desada amb el model vell es reparteix sola sense perdre res',
+    { grups: 6, activitats: 3, mitjana: 93.33 },
+    () => {
+      const vella = {
+        activitat: 'Castanyada',
+        data: '',
+        objectius: [{ id: 'o1', text: 'Cohesió', pes: 100 }],
+        pesCicles: 80,
+        pesEquipDirectiu: 20,
+        grups: {
+          'Educació Infantil': { o1: { activitats: acts([100, 100, 80]), comentaris: 'anava bé' } },
+          'Cicle Inicial': { o1: { activitats: [], comentaris: '' } },
+          'Cicle Mitjà': { o1: { activitats: [], comentaris: '' } },
+          'Cicle Superior': { o1: { activitats: [], comentaris: '' } },
+          'Equip Directiu': { o1: { activitats: [], comentaris: '' } },
+        },
+      }
+      const nova = normalitzaFesta(vella)
+      return {
+        grups: nova.grups.length,
+        activitats: nova.grups.find((g) => g.nom === 'Educació Infantil').objectius[0].activitats.length,
+        mitjana: Math.round(mitjanaGrup(nova, 'Educació Infantil') * 100) / 100,
+      }
+    }
+  ))
+
+  // ── El lector de plantilles de festa ──────────────────────────────────
+  // Reprodueix el full d'un grup tal com és a la Castanyada: el nom del
+  // grup sol a dalt, i cada objectiu marcat per "Grau d'assoliment de
+  // l'objectiu" amb les seves activitats a sota.
+  const fullEI = [
+    ['', 'Escola Mestre Enric Gibert i Camins Valoració'],
+    ['', '', '', '', '', 'PGAC /', '', 'Curs: 2026-27'],
+    ['', 'Educació Infantil', '', '', '', '', 'No assolit'],
+    ['', '', '', '', '', '', 'Baix'],
+    ['', '-Fomentar la cohesió', "Grau d'assoliment de l'objectiu", '', '', '', 'Poc satisfactori'],
+    ['', 'Exposició de carbasses', 'Alt', '100', '%', '', 'Satisfactori'],
+    ['', 'Espai compartit', 'Alt', '100', '%', '', 'Bo'],
+    ['', "Ball conjunt de tota l'escola", 'Bo', '80', '%', '', 'Alt'],
+    ['', '', '', '', '', '', ''],
+    ['', '-Elaborar, comunicar i difondre', "Grau d'assoliment de l'objectiu"],
+    ['', 'Article publicat a la web', 'No assolit', '0', '%'],
+    ['', '', '', '', ''],
+    ['', 'Comentaris i propostes de millora'],
+    ['', 'Cal començar abans'],
+  ]
+
+  proves.push(comprova(
+    'Del full de la Castanyada en surten el grup, els seus objectius i els graus',
+    {
+      nom: 'Educació Infantil',
+      objectius: ['Fomentar la cohesió', 'Elaborar, comunicar i difondre'],
+      graus: [100, 100, 80],
+      comentaris: 'Cal començar abans',
+    },
+    () => {
+      const r = interpretaFullGrupFesta(fullEI)
+      return {
+        nom: r.nom,
+        objectius: r.objectius.map((o) => o.text),
+        graus: r.objectius[0].activitats.map((a) => a.grau),
+        comentaris: r.comentaris,
+      }
+    }
+  ))
+
+  proves.push(comprova(
+    "L'objectiu que al Resum té una falta («Elaboorar») no es perd: cada full es llegeix sol",
+    1,
+    // Abans les activitats s'emparellaven comparant el text amb el del
+    // Resum, i les de l'objectiu 3 es quedaven fora a tots els grups.
+    () => interpretaFullGrupFesta(fullEI).objectius[1].activitats.length
+  ))
+
+  proves.push(comprova(
+    'Els valors del desplegable de la dreta no es colen com a activitats',
+    3,
+    () => interpretaFullGrupFesta(fullEI).objectius[0].activitats.length
+  ))
+
+  proves.push(comprova(
+    "El full diu «Comissió de Festes» i a l'app és l'Equip de coordinació",
+    'Equip de coordinació',
+    () => interpretaFullGrupFesta([
+      ['', 'Comissió de Festes'],
+      ['', '-Valorar la qualitat del document', "Grau d'assoliment de l'objectiu"],
+      ['', "S'ha elaborat a temps", 'Bo', '80', '%'],
+    ]).nom
+  ))
+
+  proves.push(comprova(
+    'Els pesos entre blocs surten dels criteris, amb la falta a «coordnació» inclosa',
+    { cicle: 80, coordinacio: 0, directiu: 20 },
+    () => interpretaPesosFesta([
+      ['', '-Objectiu 1: 30% -Objectiu 2: 30% -Objectiu 3: 40% -Cicles: 80% -Equip de coordnació: 0% -Equip directiu: 20%'],
+    ])
+  ))
+
+  proves.push(comprova(
+    "El text del grau es tradueix a percentatge",
+    [0, 40, 100, ''],
+    () => [grauDeText('No assolit'), grauDeText('Poc satisfactori'), grauDeText('Alt'), grauDeText('')]
+  ))
+
   return { titol: 'Festes', proves }
 }
-
-// ── Punts oberts, marcats a posta com a pendents ────────────────────────
-
-
-// ── Aprenentatge cooperatiu ─────────────────────────────────────────────
-// Els pesos surten del full "APRENENTATGE COOPERATIU" de l'Eina
-// d'avaluació: objectius 30/30/40 i els quatre cicles al 25%.
 
 function grupCooperatiu() {
   const proves = []
