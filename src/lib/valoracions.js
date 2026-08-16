@@ -67,6 +67,9 @@ export const NOMS_SUGGERITS = [
 // botó a part dins de Valoracions, en comptes de barrejar-se amb la resta.
 // L'AREP hi va perquè és un projecte amb una entitat de fora de l'escola,
 // com les altres tres tenen participació de famílies o de l'AFA.
+//
+// Això és només el punt de partida: des del Quadre de comandament se'n
+// poden activar, desactivar, afegir i treure per a cada curs escolar.
 export const NOMS_AFA = [
   'Comissió Comunicació', 'Comissió Espai de migdia',
   'Comissió de Transformem els Patis', 'Jardins. AREP',
@@ -142,4 +145,57 @@ export function festesBuides() {
   const festes = {}
   for (const f of FESTES) festes[f.id] = ''
   return festes
+}
+
+// --- Què està actiu cada curs ----------------------------------------------
+// La configuració es desa a Firestore (`valoracionsConfig`, un document per
+// curs), però decidir què surt i què no és lògica pura i viu aquí, perquè
+// es pugui comprovar des del mòdul "Comprovacions".
+
+export function llistaActivaPerDefecte(noms) {
+  return noms.map((nom) => ({ nom, activa: true }))
+}
+
+/**
+ * Deixa la configuració d'un curs sempre amb la mateixa forma, vingui d'on
+ * vingui: d'un document desat, d'un de desat abans que les comissions
+ * mixtes es poguessin activar, o de no res encara.
+ */
+export function normalitzaConfigValoracions(dades) {
+  const d = dades ?? {}
+  return {
+    comissions: d.comissions ?? llistaActivaPerDefecte(NOMS_SUGGERITS),
+    // Els documents desats abans d'aquest canvi no porten el camp: llavors
+    // surten totes actives, que és exactament com anava fins ara.
+    mixtes: d.mixtes ?? llistaActivaPerDefecte(NOMS_AFA),
+    festes: (d.festes ?? FESTES.map((f) => ({ id: f.id, activa: true })))
+      .map((f) => ({ ...f, label: f.label ?? FESTES.find((x) => x.id === f.id)?.label ?? f.id })),
+  }
+}
+
+/** Els noms que ha de veure el professorat en una d'aquestes llistes. */
+export function nomsActius(llista) {
+  return (llista ?? []).filter((c) => c.activa !== false).map((c) => c.nom)
+}
+
+/** Afegeix un nom sense repetir-lo (ni canviant-hi les majúscules). */
+export function afegeixALlista(llista, nomNou) {
+  const nom = (nomNou ?? '').trim()
+  if (!nom) return llista
+  if (llista.some((c) => c.nom.toLowerCase() === nom.toLowerCase())) return llista
+  return [...llista, { nom, activa: true }]
+}
+
+/**
+ * Suggeriments de la pestanya "Comissions i equips": el que hi ha actiu més
+ * el que ja s'ha desat aquest curs, però mai els cicles ni les comissions
+ * mixtes — que tenen pestanya pròpia. S'exclouen totes les mixtes, també
+ * les desactivades: una mixta apagada no ha de reaparèixer com a comissió
+ * normal per la porta del darrere.
+ */
+export function suggerimentsComissions(config, nomsExistents = []) {
+  const mixtes = (config?.mixtes ?? llistaActivaPerDefecte(NOMS_AFA)).map((c) => c.nom)
+  const base = config ? nomsActius(config.comissions) : NOMS_SUGGERITS
+  return [...new Set([...base, ...nomsExistents])]
+    .filter((n) => !CICLES.includes(n) && !mixtes.includes(n))
 }
