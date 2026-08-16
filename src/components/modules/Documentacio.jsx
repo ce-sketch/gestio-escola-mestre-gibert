@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { collection, getDocs, query, where } from 'firebase/firestore'
 import { db } from '../../firebase'
 import { cursEscolarActual } from '../../lib/cursEscolar'
-import { CICLES, NOMS_SUGGERITS, NOMS_AFA, FESTES } from '../../lib/valoracions'
+import { CICLES, NOMS_AFA, FESTES, nomsActius, suggerimentsComissions } from '../../lib/valoracions'
 import { carregaConfigValoracions } from '../../lib/valoracionsConfig'
 import ValoracioObjectius from './valoracions/ValoracioObjectius'
 import ValoracioFesta from './valoracions/ValoracioFesta'
@@ -141,7 +141,10 @@ export default function Documentacio() {
                 style={{ border: '1px solid var(--line)', borderRadius: 8, padding: '10px 12px' }}
               >
                 <option value="">Tria una comissió…</option>
-                {NOMS_AFA.map((c) => <option key={c} value={c}>{c}</option>)}
+                {/* Només les que direcció hagi deixat actives aquest curs, des
+                    del Quadre de comandament. */}
+                {(configActiva ? nomsActius(configActiva.mixtes) : NOMS_AFA)
+                  .map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
             </label>
           ) : tipus === 'activitats' ? (
@@ -171,11 +174,7 @@ export default function Documentacio() {
                 {/* Les comissions mixtes i els cicles es desen a la mateixa
                     col·lecció, i per això sortien també aquí. Es treuen: cada
                     pestanya ha de suggerir només el que li pertoca. */}
-                {[...new Set([
-                  ...(configActiva?.comissions.filter((c) => c.activa).map((c) => c.nom) ?? NOMS_SUGGERITS),
-                  ...nomsExistents,
-                ])]
-                  .filter((n) => !CICLES.includes(n) && !NOMS_AFA.includes(n))
+                {suggerimentsComissions(configActiva, nomsExistents)
                   .map((n) => <option key={n} value={n} />)}
               </datalist>
             </label>

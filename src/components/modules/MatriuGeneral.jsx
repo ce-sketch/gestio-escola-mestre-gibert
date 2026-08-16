@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { collection, deleteDoc, doc, getDoc, getDocs, query, setDoc, serverTimestamp, where } from 'firebase/firestore'
 import { db, auth } from '../../firebase'
 import { cursEscolarActual } from '../../lib/cursEscolar'
-import { FESTES, mitjanaValoracio, mitjanaObjectiu, objectiuBuit, actuacioBuida } from '../../lib/valoracions'
+import { FESTES, mitjanaValoracio, mitjanaObjectiu, objectiuBuit, actuacioBuida, afegeixALlista } from '../../lib/valoracions'
 import { exportaValoracionsExcel, exportaValoracionsPDF } from '../../lib/valoracionsExport'
 import { carregaConfigValoracions, desaConfigValoracions } from '../../lib/valoracionsConfig'
 import { interpretaResum, interpretaFullObjectiu, interpretaResumCicle, interpretaResumFesta, interpretaFullGrupFesta } from '../../lib/comissioTemplateParser'
@@ -29,6 +29,7 @@ export default function MatriuGeneral() {
 
   const [config, setConfig] = useState(null)
   const [nomNouComissio, setNomNouComissio] = useState('')
+  const [nomNovaMixta, setNomNovaMixta] = useState('')
   const [nomNovaFesta, setNomNovaFesta] = useState('')
   const [descarregant, setDescarregant] = useState(null)
   const [desantConfig, setDesantConfig] = useState(false)
@@ -59,8 +60,10 @@ export default function MatriuGeneral() {
     }
   }
 
-  function toggleComissio(nom) {
-    desaConfig({ ...config, comissions: config.comissions.map((c) => c.nom === nom ? { ...c, activa: !c.activa } : c) })
+  /** Les comissions i les comissions mixtes són dues llistes amb la mateixa
+   *  forma (`clau` és 'comissions' o 'mixtes'), i es tracten igual. */
+  function toggleNom(clau, nom) {
+    desaConfig({ ...config, [clau]: config[clau].map((c) => c.nom === nom ? { ...c, activa: !c.activa } : c) })
   }
 
   function toggleFesta(id) {
@@ -68,14 +71,17 @@ export default function MatriuGeneral() {
   }
 
   /**
-   * Treu una comissió de la llista, i opcionalment esborra també la
-   * valoració que hi hagi desada.
+   * Treu una comissió (o una comissió mixta) de la llista, i opcionalment
+   * esborra també la valoració que hi hagi desada.
    *
    * Es demana confirmació escrivint el nom perquè, si hi ha dades, es
    * perden: una valoració és feina de tot un curs. Les regles de Firestore
    * només permeten esborrar-la des del compte de direcció.
+   *
+   * Les mixtes es desen a la mateixa col·lecció `valoracions` que la resta,
+   * amb el nom com a identificador, i per això aquí no cal distingir-les.
    */
-  async function esborraComissio(nom) {
+  async function esborraDeLlista(clau, nom) {
     const teDades = valoracions.some((v) => v.nom === nom)
     const avis = teDades
       ? `"${nom}" té una valoració desada d'aquest curs.\n\nEscriu-ne el nom per confirmar que vols esborrar-la. No es pot desfer.`
@@ -96,7 +102,7 @@ export default function MatriuGeneral() {
           await deleteDoc(doc(db, 'valoracions', v.id))
         }
       }
-      await desaConfig({ ...config, comissions: config.comissions.filter((c) => c.nom !== nom) })
+      await desaConfig({ ...config, [clau]: config[clau].filter((c) => c.nom !== nom) })
       setMissatge({
         type: 'ok',
         text: teDades ? `"${nom}" i la seva valoració s'han esborrat.` : `"${nom}" s'ha tret de la llista.`,
@@ -187,10 +193,17 @@ export default function MatriuGeneral() {
   }
 
   function afegeixComissio() {
-    const nom = nomNouComissio.trim()
-    if (!nom || config.comissions.some((c) => c.nom === nom)) return
-    desaConfig({ ...config, comissions: [...config.comissions, { nom, activa: true }] })
+    const llista = afegeixALlista(config.comissions, nomNouComissio)
+    if (llista === config.comissions) return
+    desaConfig({ ...config, comissions: llista })
     setNomNouComissio('')
+  }
+
+  function afegeixMixta() {
+    const llista = afegeixALlista(config.mixtes, nomNovaMixta)
+    if (llista === config.mixtes) return
+    desaConfig({ ...config, mixtes: llista })
+    setNomNovaMixta('')
   }
 
   const [pujantPlantilla, setPujantPlantilla] = useState(false)
@@ -255,9 +268,17 @@ export default function MatriuGeneral() {
           actualitzatPer: auth.currentUser?.email ?? null,
         })
 
-        // I l'activem a la llista de comissions perquè els docents ja la vegin.
-        if (!config.comissions.some((c) => c.nom === nom)) {
-          await desaConfig({ ...config, comissions: [...config.comissions, { nom, activa: true }] })
+        // I l'activem perquè els docents ja la vegin. Si el nom que porta la
+        // plantilla és el d'una comissió mixta, s'activa allà: si no,
+        // apareixeria duplicada a les dues pestanyes.
+        const mixta = config.mixtes.find((c) => c.nom.toLowerCase() === nom.toLowerCase())
+        if (mixta) {
+          if (!mixta.activa) {
+            await desaConfig({ ...config, mixtes: config.mixtes.map((c) => c.nom === mixta.nom ? { ...c, activa: true } : c) })
+          }
+        } else {
+          const llista = afegeixALlista(config.comissions, nom)
+          if (llista !== config.comissions) await desaConfig({ ...config, comissions: llista })
         }
 
         setResultatPlantilla({ nom, numObjectius: objectius.length, numActuacions: objectius.reduce((a, o) => a + o.actuacions.length, 0) })
@@ -470,7 +491,7 @@ export default function MatriuGeneral() {
 
       <details style={{ marginTop: 20 }}>
         <summary style={{ cursor: 'pointer', fontWeight: 600 }}>
-          ⚙ Afegir, treure i activar comissions i festes {desantConfig && <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--ink-soft)' }}>(desant…)</span>}
+          ⚙ Afegir, treure i activar comissions, comissions mixtes i festes {desantConfig && <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--ink-soft)' }}>(desant…)</span>}
         </summary>
         {!config ? (
           <p style={{ marginTop: 10, fontSize: 13, color: 'var(--ink-soft)' }}>Carregant…</p>
@@ -503,12 +524,12 @@ export default function MatriuGeneral() {
               {config.comissions.map((c) => (
                 <span key={c.nom} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, opacity: c.activa ? 1 : 0.5 }}>
                   <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <input type="checkbox" checked={c.activa} onChange={() => toggleComissio(c.nom)} />
+                    <input type="checkbox" checked={c.activa} onChange={() => toggleNom('comissions', c.nom)} />
                     {c.nom}
                   </label>
                   <button
                     type="button"
-                    onClick={() => esborraComissio(c.nom)}
+                    onClick={() => esborraDeLlista('comissions', c.nom)}
                     title={`Esborra "${c.nom}"`}
                     aria-label={`Esborra ${c.nom}`}
                     style={{
@@ -550,7 +571,48 @@ export default function MatriuGeneral() {
               </p>
             )}
 
-            <p style={{ fontSize: 13, fontWeight: 600, marginTop: 16 }}>Festes</p>
+            <p style={{ fontSize: 13, fontWeight: 600, marginTop: 20 }}>Comissions mixtes (amb l&apos;AFA)</p>
+            <p style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 2 }}>
+              Les que tenen participació de famílies, de l&apos;AFA o d&apos;una entitat de fora.
+              Tenen pestanya pròpia a &quot;Documentació&quot; i no surten barrejades amb la resta
+              de comissions.
+            </p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 6 }}>
+              {config.mixtes.map((c) => (
+                <span key={c.nom} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, opacity: c.activa ? 1 : 0.5 }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <input type="checkbox" checked={c.activa} onChange={() => toggleNom('mixtes', c.nom)} />
+                    {c.nom}
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => esborraDeLlista('mixtes', c.nom)}
+                    title={`Esborra "${c.nom}"`}
+                    aria-label={`Esborra ${c.nom}`}
+                    style={{
+                      background: 'none', border: 'none', color: 'var(--red)',
+                      cursor: 'pointer', fontSize: 13, lineHeight: 1, padding: '0 2px',
+                    }}
+                  >
+                    ✕
+                  </button>
+                </span>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+              <input
+                type="text"
+                value={nomNovaMixta}
+                onChange={(e) => setNomNovaMixta(e.target.value)}
+                placeholder="Nom d'una comissió mixta nova"
+                style={{ border: '1px solid var(--line)', borderRadius: 6, padding: '6px 8px', fontSize: 12 }}
+              />
+              <button type="button" onClick={afegeixMixta} className="btn-ghost" style={{ fontSize: 12, padding: '5px 10px' }}>
+                + Afegeix en blanc
+              </button>
+            </div>
+
+            <p style={{ fontSize: 13, fontWeight: 600, marginTop: 20 }}>Festes</p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 6 }}>
               {config.festes.map((f) => {
                 const label = f.label ?? FESTES.find((ff) => ff.id === f.id)?.label ?? f.id
