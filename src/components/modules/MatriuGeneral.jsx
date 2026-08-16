@@ -20,6 +20,99 @@ function colorPer(valor) {
   return 'var(--red)'
 }
 
+// ── Les quatre seccions del panell de configuració ────────────────────────
+// Cicles, comissions, comissions mixtes i festes fan totes la mateixa feina,
+// i abans cadascuna s'escrivia sencera amb els seus textos: els botons van
+// acabar dient coses diferents per fer el mateix. Ara comparteixen aquests
+// trossos i només canvia el text d'ajuda de cada secció.
+
+function TitolSeccio({ titol, ajuda, primer = false }) {
+  return (
+    <>
+      <p style={{ fontSize: 13, fontWeight: 600, marginTop: primer ? 0 : 22 }}>{titol}</p>
+      <p style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 2 }}>{ajuda}</p>
+    </>
+  )
+}
+
+/** La llista d'elements amb la casella per activar i la ✕ per treure'ls.
+ *  `clau` és el nom (comissions) o l'identificador (festes). */
+function Etiquetes({ elements, onCanvia, onEsborra }) {
+  if (elements.length === 0) {
+    return <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 8 }}>Encara no n&apos;hi ha cap.</p>
+  }
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 8 }}>
+      {elements.map((e) => (
+        <span key={e.clau} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, opacity: e.activa ? 1 : 0.5 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <input type="checkbox" checked={e.activa} onChange={() => onCanvia(e.clau, e.etiqueta)} />
+            {e.etiqueta}
+          </label>
+          <button
+            type="button"
+            onClick={() => onEsborra(e.clau, e.etiqueta)}
+            title={`Esborra "${e.etiqueta}"`}
+            aria-label={`Esborra ${e.etiqueta}`}
+            style={{
+              background: 'none', border: 'none', color: 'var(--red)',
+              cursor: 'pointer', fontSize: 13, lineHeight: 1, padding: '0 2px',
+            }}
+          >
+            ✕
+          </button>
+        </span>
+      ))}
+    </div>
+  )
+}
+
+function AfegeixNom({ valor, onCanvia, placeholder, onAfegeix }) {
+  return (
+    <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+      <input
+        type="text"
+        value={valor}
+        onChange={(ev) => onCanvia(ev.target.value)}
+        placeholder={placeholder}
+        style={{ border: '1px solid var(--line)', borderRadius: 6, padding: '6px 8px', fontSize: 12 }}
+      />
+      <button type="button" onClick={onAfegeix} className="btn-ghost" style={{ fontSize: 12, padding: '5px 10px' }}>
+        + Afegeix en blanc
+      </button>
+    </div>
+  )
+}
+
+/** Els dos botons de plantilla: del Drive o de l'ordinador. Fan exactament
+ *  el mateix — només canvia d'on surt el fitxer — i per això van sempre
+ *  junts i amb el mateix text. */
+function BotonsPlantilla({ onFitxer, pujant, onError }) {
+  return (
+    <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+      <BotoDrive
+        onFitxer={onFitxer}
+        tipus="fulls"
+        etiqueta="Tria una plantilla del Drive"
+        onError={onError}
+        disabled={pujant}
+      />
+      <label className="btn-ghost" style={{ fontSize: 12, padding: '5px 10px', cursor: 'pointer', display: 'inline-flex', color: 'var(--navy)', borderColor: 'var(--navy)' }}>
+        {pujant ? 'Llegint la plantilla…' : '📤 Puja una plantilla (Excel)'}
+        <input type="file" accept=".xlsx,.xls" onChange={onFitxer} style={{ display: 'none' }} disabled={pujant} />
+      </label>
+    </div>
+  )
+}
+
+function ResultatPlantilla({ resultat }) {
+  return (
+    <p style={{ fontSize: 12, color: 'var(--green)', marginTop: 6 }}>
+      ✓ &quot;{resultat.nom}&quot; creada amb {resultat.numObjectius} objectius i {resultat.numActuacions} actuacions. Ja està activa per als docents.
+    </p>
+  )
+}
+
 export default function MatriuGeneral() {
   const [cursEscolarId, setCursEscolarId] = useState(cursEscolarActual())
   const [valoracions, setValoracions] = useState([])
@@ -206,17 +299,25 @@ export default function MatriuGeneral() {
     setNomNovaMixta('')
   }
 
-  const [pujantPlantilla, setPujantPlantilla] = useState(false)
+  // Quina de les dues llistes està llegint una plantilla ara mateix:
+  // 'comissions', 'mixtes' o res.
+  const [pujant, setPujant] = useState(null)
   const [resultatPlantilla, setResultatPlantilla] = useState(null)
 
-  /** Puja una plantilla "Valoració [Comissió/Equip]" (Excel amb un full
-   *  "Resum" i un full "Objectiu N" per cada objectiu), la interpreta, i
-   *  crea directament la valoració d'aquest curs escolar ja omplerta amb
-   *  el text real — a més d'activar-la a la llista de comissions. */
-  function pujaPlantillaComissio(e) {
+  /**
+   * Puja una plantilla "Valoració [Comissió/Equip]" (Excel amb un full
+   * "Resum" i un full "Objectiu N" per cada objectiu), la interpreta, i
+   * crea directament la valoració d'aquest curs escolar ja omplerta amb el
+   * text real — a més d'activar-la a la llista.
+   *
+   * Les comissions mixtes tenen plantilles amb la mateixa forma, així que
+   * és el mateix lector: `clau` només diu a quina de les dues llistes ha
+   * d'anar a parar, que és la secció on s'hagi premut el botó.
+   */
+  function pujaPlantillaComissio(e, clau = 'comissions') {
     const file = e.target.files?.[0]
     if (!file) return
-    setPujantPlantilla(true)
+    setPujant(clau)
     setMissatge(null)
     setResultatPlantilla(null)
 
@@ -231,7 +332,7 @@ export default function MatriuGeneral() {
 
         if (!nom || objectiusResum.length === 0) {
           setMissatge({ type: 'error', text: 'No he pogut interpretar aquesta plantilla — comprova que és el fitxer correcte (amb un full "Resum").' })
-          setPujantPlantilla(false)
+          setPujant(null)
           return
         }
 
@@ -268,30 +369,38 @@ export default function MatriuGeneral() {
           actualitzatPer: auth.currentUser?.email ?? null,
         })
 
-        // I l'activem perquè els docents ja la vegin. Si el nom que porta la
-        // plantilla és el d'una comissió mixta, s'activa allà: si no,
-        // apareixeria duplicada a les dues pestanyes.
-        const mixta = config.mixtes.find((c) => c.nom.toLowerCase() === nom.toLowerCase())
-        if (mixta) {
-          if (!mixta.activa) {
-            await desaConfig({ ...config, mixtes: config.mixtes.map((c) => c.nom === mixta.nom ? { ...c, activa: true } : c) })
-          }
-        } else {
-          const llista = afegeixALlista(config.comissions, nom)
-          if (llista !== config.comissions) await desaConfig({ ...config, comissions: llista })
+        // I l'activem perquè els docents ja la vegin. Va a la llista de la
+        // secció des d'on s'ha pujat, però si el nom ja és a l'altra, mana
+        // l'altra: si no, la mateixa comissió sortiria a les dues pestanyes.
+        const altra = clau === 'comissions' ? 'mixtes' : 'comissions'
+        const jaHiEs = (llista) => llista.find((c) => c.nom.toLowerCase() === nom.toLowerCase())
+        const onVa = jaHiEs(config[altra]) ? altra : clau
+        const existent = jaHiEs(config[onVa])
+        if (!existent) {
+          await desaConfig({ ...config, [onVa]: afegeixALlista(config[onVa], nom) })
+        } else if (!existent.activa) {
+          await desaConfig({
+            ...config,
+            [onVa]: config[onVa].map((c) => c.nom === existent.nom ? { ...c, activa: true } : c),
+          })
         }
 
-        setResultatPlantilla({ nom, numObjectius: objectius.length, numActuacions: objectius.reduce((a, o) => a + o.actuacions.length, 0) })
+        setResultatPlantilla({
+          clau: onVa,
+          nom,
+          numObjectius: objectius.length,
+          numActuacions: objectius.reduce((a, o) => a + o.actuacions.length, 0),
+        })
         await carrega()
       } catch (err) {
         setMissatge({ type: 'error', text: `No s'ha pogut llegir la plantilla: ${err.message}` })
       } finally {
-        setPujantPlantilla(false)
+        setPujant(null)
       }
     }
     reader.onerror = () => {
       setMissatge({ type: 'error', text: 'No s\'ha pogut llegir el fitxer.' })
-      setPujantPlantilla(false)
+      setPujant(null)
     }
     reader.readAsBinaryString(file)
     e.target.value = ''
@@ -491,182 +600,106 @@ export default function MatriuGeneral() {
 
       <details style={{ marginTop: 20 }}>
         <summary style={{ cursor: 'pointer', fontWeight: 600 }}>
-          ⚙ Afegir, treure i activar comissions, comissions mixtes i festes {desantConfig && <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--ink-soft)' }}>(desant…)</span>}
+          ⚙ Quines comissions, comissions mixtes i festes surten activades per als docents {desantConfig && <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--ink-soft)' }}>(desant…)</span>}
         </summary>
         {!config ? (
           <p style={{ marginTop: 10, fontSize: 13, color: 'var(--ink-soft)' }}>Carregant…</p>
         ) : (
           <div className="placeholder-box" style={{ borderStyle: 'solid', marginTop: 10 }}>
-            <p style={{ fontSize: 13, fontWeight: 600 }}>Cicles</p>
-            <p style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 2 }}>
-              Els 4 cicles sempre estan disponibles per als docents — aquí només pots pujar-hi
-              una plantilla ja omplerta per a un curs concret.
-            </p>
-            <BotoDrive
-              onFitxer={pujaPlantillaCicle}
-              tipus="fulls"
-              etiqueta="Tria la plantilla de cicle del Drive"
-              onError={(t) => setMissatge({ type: 'error', text: t })}
-              disabled={pujantCicle}
+            <TitolSeccio
+              titol="Cicles"
+              ajuda="Els 4 cicles sempre estan disponibles per als docents — no cal activar-los. Aquí només pots pujar-hi la plantilla d'un curs concret, ja omplerta."
+              primer
             />
-            <label className="btn-ghost" style={{ fontSize: 12, padding: '5px 10px', cursor: 'pointer', display: 'inline-flex', marginTop: 6 }}>
-              {pujantCicle ? 'Llegint la plantilla…' : '📤 Puja una plantilla de cicle (Excel)'}
-              <input type="file" accept=".xlsx,.xls" onChange={pujaPlantillaCicle} style={{ display: 'none' }} disabled={pujantCicle} />
-            </label>
+            <BotonsPlantilla
+              onFitxer={pujaPlantillaCicle}
+              pujant={pujantCicle}
+              onError={(t) => setMissatge({ type: 'error', text: t })}
+            />
             {resultatCicle && (
               <p style={{ fontSize: 12, color: 'var(--green)', marginTop: 6 }}>
-                ✓ "{resultatCicle.nom}" actualitzat amb {resultatCicle.numObjectius} objectius.
+                ✓ &quot;{resultatCicle.nom}&quot; actualitzat amb {resultatCicle.numObjectius} objectius.
               </p>
             )}
 
-            <p style={{ fontSize: 13, fontWeight: 600, marginTop: 20 }}>Comissions i equips</p>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 6 }}>
-              {config.comissions.map((c) => (
-                <span key={c.nom} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, opacity: c.activa ? 1 : 0.5 }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <input type="checkbox" checked={c.activa} onChange={() => toggleNom('comissions', c.nom)} />
-                    {c.nom}
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => esborraDeLlista('comissions', c.nom)}
-                    title={`Esborra "${c.nom}"`}
-                    aria-label={`Esborra ${c.nom}`}
-                    style={{
-                      background: 'none', border: 'none', color: 'var(--red)',
-                      cursor: 'pointer', fontSize: 13, lineHeight: 1, padding: '0 2px',
-                    }}
-                  >
-                    ✕
-                  </button>
-                </span>
-              ))}
-            </div>
-            <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-              <input
-                type="text"
-                value={nomNouComissio}
-                onChange={(e) => setNomNouComissio(e.target.value)}
-                placeholder="Nom d'una comissió/equip nova"
-                style={{ border: '1px solid var(--line)', borderRadius: 6, padding: '6px 8px', fontSize: 12 }}
-              />
-              <button type="button" onClick={afegeixComissio} className="btn-ghost" style={{ fontSize: 12, padding: '5px 10px' }}>
-                + Afegeix en blanc
-              </button>
-              <BotoDrive
-                onFitxer={pujaPlantillaComissio}
-                tipus="fulls"
-                etiqueta="Tria la plantilla de comissió del Drive"
-                onError={(t) => setMissatge({ type: 'error', text: t })}
-                disabled={pujantPlantilla}
-              />
-              <label className="btn-ghost" style={{ fontSize: 12, padding: '5px 10px', cursor: 'pointer' }}>
-                {pujantPlantilla ? 'Llegint la plantilla…' : '📤 O puja una plantilla (Excel) ja omplerta'}
-                <input type="file" accept=".xlsx,.xls" onChange={pujaPlantillaComissio} style={{ display: 'none' }} disabled={pujantPlantilla} />
-              </label>
-            </div>
-            {resultatPlantilla && (
-              <p style={{ fontSize: 12, color: 'var(--green)', marginTop: 6 }}>
-                ✓ "{resultatPlantilla.nom}" creada amb {resultatPlantilla.numObjectius} objectius i {resultatPlantilla.numActuacions} actuacions. Ja està activa per als docents.
-              </p>
-            )}
-
-            <p style={{ fontSize: 13, fontWeight: 600, marginTop: 20 }}>Comissions mixtes (amb l&apos;AFA)</p>
-            <p style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 2 }}>
-              Les que tenen participació de famílies, de l&apos;AFA o d&apos;una entitat de fora.
-              Tenen pestanya pròpia a &quot;Documentació&quot; i no surten barrejades amb la resta
-              de comissions.
-            </p>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 6 }}>
-              {config.mixtes.map((c) => (
-                <span key={c.nom} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, opacity: c.activa ? 1 : 0.5 }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <input type="checkbox" checked={c.activa} onChange={() => toggleNom('mixtes', c.nom)} />
-                    {c.nom}
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => esborraDeLlista('mixtes', c.nom)}
-                    title={`Esborra "${c.nom}"`}
-                    aria-label={`Esborra ${c.nom}`}
-                    style={{
-                      background: 'none', border: 'none', color: 'var(--red)',
-                      cursor: 'pointer', fontSize: 13, lineHeight: 1, padding: '0 2px',
-                    }}
-                  >
-                    ✕
-                  </button>
-                </span>
-              ))}
-            </div>
-            <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-              <input
-                type="text"
-                value={nomNovaMixta}
-                onChange={(e) => setNomNovaMixta(e.target.value)}
-                placeholder="Nom d'una comissió mixta nova"
-                style={{ border: '1px solid var(--line)', borderRadius: 6, padding: '6px 8px', fontSize: 12 }}
-              />
-              <button type="button" onClick={afegeixMixta} className="btn-ghost" style={{ fontSize: 12, padding: '5px 10px' }}>
-                + Afegeix en blanc
-              </button>
-            </div>
-
-            <p style={{ fontSize: 13, fontWeight: 600, marginTop: 20 }}>Festes</p>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 6 }}>
-              {config.festes.map((f) => {
-                const label = f.label ?? FESTES.find((ff) => ff.id === f.id)?.label ?? f.id
-                return (
-                  <span key={f.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, opacity: f.activa ? 1 : 0.5 }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <input type="checkbox" checked={f.activa} onChange={() => toggleFesta(f.id)} />
-                      {label}
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => esborraFesta(f.id, label)}
-                      title={`Esborra "${label}"`}
-                      aria-label={`Esborra ${label}`}
-                      style={{ background: 'none', border: 'none', color: 'var(--red)', cursor: 'pointer', fontSize: 13, lineHeight: 1, padding: '0 2px' }}
-                    >
-                      ✕
-                    </button>
-                  </span>
-                )
-              })}
-            </div>
-            <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-              <input
-                type="text"
-                value={nomNovaFesta}
-                onChange={(e) => setNomNovaFesta(e.target.value)}
-                placeholder="Nom d'una festa nova"
-                style={{ border: '1px solid var(--line)', borderRadius: 6, padding: '6px 8px', fontSize: 12 }}
-              />
-              <button type="button" onClick={afegeixFesta} className="btn-ghost" style={{ fontSize: 12, padding: '5px 10px' }}>
-                + Afegeix festa
-              </button>
-            </div>
-            <BotoDrive
-              onFitxer={pujaPlantillaFesta}
-              tipus="fulls"
-              etiqueta="Tria la plantilla de festa del Drive"
-              onError={(t) => setMissatge({ type: 'error', text: t })}
-              disabled={pujantFesta}
+            <TitolSeccio
+              titol="Comissions i equips"
+              ajuda="Les del claustre. La plantilla ha de ser un Excel &quot;Valoració ...&quot; amb un full Resum i un full per objectiu."
             />
-            <label className="btn-ghost" style={{ fontSize: 12, padding: '5px 10px', cursor: 'pointer', display: 'inline-flex', marginTop: 10 }}>
-              {pujantFesta ? 'Llegint la plantilla…' : '📤 Puja una plantilla de festa (Excel, amb tots els fulls de grup)'}
-              <input type="file" accept=".xlsx,.xls" onChange={pujaPlantillaFesta} style={{ display: 'none' }} disabled={pujantFesta} />
-            </label>
+            <Etiquetes
+              elements={config.comissions.map((c) => ({ clau: c.nom, etiqueta: c.nom, activa: c.activa }))}
+              onCanvia={(nom) => toggleNom('comissions', nom)}
+              onEsborra={(nom) => esborraDeLlista('comissions', nom)}
+            />
+            <AfegeixNom
+              valor={nomNouComissio}
+              onCanvia={setNomNouComissio}
+              placeholder="Nom d'una comissió o equip"
+              onAfegeix={afegeixComissio}
+            />
+            <BotonsPlantilla
+              onFitxer={(e) => pujaPlantillaComissio(e, 'comissions')}
+              pujant={pujant === 'comissions'}
+              onError={(t) => setMissatge({ type: 'error', text: t })}
+            />
+            {resultatPlantilla?.clau === 'comissions' && <ResultatPlantilla resultat={resultatPlantilla} />}
+
+            <TitolSeccio
+              titol="Comissions mixtes (amb l'AFA)"
+              ajuda="Les que tenen participació de famílies, de l'AFA o d'una entitat de fora. Tenen pestanya pròpia a &quot;Documentació&quot; i la plantilla té la mateixa forma que la d'una comissió."
+            />
+            <Etiquetes
+              elements={config.mixtes.map((c) => ({ clau: c.nom, etiqueta: c.nom, activa: c.activa }))}
+              onCanvia={(nom) => toggleNom('mixtes', nom)}
+              onEsborra={(nom) => esborraDeLlista('mixtes', nom)}
+            />
+            <AfegeixNom
+              valor={nomNovaMixta}
+              onCanvia={setNomNovaMixta}
+              placeholder="Nom d'una comissió mixta"
+              onAfegeix={afegeixMixta}
+            />
+            <BotonsPlantilla
+              onFitxer={(e) => pujaPlantillaComissio(e, 'mixtes')}
+              pujant={pujant === 'mixtes'}
+              onError={(t) => setMissatge({ type: 'error', text: t })}
+            />
+            {resultatPlantilla?.clau === 'mixtes' && <ResultatPlantilla resultat={resultatPlantilla} />}
+
+            <TitolSeccio
+              titol="Festes i celebracions"
+              ajuda="La plantilla d'una festa és un Excel amb el full Resum i un full per cada grup (Educació Infantil, Cicle Inicial...)."
+            />
+            <Etiquetes
+              elements={config.festes.map((f) => ({
+                clau: f.id,
+                etiqueta: f.label ?? FESTES.find((ff) => ff.id === f.id)?.label ?? f.id,
+                activa: f.activa,
+              }))}
+              onCanvia={toggleFesta}
+              onEsborra={(id, etiqueta) => esborraFesta(id, etiqueta)}
+            />
+            <AfegeixNom
+              valor={nomNovaFesta}
+              onCanvia={setNomNovaFesta}
+              placeholder="Nom d'una festa"
+              onAfegeix={afegeixFesta}
+            />
+            <BotonsPlantilla
+              onFitxer={pujaPlantillaFesta}
+              pujant={pujantFesta}
+              onError={(t) => setMissatge({ type: 'error', text: t })}
+            />
             {resultatFesta && (
               <p style={{ fontSize: 12, color: 'var(--green)', marginTop: 6 }}>
-                ✓ "{resultatFesta.nom}" actualitzada amb {resultatFesta.numObjectius} objectius i {resultatFesta.numActivitats} activitats. Ja està activa per als docents.
+                ✓ &quot;{resultatFesta.nom}&quot; actualitzada amb {resultatFesta.numObjectius} objectius i {resultatFesta.numActivitats} activitats. Ja està activa per als docents.
               </p>
             )}
-            <p style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 10 }}>
-              Es desa sol. El professorat, des de "Documentació", només veurà com a opció el que
+
+            <p style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 16 }}>
+              Es desa sol. El professorat, des de &quot;Documentació&quot;, només veurà com a opció el que
               estigui marcat aquí — desmarcar-ne una no esborra les dades que ja s'hi hagin
-              introduït, només l'amaga de la llista.
+              introduït, només l'amaga de la llista. La ✕ sí que esborra.
             </p>
           </div>
         )}
