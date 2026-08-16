@@ -24,6 +24,7 @@ import { escalaDeFormula, escalaDeText } from './excelLectura'
 import { indexAlumne, graellaAbsencies } from './indexAbsencies'
 import { primerNom, generaInformeQualitatiu } from './informeQualitatiu'
 import { cerca } from './cercaApp'
+import { classificaFulls, tipusAmbNom } from './plantillesImport'
 import { llegeixCosmos, resumClasse, rendimentAPercentatge } from './cosmosParser'
 import { claueDeNom, nivellAPercentatge, distribucio, casaAmbAlumnes } from './conmatParser'
 import { nomAmbData } from './cursEscolar'
@@ -852,6 +853,70 @@ function grupConmat() {
   return { titol: 'ConMat (Innovamat)', proves }
 }
 
+// ── Reconeixement de plantilles ─────────────────────────────────────────
+
+function grupReconeixement() {
+  const proves = []
+
+  proves.push(comprova(
+    "Resum + fulls d'objectiu és una comissió",
+    'comissio',
+    () => classificaFulls(['Resum', 'Objectiu 1', 'Objectiu 2', 'Objectiu 3'])
+  ))
+
+  proves.push(comprova(
+    'Resum + fulls de grup és una festa',
+    'festa',
+    () => classificaFulls(['Resum', 'Educació Infantil', 'Cicle Inicial', 'Cicle Mitjà', 'Cicle Superior', 'Equip Directiu'])
+  ))
+
+  proves.push(comprova(
+    'Un sol full és un cicle, es digui com es digui',
+    ['cicle', 'cicle'],
+    () => [classificaFulls(['Valoració Cicle Inicial']), classificaFulls(['Full1'])]
+  ))
+
+  proves.push(comprova(
+    "Un full de cicle que es digui com un grup de festa no es confon amb una festa",
+    'cicle',
+    // Sense full "Resum" no pot ser una festa, encara que el full es digui
+    // "Educació Infantil".
+    () => classificaFulls(['Educació Infantil'])
+  ))
+
+  proves.push(comprova(
+    'Un llibre que no s\'assembla a res queda com a desconegut',
+    'desconegut',
+    () => classificaFulls(['Dades', 'Gràfics', 'Notes'])
+  ))
+
+  proves.push(comprova(
+    'Una comissió mixta es reconeix pel nom, no pel document',
+    { esMixta: 'mixta', noEsMixta: 'comissio' },
+    () => {
+      const mixtes = ['Comissió Comunicació', 'Jardins. AREP']
+      return {
+        esMixta: tipusAmbNom('comissio', 'Comissió Comunicació', { mixtes }),
+        noEsMixta: tipusAmbNom('comissio', 'Comissió TAC', { mixtes }),
+      }
+    }
+  ))
+
+  proves.push(comprova(
+    'El nom de la mixta es reconeix encara que canviïn les majúscules',
+    'mixta',
+    () => tipusAmbNom('comissio', '  comissió comunicació ', { mixtes: ['Comissió Comunicació'] })
+  ))
+
+  proves.push(comprova(
+    'Un nom de cicle mana sobre l\'estructura',
+    'cicle',
+    () => tipusAmbNom('comissio', 'Cicle Mitjà', { mixtes: [] })
+  ))
+
+  return { titol: 'Reconeixement de plantilles', proves }
+}
+
 export function executaComprovacions() {
-  return [grupPgac(), grupValoracions(), grupFestes(), grupCooperatiu(), grupAbsencies(), grupInforme(), grupCerca(), grupCosmos(), grupConmat(), grupEscales(), grupLectors()]
+  return [grupPgac(), grupValoracions(), grupFestes(), grupCooperatiu(), grupAbsencies(), grupInforme(), grupCerca(), grupCosmos(), grupConmat(), grupEscales(), grupLectors(), grupReconeixement()]
 }

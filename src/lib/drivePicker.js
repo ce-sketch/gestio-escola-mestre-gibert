@@ -71,10 +71,23 @@ async function demanaPermis() {
  * @returns {Promise<{nom: string, buffer: ArrayBuffer} | null>}
  */
 export async function triaDocumentDelDrive(tipus = 'fulls') {
+  const fitxers = await triaDocumentsDelDrive(tipus, false)
+  return fitxers.length > 0 ? fitxers[0] : null
+}
+
+/**
+ * Igual, però deixant triar-ne uns quants de cop. Cada fitxer el tria
+ * l'usuari expressament, que és el que demana el permís `drive.file`:
+ * seleccionar una carpeta sencera voldria accés a toto el Drive i una
+ * revisió de Google.
+ *
+ * @returns {Promise<Array<{nom: string, buffer: ArrayBuffer, mime: string}>>}
+ */
+export async function triaDocumentsDelDrive(tipus = 'fulls', multiple = true) {
   await carregaPicker()
   const token = await demanaPermis()
 
-  const fitxer = await new Promise((resol) => {
+  const triats = await new Promise((resol) => {
     // Cada mòdul busca una cosa diferent: els preus i el calendari són
     // documents de text, els informes de l'Innovamat arriben en CSV, i la
     // resta són fulls de càlcul. Un CSV no surt a la vista de fulls de
@@ -93,25 +106,31 @@ export async function triaDocumentDelDrive(tipus = 'fulls') {
       vista.setMimeTypes('text/csv,text/plain,application/vnd.google-apps.spreadsheet')
     }
 
-    const picker = new window.google.picker.PickerBuilder()
+    const constructor = new window.google.picker.PickerBuilder()
       .setOAuthToken(token)
       .setDeveloperKey(CLAU_API)
       .setAppId(NUM_PROJECTE)
-      .setTitle('Tria el document')
+      .setTitle(multiple ? 'Tria els documents' : 'Tria el document')
       .setLocale('ca')
       .addView(vista)
       .addView(new window.google.picker.DocsUploadView())
       .setCallback((dades) => {
-        if (dades.action === window.google.picker.Action.PICKED) resol(dades.docs[0])
-        else if (dades.action === window.google.picker.Action.CANCEL) resol(null)
+        if (dades.action === window.google.picker.Action.PICKED) resol(dades.docs ?? [])
+        else if (dades.action === window.google.picker.Action.CANCEL) resol([])
       })
-      .build()
+    if (multiple) constructor.enableFeature(window.google.picker.Feature.MULTISELECT_ENABLED)
+    const picker = constructor.build()
     picker.setVisible(true)
   })
 
-  if (!fitxer) return null
-  const { buffer, mime } = await baixa(fitxer, tipus, token)
-  return { nom: fitxer.name, buffer, mime }
+  // Es baixen d'un en un a posta: si en van vint, fer-ho tot alhora és
+  // una bona manera que Google en talli algun.
+  const fitxers = []
+  for (const fitxer of triats) {
+    const { buffer, mime } = await baixa(fitxer, tipus, token)
+    fitxers.push({ nom: fitxer.name, buffer, mime })
+  }
+  return fitxers
 }
 
 /** Els fulls de càlcul de Google s'han d'exportar; els .xlsx pujats es
