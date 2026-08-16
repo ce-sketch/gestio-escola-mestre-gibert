@@ -30,6 +30,7 @@ import { indexAlumne, graellaAbsencies } from './indexAbsencies'
 import { primerNom, generaInformeQualitatiu } from './informeQualitatiu'
 import { cerca } from './cercaApp'
 import { classificaFulls, tipusAmbNom } from './plantillesImport'
+import { interpretaResum, interpretaFullObjectiu } from './comissioTemplateParser'
 import { llegeixCosmos, resumClasse, rendimentAPercentatge } from './cosmosParser'
 import { claueDeNom, nivellAPercentatge, distribucio, casaAmbAlumnes } from './conmatParser'
 import { nomAmbData } from './cursEscolar'
@@ -1063,6 +1064,63 @@ function grupReconeixement() {
     'Un nom de cicle mana sobre l\'estructura',
     'cicle',
     () => tipusAmbNom('comissio', 'Cicle Mitjà', { mixtes: [] })
+  ))
+
+  // ── Els fulls no comencen a la columna A ──────────────────────────────
+  // El Resum d'una comissió té les etiquetes a la columna B i els valors a
+  // la D, amb cel·les combinades pel mig. Llegint columnes fixes no en
+  // sortia ni el nom ni els objectius, i totes les comissions es quedaven
+  // com a "no reconegudes".
+  const resumComissio = [
+    ['', 'Escola Mestre Enric Gibert i Camins Valoració'],
+    ['', '', '', '', '', '', 'PGAC /', 'Curs: 2026-27'],
+    ['', '', '', '', '', '', '', ''],
+    ['', 'Departament/comissió/servei:', '', 'Comissió TAC'],
+    ['', 'Responsable:', '', 'Marta Puig'],
+    ['', 'Membres:', '', 'A, B, C'],
+    ['', '', '', '', '', '', "Grau d'assoliment gener", "Grau d'assoliment juny"],
+    ['', 'Objectiu 1:', 'Potenciar la competència digital.', '', '', '', '0%', '0%'],
+    ['', 'Objectiu 2:', 'Actualitzar la web i els blocs.', '', '', '', '0%', '0%'],
+  ]
+
+  proves.push(comprova(
+    "Del Resum d'una comissió en surten el nom i els objectius encara que comenci a la columna B",
+    { nom: 'Comissió TAC', responsable: 'Marta Puig', objectius: 2 },
+    () => {
+      const r = interpretaResum(resumComissio)
+      return { nom: r.nom, responsable: r.responsable, objectius: r.objectius.length }
+    }
+  ))
+
+  const fullObjectiu = [
+    ['', 'Escola Mestre Enric Gibert i Camins Valoració'],
+    ['', 'Objectiu 1:', 'Potenciar la competència digital.'],
+    ['', '', '', '', '', '', '', '', '', ''],
+    ['', 'Actuacions/Activitats', '', "Indicador d'avaluació", '', 'Seguiment gener', '', "Grau d'assoliment juny", '', 'Endreçades'],
+    ['', 'Donar a conèixer programes, apps i webs útils.', '', 'Fet(100%)/no fet(0%)', '', 'No fet', '0%', 'No fet', '0%', ''],
+    ['', 'Realitzar formacions entre iguals', '', 'Fet(100%)/no fet(0%)', '', 'No fet', '0%', 'No fet', '0%', 'Distribució correcte'],
+    ['', '', '', '', '', '', '', '', '', '0'],
+    ['', 'Valoració/revisió febrer:'],
+    ['', '- Recorda que si copies i enganxes has de fer-ho amb Enganxa amb format'],
+  ]
+
+  proves.push(comprova(
+    "Les actuacions surten de les columnes de la capçalera, no de les dues primeres",
+    {
+      quantes: 2,
+      primera: 'Donar a conèixer programes, apps i webs útils.',
+      indicador: 'Fet(100%)/no fet(0%)',
+    },
+    () => {
+      const a = interpretaFullObjectiu(fullObjectiu)
+      return { quantes: a.length, primera: a[0].text, indicador: a[0].indicador }
+    }
+  ))
+
+  proves.push(comprova(
+    "Ni els valors solts dels desplegables de la dreta ni el peu del full es colen com a actuacions",
+    false,
+    () => interpretaFullObjectiu(fullObjectiu).some((a) => /Endreçades|Distribució|^Valoració|Recorda/.test(a.text))
   ))
 
   return { titol: 'Reconeixement de plantilles', proves }

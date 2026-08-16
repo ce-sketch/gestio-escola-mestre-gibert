@@ -12,8 +12,26 @@ function textCella(v) {
   return v === undefined || v === null ? '' : String(v).trim()
 }
 
-/** Versió que rep ja les files (array d'arrays) del full "Resum", perquè
- *  qui la crida decideix com llegir l'Excel (amb la llibreria xlsx). */
+/** El primer valor que hi ha a la dreta d'una cel·la. Els fulls del centre
+ *  tenen les etiquetes i els valors en cel·les combinades, i entre l'una i
+ *  l'altre hi queden cel·les buides. */
+function valorAlCostat(fila, idx) {
+  for (let i = idx + 1; i < (fila?.length ?? 0); i++) {
+    const v = textCella(fila[i])
+    if (v) return v
+  }
+  return ''
+}
+
+/**
+ * Versió que rep ja les files (array d'arrays) del full "Resum", perquè qui
+ * la crida decideix com llegir l'Excel (amb la llibreria xlsx).
+ *
+ * Les etiquetes es busquen a **qualsevol columna**, no a la primera: els
+ * fulls del centre no comencen a la columna A —el Resum d'una comissió té
+ * les etiquetes a la B i els valors a la D— i les columnes canvien d'un
+ * document a l'altre.
+ */
 export function interpretaResum(filesResum) {
   let nom = ''
   let responsable = ''
@@ -21,37 +39,70 @@ export function interpretaResum(filesResum) {
   const objectius = [] // { num, text }
 
   for (const fila of filesResum) {
-    const a = textCella(fila[0])
-    const b = textCella(fila[1])
-    if (/^departament\/comiss/i.test(a)) nom = b
-    else if (/^responsable:?$/i.test(a)) responsable = b
-    else if (/^membres:?$/i.test(a)) membres = b
-    else {
+    const cel·les = (fila ?? []).map(textCella)
+    for (let i = 0; i < cel·les.length; i++) {
+      const a = cel·les[i]
+      if (!a) continue
+
+      if (/^departament\s*\/\s*comiss/i.test(a)) {
+        if (!nom) nom = valorAlCostat(fila, i)
+        break
+      }
+      if (/^responsable:?$/i.test(a)) {
+        if (!responsable) responsable = valorAlCostat(fila, i)
+        break
+      }
+      if (/^membres:?$/i.test(a)) {
+        if (!membres) membres = valorAlCostat(fila, i)
+        break
+      }
       const m = a.match(/^objectiu\s*(\d+):$/i)
-      if (m && b) objectius.push({ num: Number(m[1]), text: b })
+      if (m) {
+        const text = valorAlCostat(fila, i)
+        if (text) objectius.push({ num: Number(m[1]), text })
+        break
+      }
     }
   }
   return { nom, responsable, membres, objectius }
 }
 
-/** Llegeix les actuacions del full "Objectiu N" corresponent — files amb
- *  columna A = text de l'actuació i columna B = indicador d'avaluació,
- *  ignorant la fila de capçalera i qualsevol fila sense text a la columna A
- *  (sovint hi ha valors solts de llistes desplegables a columnes més enllà). */
+/**
+ * Llegeix les actuacions del full "Objectiu N".
+ *
+ * Les columnes es localitzen per la capçalera de la taula
+ * ("Actuacions/Activitats" i "Indicador d'avaluació"), mai per posició. A
+ * la dreta del full hi ha els valors solts de les llistes desplegables
+ * (Fet, No fet, Endreçades, 0, 1, 2…), que queden fora perquè només es
+ * llegeixen les dues columnes de la capçalera.
+ */
 export function interpretaFullObjectiu(filesObjectiu) {
   const actuacions = []
-  let dinsDeLaTaula = false
+  let colText = null
+  let colIndicador = null
+
   for (const fila of filesObjectiu) {
-    const a = textCella(fila[0])
-    const b = textCella(fila[1])
-    if (/^actuacions\/activitats$/i.test(a)) { dinsDeLaTaula = true; continue }
-    if (!dinsDeLaTaula) continue
-    if (!a) continue
-    // Files que són en realitat capçaleres repetides o valors solts de
-    // desplegables (No fet, Fet, Endreçades...) no tenen sentit com a
-    // activitat — les descartem si són massa curtes i sense indicador.
-    if (a.length < 4 && !b) continue
-    actuacions.push({ text: a, indicador: b })
+    const cel·les = (fila ?? []).map(textCella)
+
+    if (colText === null) {
+      const i = cel·les.findIndex((c) => /^actuacions\s*\/\s*activitats$/i.test(c))
+      if (i >= 0) {
+        colText = i
+        const j = cel·les.findIndex((c, k) => k > i && /^indicador/i.test(c))
+        colIndicador = j >= 0 ? j : null
+      }
+      continue
+    }
+
+    const text = cel·les[colText] ?? ''
+    if (!text) continue
+    // El peu del full: la valoració de febrer i les instruccions per a qui
+    // l'omple. A partir d'aquí ja no hi ha actuacions.
+    if (/^valoraci|^-?\s*recorda que si copies/i.test(text)) break
+
+    const indicador = colIndicador !== null ? (cel·les[colIndicador] ?? '') : valorAlCostat(fila, colText)
+    if (text.length < 4 && !indicador) continue
+    actuacions.push({ text, indicador })
   }
   return actuacions
 }
