@@ -2,14 +2,12 @@ import { useEffect, useState } from 'react'
 import { collection, deleteDoc, doc, getDoc, getDocs, query, setDoc, serverTimestamp, where } from 'firebase/firestore'
 import { db, auth } from '../../firebase'
 import { cursEscolarActual } from '../../lib/cursEscolar'
-import { FESTES, mitjanaValoracio, mitjanaObjectiu, objectiuBuit, actuacioBuida, afegeixALlista } from '../../lib/valoracions'
+import { FESTES, mitjanaValoracio, mitjanaObjectiu, afegeixALlista } from '../../lib/valoracions'
 import { exportaValoracionsExcel, exportaValoracionsPDF } from '../../lib/valoracionsExport'
 import { carregaConfigValoracions, desaConfigValoracions } from '../../lib/valoracionsConfig'
-import { interpretaResum, interpretaFullObjectiu, interpretaResumCicle, interpretaResumFesta, interpretaFullGrupFesta } from '../../lib/comissioTemplateParser'
-import { CICLES } from '../../lib/valoracions'
-import { GRUPS, festaBuida, objectiuFestaBuit, activitatBuida } from '../../lib/festesDetall'
+import { analitzaLlibre, TIPUS } from '../../lib/plantillesImport'
+import { triaDocumentsDelDrive } from '../../lib/drivePicker'
 import { slug } from '../../lib/slug'
-import BotoDrive from '../BotoDrive'
 import { carregaXLSX } from '../../lib/carregaLlibreries'
 
 function colorPer(valor) {
@@ -84,32 +82,57 @@ function AfegeixNom({ valor, onCanvia, placeholder, onAfegeix }) {
   )
 }
 
-/** Els dos botons de plantilla: del Drive o de l'ordinador. Fan exactament
- *  el mateix — només canvia d'on surt el fitxer — i per això van sempre
- *  junts i amb el mateix text. */
-function BotonsPlantilla({ onFitxer, pujant, onError }) {
+/** La taula de revisió: què s'ha trobat a cada fitxer abans d'escriure res.
+ *  El tipus es pot corregir perquè una comissió mixta no es pot distingir
+ *  d'una de normal mirant el document — només pel nom. */
+function TaulaPendents({ pendents, onCanviaTipus, onTreu }) {
   return (
-    <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-      <BotoDrive
-        onFitxer={onFitxer}
-        tipus="fulls"
-        etiqueta="Tria una plantilla del Drive"
-        onError={onError}
-        disabled={pujant}
-      />
-      <label className="btn-ghost" style={{ fontSize: 12, padding: '5px 10px', cursor: 'pointer', display: 'inline-flex', color: 'var(--navy)', borderColor: 'var(--navy)' }}>
-        {pujant ? 'Llegint la plantilla…' : '📤 Puja una plantilla (Excel)'}
-        <input type="file" accept=".xlsx,.xls" onChange={onFitxer} style={{ display: 'none' }} disabled={pujant} />
-      </label>
+    <div className="taula-scroll" style={{ marginTop: 10 }}>
+      <table style={{ borderCollapse: 'collapse', fontSize: 12, width: '100%' }}>
+        <thead>
+          <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--line)' }}>
+            <th style={{ padding: '4px 6px' }}>Fitxer</th>
+            <th style={{ padding: '4px 6px' }}>Què és</th>
+            <th style={{ padding: '4px 6px' }}>Nom</th>
+            <th style={{ padding: '4px 6px' }}>Contingut</th>
+            <th style={{ padding: '4px 6px' }}></th>
+          </tr>
+        </thead>
+        <tbody>
+          {pendents.map((p) => (
+            <tr key={p.id} style={{ borderBottom: '1px solid var(--line)', opacity: p.dades ? 1 : 0.6 }}>
+              <td style={{ padding: '4px 6px' }}>{p.fitxer}</td>
+              <td style={{ padding: '4px 6px' }}>
+                {p.dades ? (
+                  <select
+                    value={p.tipus}
+                    onChange={(ev) => onCanviaTipus(p.id, ev.target.value)}
+                    style={{ border: '1px solid var(--line)', borderRadius: 6, padding: '3px 6px', fontSize: 12 }}
+                  >
+                    {TIPUS.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+                  </select>
+                ) : (
+                  <span style={{ color: 'var(--red)' }}>No reconegut</span>
+                )}
+              </td>
+              <td style={{ padding: '4px 6px' }}>{p.nom || '—'}</td>
+              <td style={{ padding: '4px 6px', color: p.dades ? 'var(--ink-soft)' : 'var(--red)' }}>{p.resum}</td>
+              <td style={{ padding: '4px 6px' }}>
+                <button
+                  type="button"
+                  onClick={() => onTreu(p.id)}
+                  title="Treu-lo de la llista"
+                  aria-label={`Treu ${p.fitxer}`}
+                  style={{ background: 'none', border: 'none', color: 'var(--red)', cursor: 'pointer', fontSize: 13, padding: '0 2px' }}
+                >
+                  ✕
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
-  )
-}
-
-function ResultatPlantilla({ resultat }) {
-  return (
-    <p style={{ fontSize: 12, color: 'var(--green)', marginTop: 6 }}>
-      ✓ &quot;{resultat.nom}&quot; creada amb {resultat.numObjectius} objectius i {resultat.numActuacions} actuacions. Ja està activa per als docents.
-    </p>
   )
 }
 
@@ -299,269 +322,163 @@ export default function MatriuGeneral() {
     setNomNovaMixta('')
   }
 
-  // Quina de les dues llistes està llegint una plantilla ara mateix:
-  // 'comissions', 'mixtes' o res.
-  const [pujant, setPujant] = useState(null)
-  const [resultatPlantilla, setResultatPlantilla] = useState(null)
+  // ── Importació de plantilles ──────────────────────────────────────────
+  // Un sol camí per a totes: es llegeixen els fitxers, es diu de cada un
+  // què sembla que és, i no s'escriu res fins que l'administrador ho
+  // confirma. El tipus es pot corregir, perquè una comissió mixta que
+  // encara no sigui a la llista arriba com a comissió normal.
+
+  const [analitzant, setAnalitzant] = useState(false)
+  const [pendents, setPendents] = useState([]) // { id, fitxer, tipus, nom, resum, dades }
+  const [important, setImportant] = useState(false)
+  const [resultatImport, setResultatImport] = useState(null)
+
+  async function analitzaFitxers(fitxers) {
+    if (!fitxers || fitxers.length === 0) return
+    setAnalitzant(true)
+    setMissatge(null)
+    setResultatImport(null)
+    try {
+      const XLSX = await carregaXLSX()
+      const mixtes = config.mixtes.map((c) => c.nom)
+      const trobats = []
+      for (const fitxer of fitxers) {
+        try {
+          const workbook = XLSX.read(await fitxer.arrayBuffer(), { type: 'array' })
+          const analisi = analitzaLlibre(XLSX, workbook, { mixtes })
+          trobats.push({ id: `${fitxer.name}-${trobats.length}`, fitxer: fitxer.name, ...analisi })
+        } catch (err) {
+          trobats.push({
+            id: `${fitxer.name}-${trobats.length}`,
+            fitxer: fitxer.name,
+            tipus: 'desconegut',
+            nom: '',
+            resum: `No s'ha pogut llegir: ${err.message}`,
+            dades: null,
+          })
+        }
+      }
+      setPendents(trobats)
+    } catch (err) {
+      setMissatge({ type: 'error', text: `No s'han pogut llegir les plantilles: ${err.message}` })
+    } finally {
+      setAnalitzant(false)
+    }
+  }
+
+  /** Els fitxers arriben o del selector del Drive o de l'ordinador, i tots
+   *  dos camins acaben en una llista de File. */
+  function delOrdinador(e) {
+    analitzaFitxers([...(e.target.files ?? [])])
+    e.target.value = ''
+  }
+
+  async function delDrive() {
+    setAnalitzant(true)
+    setMissatge(null)
+    try {
+      const triats = await triaDocumentsDelDrive('fulls')
+      await analitzaFitxers(triats.map((t) => new File([t.buffer], t.nom, { type: t.mime })))
+    } catch (err) {
+      setMissatge({ type: 'error', text: err.message })
+    } finally {
+      setAnalitzant(false)
+    }
+  }
+
+  function canviaTipus(id, tipus) {
+    setPendents(pendents.map((p) => p.id === id ? { ...p, tipus } : p))
+  }
+
+  function treuDeLaLlista(id) {
+    setPendents(pendents.filter((p) => p.id !== id))
+  }
 
   /**
-   * Puja una plantilla "Valoració [Comissió/Equip]" (Excel amb un full
-   * "Resum" i un full "Objectiu N" per cada objectiu), la interpreta, i
-   * crea directament la valoració d'aquest curs escolar ja omplerta amb el
-   * text real — a més d'activar-la a la llista.
+   * Escriu de debò les plantilles revisades.
    *
-   * Les comissions mixtes tenen plantilles amb la mateixa forma, així que
-   * és el mateix lector: `clau` només diu a quina de les dues llistes ha
-   * d'anar a parar, que és la secció on s'hagi premut el botó.
+   * La configuració es desa **un sol cop al final**: si es desés a cada
+   * fitxer, cada escriptura partiria d'una còpia que encara no veu les
+   * anteriors i s'hi perdrien activacions.
    */
-  function pujaPlantillaComissio(e, clau = 'comissions') {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setPujant(clau)
+  async function importa() {
+    setImportant(true)
     setMissatge(null)
-    setResultatPlantilla(null)
+    setResultatImport(null)
+    let configNova = config
+    const fets = []
+    const fallats = []
 
-    const reader = new FileReader()
-    reader.onload = async (event) => {
-      const XLSX = await carregaXLSX()
+    for (const p of pendents.filter((x) => x.dades && x.tipus !== 'desconegut')) {
       try {
-        const workbook = XLSX.read(event.target.result, { type: 'binary' })
-        const nomFullResum = workbook.SheetNames.find((n) => n.toLowerCase().includes('resum')) ?? workbook.SheetNames[0]
-        const filesResum = XLSX.utils.sheet_to_json(workbook.Sheets[nomFullResum], { header: 1, raw: false })
-        const { nom, responsable, membres, objectius: objectiusResum } = interpretaResum(filesResum)
-
-        if (!nom || objectiusResum.length === 0) {
-          setMissatge({ type: 'error', text: 'No he pogut interpretar aquesta plantilla — comprova que és el fitxer correcte (amb un full "Resum").' })
-          setPujant(null)
-          return
-        }
-
-        const objectius = objectiusResum.map(({ num, text }) => {
-          const o = objectiuBuit()
-          o.text = text
-          const nomFullObjectiu = workbook.SheetNames.find((n) => new RegExp(`^objectiu\\s*${num}$`, 'i').test(n.trim()))
-          if (nomFullObjectiu) {
-            const filesObjectiu = XLSX.utils.sheet_to_json(workbook.Sheets[nomFullObjectiu], { header: 1, raw: false })
-            const actuacionsText = interpretaFullObjectiu(filesObjectiu)
-            o.actuacions = actuacionsText.map(({ text, indicador }) => {
-              const a = actuacioBuida()
-              a.text = text
-              a.indicador = indicador
-              return a
-            })
+        if (p.tipus === 'festa') {
+          const entrada = configNova.festes.find((f) => {
+            const label = (f.label ?? '').toLowerCase()
+            const activitat = p.nom.toLowerCase()
+            return label && (activitat.includes(label) || label.includes(activitat.replace(/^festa (de |del |la )?/i, '')))
+          })
+          if (!entrada) throw new Error(`no sé quina festa és "${p.nom}" — afegeix-la primer a la llista`)
+          await setDoc(doc(db, 'festesDetall', `${cursEscolarId}__festa-${entrada.id}`), {
+            festa: { ...p.dades.festa, activitat: entrada.label },
+            cursEscolar: cursEscolarId,
+            actualitzatEl: serverTimestamp(),
+            actualitzatPer: auth.currentUser?.email ?? null,
+          })
+          configNova = {
+            ...configNova,
+            festes: configNova.festes.map((f) => f.id === entrada.id ? { ...f, activa: true } : f),
           }
-          return o
-        })
+          fets.push({ nom: entrada.label, tipus: 'festa' })
+          continue
+        }
 
-        // Creem/actualitzem la valoració d'aquest curs amb el que hem trobat.
-        const id = `${cursEscolarId}__${slug(nom)}`
-        await setDoc(doc(db, 'valoracions', id), {
+        const { nom, responsable, membres, objectius, metodologies } = p.dades
+        await setDoc(doc(db, 'valoracions', `${cursEscolarId}__${slug(nom)}`), {
           nom,
           responsable,
           membres,
           objectius,
           valoracioRevisio: '',
           valoracioFinal: '',
-          metodologies: '',
+          metodologies: metodologies ?? '',
           propostesMillora: '',
           cursEscolar: cursEscolarId,
           actualitzatEl: serverTimestamp(),
           actualitzatPer: auth.currentUser?.email ?? null,
         })
 
-        // I l'activem perquè els docents ja la vegin. Va a la llista de la
-        // secció des d'on s'ha pujat, però si el nom ja és a l'altra, mana
-        // l'altra: si no, la mateixa comissió sortiria a les dues pestanyes.
-        const altra = clau === 'comissions' ? 'mixtes' : 'comissions'
-        const jaHiEs = (llista) => llista.find((c) => c.nom.toLowerCase() === nom.toLowerCase())
-        const onVa = jaHiEs(config[altra]) ? altra : clau
-        const existent = jaHiEs(config[onVa])
-        if (!existent) {
-          await desaConfig({ ...config, [onVa]: afegeixALlista(config[onVa], nom) })
-        } else if (!existent.activa) {
-          await desaConfig({
-            ...config,
-            [onVa]: config[onVa].map((c) => c.nom === existent.nom ? { ...c, activa: true } : c),
-          })
-        }
-
-        setResultatPlantilla({
-          clau: onVa,
-          nom,
-          numObjectius: objectius.length,
-          numActuacions: objectius.reduce((a, o) => a + o.actuacions.length, 0),
-        })
-        await carrega()
-      } catch (err) {
-        setMissatge({ type: 'error', text: `No s'ha pogut llegir la plantilla: ${err.message}` })
-      } finally {
-        setPujant(null)
-      }
-    }
-    reader.onerror = () => {
-      setMissatge({ type: 'error', text: 'No s\'ha pogut llegir el fitxer.' })
-      setPujant(null)
-    }
-    reader.readAsBinaryString(file)
-    e.target.value = ''
-  }
-
-  const [pujantCicle, setPujantCicle] = useState(false)
-  const [resultatCicle, setResultatCicle] = useState(null)
-
-  /** Puja una plantilla senzilla de CICLE (un sol full, sense fulls
-   *  d'objectiu separats) i crea/actualitza la valoració d'aquest curs. */
-  function pujaPlantillaCicle(e) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setPujantCicle(true)
-    setMissatge(null)
-    setResultatCicle(null)
-
-    const reader = new FileReader()
-    reader.onload = async (event) => {
-      const XLSX = await carregaXLSX()
-      try {
-        const workbook = XLSX.read(event.target.result, { type: 'binary' })
-        const nomFull = workbook.SheetNames.find((n) => n.toLowerCase().includes('valoraci')) ?? workbook.SheetNames[0]
-        const files_ = XLSX.utils.sheet_to_json(workbook.Sheets[nomFull], { header: 1, raw: false })
-        const { nom, responsable, membres, objectius: textosObjectius, metodologies } = interpretaResumCicle(files_)
-
-        const nomCicle = CICLES.find((c) => c.toLowerCase() === nom.toLowerCase()) ?? nom
-        if (!nomCicle || textosObjectius.length === 0) {
-          setMissatge({ type: 'error', text: 'No he pogut interpretar aquesta plantilla de cicle — comprova que és el fitxer correcte.' })
-          setPujantCicle(false)
-          return
-        }
-
-        const objectius = textosObjectius.map((text) => {
-          const o = objectiuBuit()
-          o.text = text
-          return o
-        })
-
-        const id = `${cursEscolarId}__${slug(nomCicle)}`
-        await setDoc(doc(db, 'valoracions', id), {
-          nom: nomCicle,
-          responsable,
-          membres,
-          objectius,
-          valoracioRevisio: '',
-          valoracioFinal: '',
-          metodologies,
-          propostesMillora: '',
-          cursEscolar: cursEscolarId,
-          actualitzatEl: serverTimestamp(),
-          actualitzatPer: auth.currentUser?.email ?? null,
-        })
-
-        setResultatCicle({ nom: nomCicle, numObjectius: objectius.length })
-        await carrega()
-      } catch (err) {
-        setMissatge({ type: 'error', text: `No s'ha pogut llegir la plantilla: ${err.message}` })
-      } finally {
-        setPujantCicle(false)
-      }
-    }
-    reader.onerror = () => {
-      setMissatge({ type: 'error', text: 'No s\'ha pogut llegir el fitxer.' })
-      setPujantCicle(false)
-    }
-    reader.readAsBinaryString(file)
-    e.target.value = ''
-  }
-
-  const [pujantFesta, setPujantFesta] = useState(false)
-  const [resultatFesta, setResultatFesta] = useState(null)
-
-  /** Puja una plantilla de FESTA (full "Resum" + un full per cada grup:
-   *  Educació Infantil, Cicle Inicial...) i crea/actualitza la valoració
-   *  detallada d'aquesta festa per aquest curs. */
-  function pujaPlantillaFesta(e) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setPujantFesta(true)
-    setMissatge(null)
-    setResultatFesta(null)
-
-    const reader = new FileReader()
-    reader.onload = async (event) => {
-      const XLSX = await carregaXLSX()
-      try {
-        const workbook = XLSX.read(event.target.result, { type: 'binary' })
-        const nomFullResum = workbook.SheetNames.find((n) => n.toLowerCase().includes('resum')) ?? workbook.SheetNames[0]
-        const filesResum = XLSX.utils.sheet_to_json(workbook.Sheets[nomFullResum], { header: 1, raw: false })
-        const resumFesta = interpretaResumFesta(filesResum)
-
-        if (!resumFesta.activitat || resumFesta.objectius.length === 0) {
-          setMissatge({ type: 'error', text: 'No he pogut interpretar aquesta plantilla de festa — comprova que és el fitxer correcte (amb un full "Resum").' })
-          setPujantFesta(false)
-          return
-        }
-
-        const festival = FESTES.find((f) => resumFesta.activitat.toLowerCase().includes(f.label.toLowerCase()) || f.label.toLowerCase().includes(resumFesta.activitat.toLowerCase().replace(/^festa (de |del |la )?/i, '')))
-        if (!festival) {
-          setMissatge({ type: 'error', text: `No he pogut identificar quina festa és "${resumFesta.activitat}" — comprova que el nom coincideix amb una de la llista.` })
-          setPujantFesta(false)
-          return
-        }
-
-        const nova = festaBuida(festival.label)
-        nova.data = resumFesta.data
-        nova.pesCicles = resumFesta.pesCicles
-        nova.pesEquipDirectiu = resumFesta.pesEquipDirectiu
-        nova.objectius = resumFesta.objectius.map(({ num, text, pes }) => {
-          const o = objectiuFestaBuit(pes)
-          o.text = text
-          o._num = num // temporal, per emparellar amb els grups
-          return o
-        })
-
-        const grups = {}
-        for (const g of GRUPS) {
-          grups[g] = {}
-          const nomFullGrup = workbook.SheetNames.find((n) => n.trim().toLowerCase() === g.toLowerCase())
-          const activitatsPerObjectiu = nomFullGrup
-            ? interpretaFullGrupFesta(XLSX.utils.sheet_to_json(workbook.Sheets[nomFullGrup], { header: 1, raw: false }), resumFesta.objectius)
-            : {}
-          nova.objectius.forEach((o) => {
-            const textos = activitatsPerObjectiu[o._num] ?? []
-            grups[g][o.id] = {
-              activitats: textos.map(({ text }) => { const a = activitatBuida(); a.text = text; return a }),
-              comentaris: '',
+        // Els cicles sempre estan disponibles: no hi ha cap llista on
+        // activar-los. Les comissions i les mixtes, sí.
+        if (p.tipus !== 'cicle') {
+          const clau = p.tipus === 'mixta' ? 'mixtes' : 'comissions'
+          const existent = configNova[clau].find((c) => c.nom.toLowerCase() === nom.toLowerCase())
+          if (!existent) {
+            configNova = { ...configNova, [clau]: afegeixALlista(configNova[clau], nom) }
+          } else if (!existent.activa) {
+            configNova = {
+              ...configNova,
+              [clau]: configNova[clau].map((c) => c.nom === existent.nom ? { ...c, activa: true } : c),
             }
-          })
+          }
         }
-        nova.grups = grups
-        nova.objectius.forEach((o) => { delete o._num })
-
-        const id = `${cursEscolarId}__festa-${festival.id}`
-        await setDoc(doc(db, 'festesDetall', id), {
-          festa: nova,
-          cursEscolar: cursEscolarId,
-          actualitzatEl: serverTimestamp(),
-          actualitzatPer: auth.currentUser?.email ?? null,
-        })
-
-        if (!config.festes.find((f) => f.id === festival.id)?.activa) {
-          await desaConfig({ ...config, festes: config.festes.map((f) => f.id === festival.id ? { ...f, activa: true } : f) })
-        }
-
-        const totalActivitats = Object.values(grups).reduce((acc, g) => acc + Object.values(g).reduce((a2, o) => a2 + o.activitats.length, 0), 0)
-        setResultatFesta({ nom: festival.label, numObjectius: nova.objectius.length, numActivitats: totalActivitats })
+        fets.push({ nom, tipus: p.tipus })
       } catch (err) {
-        setMissatge({ type: 'error', text: `No s'ha pogut llegir la plantilla: ${err.message}` })
-      } finally {
-        setPujantFesta(false)
+        fallats.push({ fitxer: p.fitxer, motiu: err.message })
       }
     }
-    reader.onerror = () => {
-      setMissatge({ type: 'error', text: 'No s\'ha pogut llegir el fitxer.' })
-      setPujantFesta(false)
+
+    try {
+      if (configNova !== config) await desaConfig(configNova)
+    } catch (err) {
+      fallats.push({ fitxer: 'la configuració', motiu: err.message })
     }
-    reader.readAsBinaryString(file)
-    e.target.value = ''
+
+    setResultatImport({ fets, fallats })
+    setPendents([])
+    setImportant(false)
+    await carrega()
   }
+
 
 
   async function carrega() {
@@ -607,24 +524,73 @@ export default function MatriuGeneral() {
         ) : (
           <div className="placeholder-box" style={{ borderStyle: 'solid', marginTop: 10 }}>
             <TitolSeccio
-              titol="Cicles"
-              ajuda="Els 4 cicles sempre estan disponibles per als docents — no cal activar-los. Aquí només pots pujar-hi la plantilla d'un curs concret, ja omplerta."
+              titol="Importa plantilles"
+              ajuda="Tria tots els fulls que vulguis d'un cop — de cicle, de comissió o de festa. Es mira què és cadascun i no s'escriu res fins que ho confirmis."
               primer
             />
-            <BotonsPlantilla
-              onFitxer={pujaPlantillaCicle}
-              pujant={pujantCicle}
-              onError={(t) => setMissatge({ type: 'error', text: t })}
-            />
-            {resultatCicle && (
-              <p style={{ fontSize: 12, color: 'var(--green)', marginTop: 6 }}>
-                ✓ &quot;{resultatCicle.nom}&quot; actualitzat amb {resultatCicle.numObjectius} objectius.
-              </p>
+            <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={delDrive}
+                disabled={analitzant || important}
+                className="btn-ghost"
+                style={{ color: 'var(--navy)', borderColor: 'var(--navy)', maxWidth: '100%', textAlign: 'left' }}
+              >
+                {analitzant ? 'Llegint…' : '📁 Tria plantilles del Drive'}
+              </button>
+              <label className="btn-ghost" style={{ fontSize: 12, padding: '5px 10px', cursor: 'pointer', display: 'inline-flex', color: 'var(--navy)', borderColor: 'var(--navy)' }}>
+                📤 Puja plantilles (Excel)
+                <input type="file" accept=".xlsx,.xls" multiple onChange={delOrdinador} style={{ display: 'none' }} disabled={analitzant || important} />
+              </label>
+            </div>
+
+            {pendents.length > 0 && (
+              <>
+                <TaulaPendents pendents={pendents} onCanviaTipus={canviaTipus} onTreu={treuDeLaLlista} />
+                <p style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 8 }}>
+                  Una comissió mixta i una de normal tenen la plantilla igual: si alguna surt com a
+                  &quot;Comissió o equip&quot; i en realitat és mixta, canvia-ho aquí abans d&apos;importar.
+                </p>
+                <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    onClick={importa}
+                    disabled={important || pendents.every((p) => !p.dades)}
+                    className="btn-primary"
+                    style={{ maxWidth: 260 }}
+                  >
+                    {important ? 'Important…' : `Importa ${pendents.filter((p) => p.dades).length} plantilles`}
+                  </button>
+                  <button type="button" onClick={() => setPendents([])} disabled={important} className="btn-ghost" style={{ fontSize: 12, padding: '5px 10px' }}>
+                    Cancel·la
+                  </button>
+                </div>
+              </>
+            )}
+
+            {resultatImport && (
+              <div style={{ marginTop: 10 }}>
+                {resultatImport.fets.length > 0 && (
+                  <p style={{ fontSize: 12, color: 'var(--green)' }}>
+                    ✓ Importades {resultatImport.fets.length}: {resultatImport.fets.map((f) => f.nom).join(', ')}. Ja estan actives per als docents.
+                  </p>
+                )}
+                {resultatImport.fallats.map((f) => (
+                  <p key={f.fitxer} style={{ fontSize: 12, color: 'var(--red)', marginTop: 4 }}>
+                    ✕ {f.fitxer}: {f.motiu}
+                  </p>
+                ))}
+              </div>
             )}
 
             <TitolSeccio
+              titol="Cicles"
+              ajuda="Els 4 cicles sempre estan disponibles per als docents — no cal activar-los ni treure'ls."
+            />
+
+            <TitolSeccio
               titol="Comissions i equips"
-              ajuda="Les del claustre. La plantilla ha de ser un Excel &quot;Valoració ...&quot; amb un full Resum i un full per objectiu."
+              ajuda="Les del claustre. Marca les que han de sortir aquest curs."
             />
             <Etiquetes
               elements={config.comissions.map((c) => ({ clau: c.nom, etiqueta: c.nom, activa: c.activa }))}
@@ -637,16 +603,10 @@ export default function MatriuGeneral() {
               placeholder="Nom d'una comissió o equip"
               onAfegeix={afegeixComissio}
             />
-            <BotonsPlantilla
-              onFitxer={(e) => pujaPlantillaComissio(e, 'comissions')}
-              pujant={pujant === 'comissions'}
-              onError={(t) => setMissatge({ type: 'error', text: t })}
-            />
-            {resultatPlantilla?.clau === 'comissions' && <ResultatPlantilla resultat={resultatPlantilla} />}
 
             <TitolSeccio
               titol="Comissions mixtes (amb l'AFA)"
-              ajuda="Les que tenen participació de famílies, de l'AFA o d'una entitat de fora. Tenen pestanya pròpia a &quot;Documentació&quot; i la plantilla té la mateixa forma que la d'una comissió."
+              ajuda="Les que tenen participació de famílies, de l'AFA o d'una entitat de fora. Tenen pestanya pròpia a &quot;Documentació&quot;."
             />
             <Etiquetes
               elements={config.mixtes.map((c) => ({ clau: c.nom, etiqueta: c.nom, activa: c.activa }))}
@@ -659,16 +619,10 @@ export default function MatriuGeneral() {
               placeholder="Nom d'una comissió mixta"
               onAfegeix={afegeixMixta}
             />
-            <BotonsPlantilla
-              onFitxer={(e) => pujaPlantillaComissio(e, 'mixtes')}
-              pujant={pujant === 'mixtes'}
-              onError={(t) => setMissatge({ type: 'error', text: t })}
-            />
-            {resultatPlantilla?.clau === 'mixtes' && <ResultatPlantilla resultat={resultatPlantilla} />}
 
             <TitolSeccio
               titol="Festes i celebracions"
-              ajuda="La plantilla d'una festa és un Excel amb el full Resum i un full per cada grup (Educació Infantil, Cicle Inicial...)."
+              ajuda="Les del curs. Una festa que no hi sigui s'ha d'afegir aquí abans de poder-ne importar la plantilla."
             />
             <Etiquetes
               elements={config.festes.map((f) => ({
@@ -685,16 +639,6 @@ export default function MatriuGeneral() {
               placeholder="Nom d'una festa"
               onAfegeix={afegeixFesta}
             />
-            <BotonsPlantilla
-              onFitxer={pujaPlantillaFesta}
-              pujant={pujantFesta}
-              onError={(t) => setMissatge({ type: 'error', text: t })}
-            />
-            {resultatFesta && (
-              <p style={{ fontSize: 12, color: 'var(--green)', marginTop: 6 }}>
-                ✓ &quot;{resultatFesta.nom}&quot; actualitzada amb {resultatFesta.numObjectius} objectius i {resultatFesta.numActivitats} activitats. Ja està activa per als docents.
-              </p>
-            )}
 
             <p style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 16 }}>
               Es desa sol. El professorat, des de &quot;Documentació&quot;, només veurà com a opció el que
