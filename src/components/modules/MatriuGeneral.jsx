@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { collection, deleteDoc, doc, getDoc, getDocs, query, setDoc, serverTimestamp, where } from 'firebase/firestore'
 import { db, auth } from '../../firebase'
 import { cursEscolarActual } from '../../lib/cursEscolar'
-import { FESTES, mitjanaValoracio, mitjanaObjectiu, afegeixALlista } from '../../lib/valoracions'
+import { FESTES, mitjanaValoracio, mitjanaObjectiu, afegeixALlista, agrupaValoracions } from '../../lib/valoracions'
 import { exportaValoracionsExcel, exportaValoracionsPDF } from '../../lib/valoracionsExport'
 import { carregaConfigValoracions, desaConfigValoracions } from '../../lib/valoracionsConfig'
 import { analitzaLlibre, TIPUS } from '../../lib/plantillesImport'
@@ -678,7 +678,12 @@ export default function MatriuGeneral() {
         </p>
       ) : (
         <div style={{ marginTop: 20 }}>
-          {valoracions.map((v) => {
+          {agrupaValoracions(valoracions, config).map((seccio) => (
+            <div key={seccio.titol} style={{ marginTop: 18 }}>
+              <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-soft)', borderBottom: '1px solid var(--line)', paddingBottom: 4 }}>
+                {seccio.titol} <span style={{ fontWeight: 400 }}>({seccio.valoracions.length})</span>
+              </p>
+          {seccio.valoracions.map((v) => {
             const oberta = obert === v.id
             const gener = mitjanaValoracio(v, 'gener')
             const juny = mitjanaValoracio(v, 'juny')
@@ -749,6 +754,8 @@ export default function MatriuGeneral() {
               </div>
             )
           })}
+            </div>
+          ))}
         </div>
       )}
     </div>
