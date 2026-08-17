@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { collection, deleteDoc, doc, getDoc, getDocs, query, setDoc, serverTimestamp, where } from 'firebase/firestore'
 import { db, auth } from '../../firebase'
 import { cursEscolarActual } from '../../lib/cursEscolar'
-import { FESTES, mitjanaValoracio, mitjanaObjectiu, afegeixALlista, agrupaValoracions } from '../../lib/valoracions'
+import { FESTES, mitjanaValoracio, mitjanaObjectiu, afegeixALlista, agrupaValoracions, nomJaExistent, mateixNom } from '../../lib/valoracions'
 import { exportaValoracionsExcel, exportaValoracionsPDF } from '../../lib/valoracionsExport'
 import { carregaConfigValoracions, desaConfigValoracions } from '../../lib/valoracionsConfig'
 import { analitzaLlibre, TIPUS } from '../../lib/plantillesImport'
@@ -115,7 +115,14 @@ function TaulaPendents({ pendents, onCanviaTipus, onTreu }) {
                   <span style={{ color: 'var(--red)' }}>No reconegut</span>
                 )}
               </td>
-              <td style={{ padding: '4px 6px' }}>{p.nom || '—'}</td>
+              <td style={{ padding: '4px 6px' }}>
+                {p.nomExistent ?? p.nom ?? '—'}
+                {p.nomExistent && (
+                  <span style={{ display: 'block', fontSize: 11, color: 'var(--amber-dark)' }}>
+                    al full diu «{p.nom}» — s&apos;actualitza la que ja hi ha
+                  </span>
+                )}
+              </td>
               <td style={{ padding: '4px 6px', color: p.dades ? 'var(--ink-soft)' : 'var(--red)' }}>{p.resum}</td>
               <td style={{ padding: '4px 6px' }}>
                 <button
@@ -197,6 +204,43 @@ export default function MatriuGeneral() {
    * Les mixtes es desen a la mateixa col·lecció `valoracions` que la resta,
    * amb el nom com a identificador, i per això aquí no cal distingir-les.
    */
+  /**
+   * Esborra una valoració des de la llista de baix, tingui el nom que
+   * tingui. Cal perquè les que crea la importació poden no ser a cap
+   * llista del panell —i llavors no hi ha cap ✕ que les tregui—, que és el
+   * cas de les comissions duplicades amb el nom escrit d'una altra manera.
+   *
+   * Si el nom sí que és a alguna llista, també se'n treu, per no deixar
+   * l'opció penjada als docents apuntant a una valoració que ja no hi és.
+   */
+  async function esborraValoracio(v) {
+    const te = mitjanaValoracio(v, 'gener') !== null || mitjanaValoracio(v, 'juny') !== null
+    const avis = te
+      ? `La valoració "${v.nom}" té dades. S'esborrarà del tot i no es podrà recuperar.\n\nEscriu el nom per confirmar-ho:`
+      : `Segur que vols esborrar la valoració "${v.nom}"?\n\nEscriu el nom per confirmar-ho:`
+    const escrit = window.prompt(avis, '')
+    if (escrit === null) return
+    if (escrit.trim() !== v.nom.trim()) {
+      setMissatge({ type: 'error', text: 'El nom no coincideix: no s\'ha esborrat res.' })
+      return
+    }
+    try {
+      await deleteDoc(doc(db, 'valoracions', v.id))
+      const configNova = {
+        ...config,
+        comissions: config.comissions.filter((c) => !mateixNom(c.nom, v.nom)),
+        mixtes: config.mixtes.filter((c) => !mateixNom(c.nom, v.nom)),
+      }
+      if (configNova.comissions.length !== config.comissions.length || configNova.mixtes.length !== config.mixtes.length) {
+        await desaConfig(configNova)
+      }
+      setMissatge({ type: 'ok', text: `Esborrada "${v.nom}".` })
+      await carrega()
+    } catch (err) {
+      setMissatge({ type: 'error', text: `No s'ha pogut esborrar: ${err.message}` })
+    }
+  }
+
   async function esborraDeLlista(clau, nom) {
     const teDades = valoracions.some((v) => v.nom === nom)
     const avis = teDades
@@ -341,12 +385,26 @@ export default function MatriuGeneral() {
     try {
       const XLSX = await carregaXLSX()
       const mixtes = config.mixtes.map((c) => c.nom)
+      const nomsExistents = [
+        ...valoracions.map((v) => v.nom),
+        ...config.comissions.map((c) => c.nom),
+        ...mixtes,
+      ].filter(Boolean)
       const trobats = []
       for (const fitxer of fitxers) {
         try {
           const workbook = XLSX.read(await fitxer.arrayBuffer(), { type: 'array' })
           const analisi = analitzaLlibre(XLSX, workbook, { mixtes })
-          trobats.push({ id: `${fitxer.name}-${trobats.length}`, fitxer: fitxer.name, ...analisi })
+          // "Comissió Anglès" i "Comissió d'anglès" són la mateixa: si ja
+          // existeix, es reaprofita el nom que hi ha en comptes de crear-ne
+          // una de nova al costat.
+          const jaHiEs = analisi.nom ? nomJaExistent(analisi.nom, nomsExistents) : null
+          trobats.push({
+            id: `${fitxer.name}-${trobats.length}`,
+            fitxer: fitxer.name,
+            ...analisi,
+            nomExistent: jaHiEs && jaHiEs !== analisi.nom ? jaHiEs : null,
+          })
         } catch (err) {
           trobats.push({
             id: `${fitxer.name}-${trobats.length}`,
@@ -432,7 +490,8 @@ export default function MatriuGeneral() {
           continue
         }
 
-        const { nom, responsable, membres, objectius, metodologies } = p.dades
+        const { responsable, membres, objectius, metodologies } = p.dades
+        const nom = p.nomExistent ?? p.dades.nom
         await setDoc(doc(db, 'valoracions', `${cursEscolarId}__${slug(nom)}`), {
           nom,
           responsable,
@@ -701,6 +760,15 @@ export default function MatriuGeneral() {
                     <span style={{ fontSize: 12 }}>Gener: <strong style={{ color: colorPer(gener) }}>{gener !== null ? `${Math.round(gener)}%` : '—'}</strong></span>
                     <span style={{ fontSize: 12 }}>Juny: <strong style={{ color: colorPer(juny) }}>{juny !== null ? `${Math.round(juny)}%` : '—'}</strong></span>
                     <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>{oberta ? '▲' : '▼'}</span>
+                    <button
+                      type="button"
+                      onClick={(ev) => { ev.stopPropagation(); esborraValoracio(v) }}
+                      title={`Esborra la valoració "${v.nom}"`}
+                      aria-label={`Esborra ${v.nom}`}
+                      style={{ background: 'none', border: 'none', color: 'var(--red)', cursor: 'pointer', fontSize: 13, padding: '0 2px' }}
+                    >
+                      ✕
+                    </button>
                   </div>
                 </div>
 
