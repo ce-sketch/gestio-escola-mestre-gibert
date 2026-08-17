@@ -199,3 +199,76 @@ export function suggerimentsComissions(config, nomsExistents = []) {
   return [...new Set([...base, ...nomsExistents])]
     .filter((n) => !CICLES.includes(n) && !mixtes.includes(n))
 }
+
+// --- Com s'ordena la llista del Quadre de comandament ----------------------
+
+export const SECCIONS_VALORACIONS = ['Cicles', 'Comissions i equips', 'Comissions mixtes']
+
+const iguals = (a, b) => (a ?? '').trim().toLowerCase() === (b ?? '').trim().toLowerCase()
+
+/** A quina secció va una valoració, pel seu nom. Igual que a la resta de
+ *  l'app: cicle si el nom és un dels quatre, mixta si és a la llista de
+ *  mixtes d'aquest curs, i si no, comissió o equip. */
+export function seccioDe(nom, config) {
+  if (CICLES.some((c) => iguals(c, nom))) return 'Cicles'
+  const mixtes = (config?.mixtes ?? llistaActivaPerDefecte(NOMS_AFA)).map((c) => c.nom)
+  if (mixtes.some((m) => iguals(m, nom))) return 'Comissions mixtes'
+  return 'Comissions i equips'
+}
+
+/**
+ * Reparteix les valoracions per secció, per no ensenyar-les totes seguides
+ * en una llista sola. Els cicles surten en l'ordre de sempre (Infantil,
+ * Inicial, Mitjà, Superior) i la resta per ordre alfabètic. Les seccions
+ * buides no es dibuixen.
+ */
+export function agrupaValoracions(valoracions, config) {
+  const per = {}
+  for (const titol of SECCIONS_VALORACIONS) per[titol] = []
+  for (const v of valoracions ?? []) per[seccioDe(v.nom, config)].push(v)
+
+  const ordreCicle = (nom) => {
+    const i = CICLES.findIndex((c) => iguals(c, nom))
+    return i === -1 ? CICLES.length : i
+  }
+  per.Cicles.sort((a, b) => ordreCicle(a.nom) - ordreCicle(b.nom))
+  for (const titol of ['Comissions i equips', 'Comissions mixtes']) {
+    per[titol].sort((a, b) => (a.nom ?? '').localeCompare(b.nom ?? '', 'ca'))
+  }
+
+  return SECCIONS_VALORACIONS
+    .map((titol) => ({ titol, valoracions: per[titol] }))
+    .filter((s) => s.valoracions.length > 0)
+}
+
+// --- Noms que són el mateix escrits diferent -------------------------------
+// Els fulls del Drive i la llista de suggeriments no diuen les coses igual:
+// "Comissió Anglès" al panell i "Comissió d'anglès" al full. Com que el nom
+// és l'identificador de la valoració, cada variant en creava una de nova i
+// sortien duplicades.
+
+const PARAULES_BUIDES = ['de', 'del', 'dels', 'd', 'la', 'el', 'els', 'les', 'l', 'i', 'a']
+
+/** Deixa un nom en la seva forma comparable: sense accents, sense
+ *  apòstrofs, sense signes i sense articles ni preposicions. */
+export function nomCanonic(nom) {
+  return (nom ?? '')
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter((p) => p && !PARAULES_BUIDES.includes(p))
+    .join(' ')
+}
+
+export function mateixNom(a, b) {
+  const na = nomCanonic(a)
+  return na !== '' && na === nomCanonic(b)
+}
+
+/** Si aquest nom ja existeix amb una altra manera d'escriure'l, retorna el
+ *  que ja hi ha. Serveix per reaprofitar la valoració en comptes de
+ *  duplicar-la. */
+export function nomJaExistent(nom, nomsExistents = []) {
+  return nomsExistents.find((n) => mateixNom(n, nom)) ?? null
+}

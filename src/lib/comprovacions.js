@@ -16,7 +16,8 @@ import {
 import {
   mitjanaObjectiu, mitjanaValoracio, pendentsValoracio, valoracioBuida,
   normalitzaConfigValoracions, nomsActius, suggerimentsComissions,
-  afegeixALlista, llistaActivaPerDefecte,
+  afegeixALlista, llistaActivaPerDefecte, agrupaValoracions,
+  nomCanonic, mateixNom, nomJaExistent,
 } from './valoracions'
 import { opcionsDe, ESCALES } from './escales'
 import {
@@ -280,6 +281,90 @@ function grupValoracions() {
       llista = afegeixALlista(llista, '  comissió patis ')
       return llista.length
     }
+  ))
+
+  // ── Com s'ordena la llista del Quadre de comandament ──────────────────
+
+  const config3 = normalitzaConfigValoracions({
+    mixtes: [{ nom: 'Comissió Comunicació', activa: true }, { nom: 'Jardins. AREP', activa: false }],
+  })
+  const llistaDesordenada = [
+    { id: '1', nom: 'Cicle Mitjà' },
+    { id: '2', nom: 'Comissió TAC' },
+    { id: '3', nom: 'Educació Infantil' },
+    { id: '4', nom: 'Comissió Comunicació' },
+    { id: '5', nom: 'Comissió Anglès' },
+    { id: '6', nom: 'Cicle Superior' },
+    { id: '7', nom: 'Jardins. AREP' },
+  ]
+
+  proves.push(comprova(
+    'La llista es reparteix en cicles, comissions i mixtes',
+    [
+      { titol: 'Cicles', noms: ['Educació Infantil', 'Cicle Mitjà', 'Cicle Superior'] },
+      { titol: 'Comissions i equips', noms: ['Comissió Anglès', 'Comissió TAC'] },
+      { titol: 'Comissions mixtes', noms: ['Comissió Comunicació', 'Jardins. AREP'] },
+    ],
+    // Els cicles surten en l'ordre de sempre, no per ordre alfabètic; la
+    // resta sí. Una mixta desactivada segueix sortint a la seva secció:
+    // desactivar-la amaga l'opció als docents, no la valoració ja feta.
+    () => agrupaValoracions(llistaDesordenada, config3)
+      .map((s) => ({ titol: s.titol, noms: s.valoracions.map((v) => v.nom) }))
+  ))
+
+  proves.push(comprova(
+    'Les seccions sense res no es dibuixen',
+    ['Cicles'],
+    () => agrupaValoracions([{ id: '1', nom: 'Cicle Inicial' }], config3).map((s) => s.titol)
+  ))
+
+  // ── Noms que són el mateix escrits diferent ───────────────────────────
+  // La càrrega massiva del 16 d'agost va crear parelles com "Comissió
+  // Anglès" (de la llista de suggeriments) i "Comissió d'anglès" (del full
+  // del Drive): com que el nom és l'identificador, en sortien dues.
+
+  proves.push(comprova(
+    "«Comissió Anglès» i «Comissió d'anglès» són la mateixa",
+    true,
+    () => mateixNom('Comissió Anglès', "Comissió d'anglès")
+  ))
+
+  proves.push(comprova(
+    'També ho són les que només es diferencien per un «de» o per les majúscules',
+    [true, true, true],
+    () => [
+      mateixNom('Comissió de biblioteca', 'Comissió Biblioteca'),
+      mateixNom('Comissió de material', 'Comissió Material'),
+      mateixNom("Comissió d'Espais", 'Comissió Espais'),
+    ]
+  ))
+
+  proves.push(comprova(
+    'Però dues comissions de debò diferents no es barregen',
+    [false, false, false],
+    () => [
+      mateixNom('Comissió de Transformem els Patis', 'Comissió Patis'),
+      mateixNom('Equip LIC', 'Comissió LIC'),
+      mateixNom('Comissió Espais', 'Comissió Espai de migdia'),
+    ]
+  ))
+
+  proves.push(comprova(
+    'Un nom buit no es fa igual a res',
+    [false, null],
+    () => [mateixNom('', ''), nomJaExistent('', ['Comissió TAC'])]
+  ))
+
+  proves.push(comprova(
+    "En importar es reaprofita el nom que ja hi ha, no se'n crea un de nou",
+    'Comissió Anglès',
+    () => nomJaExistent("Comissió d'anglès", ['Cicle Inicial', 'Comissió Anglès', 'Comissió TAC'])
+  ))
+
+  proves.push(comprova(
+    'La forma comparable treu accents, apòstrofs i articles',
+    ['comissio angles', 'jardins arep'],
+    () => [nomCanonic("Comissió d'Anglès"), nomCanonic('Jardins. AREP')]
   ))
 
   return { titol: 'Valoracions', proves }
