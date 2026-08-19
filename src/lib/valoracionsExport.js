@@ -1,11 +1,12 @@
 import { carregaExcelJS } from './carregaLlibreries'
-import { FESTES, mitjanaObjectiu, mitjanaValoracio } from './valoracions'
+import { FESTES, mitjanaObjectiu, mitjanaValoracio, agrupaValoracions } from './valoracions'
 import { mitjanaGeneralFesta, mitjanaGrup } from './festesDetall'
 import { grauGlobal, grauCicle, CICLES_COOPERATIU } from './aprenentatgeCooperatiu'
 import { grauSatisfaccioCicle, percentValorades, totalRepetirSi, mitjanaActivitat } from './activitatsComplementariesDetall'
 import { afegeixCapcalera, ajustaColumnes } from './excelCapcalera'
 
 const BLAU = 'FF1E3A5F'
+const BLAU_CSS = '#1E3A5F'
 const GRIS = 'FFF2F0EA'
 const VORA = { style: 'thin', color: { argb: 'FFCCCCCC' } }
 const TOTES_VORES = { top: VORA, left: VORA, bottom: VORA, right: VORA }
@@ -43,6 +44,13 @@ function estilCapçalera(cell) {
   cell.border = TOTES_VORES
 }
 
+/** Full en horitzontal i ajustat a l'amplada del paper: les taules de
+ *  valoracions solen tenir moltes columnes (Objectiu, Gener, Juny...) i en
+ *  vertical queden tallades o minúscules en imprimir-les. */
+function configuraPagina(ws) {
+  ws.pageSetup = { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0, margins: { left: 0.5, right: 0.5, top: 0.6, bottom: 0.6, header: 0.3, footer: 0.3 } }
+}
+
 function pct(v) {
   return v === '' || v === null || v === undefined ? '' : `${v}%`
 }
@@ -61,7 +69,7 @@ function arrodoneix(v) {
  */
 export async function exportaValoracionsExcel(
   valoracions, cursEscolarId,
-  { festesDetall = [], cooperatiu = null, activitats = [] } = {}
+  { festesDetall = [], cooperatiu = null, activitats = [], config = null } = {}
 ) {
   const ExcelJS = await carregaExcelJS()
   const wb = new ExcelJS.Workbook()
@@ -69,11 +77,20 @@ export async function exportaValoracionsExcel(
   wb.created = new Date()
   const nomsUsats = new Set() // compartit per a tot el llibre, evita fulls amb el mateix nom
 
-  for (const v of valoracions) {
+  // Amb la configuració del curs, les pestanyes surten en el mateix ordre
+  // que al Quadre de comandament (cicles en ordre pedagògic, després
+  // comissions i mixtes per ordre alfabètic) en comptes de tot mesclat
+  // per ordre alfabètic pla, que posava un cicle enmig de dues comissions.
+  const valoracionsOrdenades = config
+    ? agrupaValoracions(valoracions, config).flatMap((s) => s.valoracions)
+    : valoracions
+
+  for (const v of valoracionsOrdenades) {
     const teActuacions = (v.objectius ?? []).some((o) => o.actuacions?.length > 0)
 
     // --- Pestanya principal (Resum, o única si és un cicle sense actuacions) ---
     const ws = wb.addWorksheet(nomFullSegur(v.nom, teActuacions ? ' - Resum' : '', nomsUsats))
+    configuraPagina(ws)
     afegeixCapcalera(ws, { titol: `Valoració ${v.nom}`, cursEscolarId, columnes: 3 })
     ws.addRow(['Departament/comissió/servei:', v.nom])
     if (v.responsable) ws.addRow(['Responsable:', v.responsable])
@@ -119,6 +136,7 @@ export async function exportaValoracionsExcel(
       v.objectius.forEach((o, oi) => {
         if (!o.actuacions || o.actuacions.length === 0) return
         const wsO = wb.addWorksheet(nomFullSegur(v.nom, ` - Obj.${oi + 1}`, nomsUsats))
+        configuraPagina(wsO)
         afegeixCapcalera(wsO, {
           titol: `${v.nom} — Objectiu ${oi + 1}: ${o.text}`,
           cursEscolarId,
@@ -163,6 +181,7 @@ export async function exportaValoracionsExcel(
   //     cada grup a sota, en comptes d'una pestanya per festa. ---
   if (festesDetall.length > 0) {
     const wsF = wb.addWorksheet(nomFullSegur('Festes', '', nomsUsats))
+    configuraPagina(wsF)
     afegeixCapcalera(wsF, { titol: 'Festes i celebracions', cursEscolarId, columnes: 2 })
     const capF = wsF.addRow(['Festa', 'Grau general'])
     capF.eachCell((c) => estilCapçalera(c))
@@ -184,6 +203,7 @@ export async function exportaValoracionsExcel(
   //     global i el de cada cicle a gener i a juny. ---
   if (cooperatiu) {
     const wsC = wb.addWorksheet(nomFullSegur('Aprenentatge cooperatiu', '', nomsUsats))
+    configuraPagina(wsC)
     afegeixCapcalera(wsC, { titol: 'Aprenentatge cooperatiu', cursEscolarId, columnes: 3 })
     const capC = wsC.addRow(['', 'Gener', 'Juny'])
     capC.eachCell((c) => estilCapçalera(c))
@@ -199,6 +219,7 @@ export async function exportaValoracionsExcel(
   //     columnes no són les mateixes que les altres dues. ---
   if (activitats.length > 0) {
     const wsA = wb.addWorksheet(nomFullSegur('Activitats complementàries', '', nomsUsats))
+    configuraPagina(wsA)
     afegeixCapcalera(wsA, { titol: 'Activitats complementàries', cursEscolarId, columnes: 4 })
     const capA = wsA.addRow(['Cicle', 'Satisfacció', 'Valorades', 'Es repetirien'])
     capA.eachCell((c) => estilCapçalera(c))
@@ -244,7 +265,7 @@ export async function exportaValoracionsExcel(
  */
 export function exportaValoracionsPDF(
   valoracions, cursEscolarId,
-  { festesDetall = [], cooperatiu = null, activitats = [] } = {}
+  { festesDetall = [], cooperatiu = null, activitats = [], config = null } = {}
 ) {
   const finestra = window.open('', '_blank')
   if (!finestra) {
@@ -252,7 +273,9 @@ export function exportaValoracionsPDF(
     return
   }
 
-  const blocs = valoracions.map((v) => {
+  /** El bloc HTML d'una valoració (festes incloses, si en porta). Es fa
+   *  servir tant si van agrupades per secció com si no. */
+  function blocValoracio(v) {
     const objectiusHtml = (v.objectius ?? []).map((o, oi) => {
       const actuacionsHtml = (o.actuacions ?? []).length > 0
         ? `<table class="sub">
@@ -284,7 +307,31 @@ export function exportaValoracionsPDF(
         ${festesHtml}
       </div>
     `
-  }).join('')
+  }
+
+  // Amb la configuració del curs, es respecta el mateix ordre que al
+  // Quadre de comandament — cicles en ordre pedagògic, després comissions
+  // i mixtes alfabèticament — amb un títol de secció al davant de cada
+  // bloc. Sense configuració (per exemple, en una prova), es queda amb
+  // l'ordre que ja portava la llista.
+  // El primer bloc de tots (secció o valoració) no ha de forçar salt de
+  // pàgina — ja és a dalt de la primera. Es marca a part perquè la regla
+  // de CSS que fa "cada valoració a la seva pàgina" no depengui de com
+  // s'intercalen els <h1> de secció entremig (:first-of-type no serveix
+  // aquí, perquè només mira el tipus d'etiqueta, no la classe).
+  let primer = true
+  function marcaPrimer(html) {
+    if (!primer) return html
+    primer = false
+    return html.replace(/class="([^"]*)"/, 'class="$1 primer-bloc"')
+  }
+
+  const blocs = config
+    ? agrupaValoracions(valoracions, config).map((seccio) => `
+        ${marcaPrimer(`<h1 class="seccio">${seccio.titol}</h1>`)}
+        ${seccio.valoracions.map((v) => marcaPrimer(blocValoracio(v))).join('')}
+      `).join('')
+    : valoracions.map((v) => marcaPrimer(blocValoracio(v))).join('')
 
   const blocFestes = festesDetall.length > 0 ? `
     <div class="valoracio">
@@ -329,25 +376,58 @@ export function exportaValoracionsPDF(
   finestra.document.write(`
     <html>
       <head>
-        <title>Valoracions PGAC ${cursEscolarId}</title>
+        <title>Valoracions — Curs ${cursEscolarId}</title>
         <meta charset="utf-8" />
         <style>
-          body { font-family: Arial, sans-serif; padding: 24px; color: #1a1a1a; }
-          h1 { font-size: 18px; margin-bottom: 4px; color: #1E3A5F; }
-          .data { font-size: 12px; color: #666; margin-bottom: 20px; }
-          .valoracio { break-before: page; padding-top: 12px; }
-          .valoracio:first-of-type { break-before: avoid; }
-          h2 { font-size: 15px; color: #1E3A5F; border-bottom: 2px solid #1E3A5F; padding-bottom: 4px; margin-top: 0; }
-          .petit { font-size: 12px; margin: 4px 0; }
-          .objectiu { margin-top: 12px; font-size: 12px; }
-          table.sub { border-collapse: collapse; width: 100%; font-size: 11px; margin: 6px 0 12px; }
-          table.sub th, table.sub td { border: 1px solid #ccc; padding: 4px 6px; text-align: left; }
-          table.sub th { background: #f0f0f0; }
+          @page { size: A4 landscape; margin: 14mm 12mm; }
+          * { box-sizing: border-box; }
+          body { font-family: 'Georgia', 'Times New Roman', serif; margin: 0; padding: 0 6mm; color: #1a1a1a; }
+          .banda {
+            background: ${BLAU_CSS}; color: #fff; font-weight: 700; font-size: 17px;
+            text-align: center; padding: 10px; letter-spacing: 0.3px;
+          }
+          .subtitol {
+            display: flex; justify-content: space-between; align-items: baseline;
+            border-bottom: 2px solid ${BLAU_CSS}; padding: 8px 2px 10px; margin-bottom: 4px;
+          }
+          .subtitol .titol { font-size: 16px; font-weight: 700; color: ${BLAU_CSS}; }
+          .subtitol .data { font-size: 11px; color: #666; }
+
+          h1.seccio {
+            font-size: 14px; font-weight: 700; color: #fff; background: ${BLAU_CSS};
+            padding: 5px 10px; margin: 22px 0 12px; break-before: page;
+          }
+          h1.seccio.primer-bloc { break-before: avoid; margin-top: 10px; }
+
+          .valoracio { break-before: page; padding-top: 4px; }
+          .valoracio.primer-bloc { break-before: avoid; }
+
+          h2 {
+            font-size: 14px; color: #1a1a1a; border-bottom: 1px solid ${BLAU_CSS};
+            padding-bottom: 5px; margin: 0 0 8px;
+          }
+          .petit { font-size: 12px; margin: 5px 0; line-height: 1.4; }
+          .objectiu { margin-top: 14px; font-size: 12px; }
+          .objectiu > p { margin: 0 0 4px; }
+
+          table.sub { border-collapse: collapse; width: 100%; font-size: 11px; margin: 6px 0 14px; }
+          table.sub th, table.sub td { border: 1px solid #bbb; padding: 5px 8px; text-align: left; vertical-align: top; }
+          table.sub th { background: #EDEFF2; color: #1a1a1a; font-weight: 700; }
+          table.sub tbody tr:nth-child(even) { background: #FAFAFA; }
+
+          @media print {
+            h1.seccio, h2 { break-after: avoid; }
+            table.sub { break-inside: auto; }
+            table.sub tr { break-inside: avoid; }
+          }
         </style>
       </head>
       <body>
-        <h1>Valoracions PGAC — Curs ${cursEscolarId}</h1>
-        <p class="data">Escola Mestre Enric Gibert i Camins — generat el ${new Date().toLocaleDateString('ca-ES')}</p>
+        <div class="banda">Escola Mestre Enric Gibert i Camins</div>
+        <div class="subtitol">
+          <span class="titol">Valoracions — Curs ${cursEscolarId}</span>
+          <span class="data">Generat el ${new Date().toLocaleDateString('ca-ES')}</span>
+        </div>
         ${blocs}
         ${blocFestes}${blocCooperatiu}${blocActivitats}
       </body>

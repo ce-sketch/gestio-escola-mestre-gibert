@@ -113,7 +113,7 @@ function descarregaBlob(buffer, nomFitxer, mimeType) {
  * fulls: [{ nom: 'TEE', files: [[capçalera...], [fila...], ...] }]
  */
 export function exportaPDF(titol, dades) {
-  const { cursEscolarId, fulls } = comprovaDades(dades, 'exportaPDF')
+  const { cursEscolarId, fulls, etiqueta } = comprovaDades(dades, 'exportaPDF')
   const finestra = window.open('', '_blank')
   if (!finestra) {
     alert('El navegador ha bloquejat la finestra per generar el PDF. Permet finestres emergents per a aquesta pàgina i torna-ho a provar.')
@@ -142,7 +142,8 @@ export function exportaPDF(titol, dades) {
         <title>${titol}</title>
         <meta charset="utf-8" />
         <style>
-          body { font-family: Arial, sans-serif; padding: 24px; color: #1a1a1a; }
+          @page { size: A4 landscape; margin: 14mm 12mm; }
+          body { font-family: Arial, sans-serif; padding: 0 6mm; color: #1a1a1a; }
           .banda { background: #1E3A5F; color: #fff; font-weight: 700; font-size: 15px; text-align: center; padding: 8px; }
           .curs { font-size: 11px; color: #666; text-align: right; margin: 4px 0 12px; }
           h1 { font-size: 18px; margin-bottom: 4px; color: #1E3A5F; }
@@ -161,7 +162,7 @@ export function exportaPDF(titol, dades) {
       </head>
       <body>
         <div class="banda">${NOM_ESCOLA}</div>
-        <p class="curs">PGAC · Curs ${cursEscolarId}</p>
+        <p class="curs">${etiqueta ?? 'PGAC'} · Curs ${cursEscolarId}</p>
         <h1>${titol}</h1>
         <p class="data">Generat el ${new Date().toLocaleDateString('ca-ES')}</p>
         ${taulesHtml}
