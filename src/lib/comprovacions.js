@@ -32,7 +32,7 @@ import { primerNom, generaInformeQualitatiu } from './informeQualitatiu'
 import { cerca } from './cercaApp'
 import { classificaFulls, tipusAmbNom } from './plantillesImport'
 import { esClasseAmbLectura } from './rubricaLectura'
-import { notaFinalArea, TRIMESTRES, AREES } from './notesArea'
+import { notaFinalArea, TRIMESTRES, AREES, areaAplicaAClasse } from './notesArea'
 import { colorCella } from './matriuColors'
 import { interpretaResum, interpretaFullObjectiu } from './comissioTemplateParser'
 import { llegeixCosmos, resumClasse, rendimentAPercentatge } from './cosmosParser'
@@ -1013,6 +1013,32 @@ function grupNotesArea() {
     // Mitjana de les dues finals: (7 + 7,3) / 2 = 7,15 → 7,2. Es prova amb
     // valors senzills perquè el número final sigui inequívoc.
     () => notaFinalArea([notaFinalArea([6, 8]), notaFinalArea([8, 6])])
+  ))
+
+  proves.push(comprova(
+    "Medi (global) també ve de dues àrees, com Artística: Medi i Science",
+    { calculada: true, deArees: ['medi', 'science'] },
+    () => {
+      const a = AREES.find((x) => x.id === 'medi_global')
+      return { calculada: !!a.calculada, deArees: a.deArees }
+    }
+  ))
+
+  proves.push(comprova(
+    "La final de Medi (global) és la mitjana de les finals de Medi i Science",
+    7,
+    () => notaFinalArea([notaFinalArea([6, 8]), notaFinalArea([8, 6])])
+  ))
+
+  proves.push(comprova(
+    "Medi (global) només surt de 3r a 6è, igual que Science — a Infantil i Cicle Inicial no hi ha Science",
+    { primer: false, segon: false, tercer: true, sise: true },
+    () => ({
+      primer: areaAplicaAClasse('medi_global', '1A'),
+      segon: areaAplicaAClasse('medi_global', '2B'),
+      tercer: areaAplicaAClasse('medi_global', '3A'),
+      sise: areaAplicaAClasse('medi_global', '6C'),
+    })
   ))
 
   return { titol: "Notes per àrea", proves }

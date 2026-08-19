@@ -14,6 +14,15 @@ export const AREES = [
   { id: 'matematiques', label: 'Matemàtiques' },
   { id: 'medi', label: 'Medi' },
   { id: 'science', label: 'Science' },
+  // No té notes pròpies. Al full, la "GF" de Medi surt de fer primer la
+  // mitjana de Medi Natural i Science, i després la mitjana d'això amb
+  // Medi Social — però Medi Social no és una àrea pròpia a l'app (es fa
+  // servir "Medi" per al conjunt de Natural+Social junts). Per això aquí
+  // ens quedem amb el primer pas: la mitjana de Medi i Science, que és
+  // exactament la peça que l'app pot calcular amb el que ja té.
+  //
+  // Només a partir de 3r, com Science (vegeu AREES_NOMES_CURSOS).
+  { id: 'medi_global', label: 'Medi (global)', calculada: true, deArees: ['medi', 'science'] },
   { id: 'plastica', label: 'Plàstica' },
   { id: 'musica', label: 'Música' },
   // No té notes pròpies: al full és un títol de grup ("ARTÍSTICA") que la
@@ -34,6 +43,7 @@ export const AREES = [
 const AREES_NOMES_CURSOS = {
   valors: ['5'],
   science: ['3', '4', '5', '6'],
+  medi_global: ['3', '4', '5', '6'],
 }
 
 /** Diu si una àrea s'ha de mostrar per a una classe concreta (p. ex. "5A"). */
