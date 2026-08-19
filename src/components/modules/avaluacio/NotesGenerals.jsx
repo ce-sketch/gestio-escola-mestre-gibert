@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import { collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore'
 import { db, auth } from '../../../firebase'
 import { NIVELLS, nivellDe, redueixVigents } from '../../../lib/avaluacioCatala'
-import { AREES, TRIMESTRES, areaAplicaAClasse, interpretaDictatNotesArea } from '../../../lib/notesArea'
+import { AREES, TRIMESTRES, areaAplicaAClasse, interpretaDictatNotesArea, notaFinalArea } from '../../../lib/notesArea'
 import { cursEscolarActual, NIVELLS_ESCOLARS, nivellEscolarDe } from '../../../lib/cursEscolar'
 import { grauPrimaria } from '../../../lib/rubricaLectura'
 import { exportaExcel, exportaPDF } from '../../../lib/exportTaula'
@@ -62,42 +62,37 @@ export default function NotesGenerals() {
   const alumnesClasse = useMemo(() => alumnesTots.filter((a) => a.curs === classe), [alumnesTots, classe])
   const areesClasse = useMemo(() => AREES.filter((a) => areaAplicaAClasse(a.id, classe)), [classe])
 
-  // Vigents per a l'entrada actual (classe + trimestre + curs escolar), amb
-  // TOTES les àrees alhora — clau alumne+àrea, tal com als fulls per classe
-  // de l'Excel (1A, 1B...), on cada alumne té una columna per àrea.
-  const vigentsEntrada = useMemo(
+  // Vigents per a la classe actual (curs escolar), amb els TRES trimestres i
+  // TOTES les àrees alhora — clau alumne+àrea+trimestre, tal com als fulls
+  // per classe de l'Excel (1A, 1B...), on cada àrea té una columna per
+  // trimestre més una de "Final". El selector de Trimestre ja no filtra
+  // aquesta llista: només diu a quina columna escriu una nota nova.
+  const vigentsClasse = useMemo(
     () => redueixVigents(
-      registres.filter((r) =>
-        r.curs === classe &&
-        r.trimestre === trimestre &&
-        (r.cursEscolar ?? cursEscolarActual()) === cursEscolarId
-      ),
-      (r) => `${r.alumneId}__${r.area}`
+      registres.filter((r) => r.curs === classe && (r.cursEscolar ?? cursEscolarActual()) === cursEscolarId),
+      (r) => `${r.alumneId}__${r.area}__${r.trimestre}`
     ),
-    [registres, classe, trimestre, cursEscolarId]
+    [registres, classe, cursEscolarId]
   )
 
-  function clauValor(alumneId, areaId) {
-    return `${alumneId}__${areaId}`
+  function clauValor(alumneId, areaId, trim = trimestre) {
+    return `${alumneId}__${areaId}__${trim}`
   }
 
-  function notaAlumne(alumneId, areaId) {
-    const clau = clauValor(alumneId, areaId)
-    if (valors[clau] !== undefined) return valors[clau]
-    const existent = vigentsEntrada.find((r) => r.alumneId === alumneId && r.area === areaId)
+  /** La nota d'un alumne, una àrea i UN trimestre concret. Les edicions
+   *  locals encara no desades (`valors`) només existeixen per al trimestre
+   *  actiu al selector, que és l'únic que es pot editar. */
+  function notaAlumneTrimestre(alumneId, areaId, trim) {
+    const clau = clauValor(alumneId, areaId, trim)
+    if (trim === trimestre && valors[clau] !== undefined) return valors[clau]
+    const existent = vigentsClasse.find((r) => r.alumneId === alumneId && r.area === areaId && r.trimestre === trim)
     return existent?.nota ?? ''
   }
 
-  /** Mitjana de totes les àrees ja introduïdes per aquest alumne (ignora
-   *  les àrees encara buides) — la "nota global" del trimestre. */
-  function notaGlobalAlumne(alumneId) {
-    const valorsOmplerts = areesClasse
-      .map((a) => notaAlumne(alumneId, a.id))
-      .filter((v) => v !== '')
-      .map(Number)
-    if (valorsOmplerts.length === 0) return null
-    const mitjana = valorsOmplerts.reduce((a, b) => a + b, 0) / valorsOmplerts.length
-    return Math.round(mitjana * 10) / 10
+  /** Nota final de l'àrea: la mitjana dels trimestres que l'alumne ja tingui
+   *  avaluats (no cal esperar que hi siguin els tres). */
+  function notaFinalAlumneArea(alumneId, areaId) {
+    return notaFinalArea(TRIMESTRES.map((t) => notaAlumneTrimestre(alumneId, areaId, t)))
   }
 
   async function desaCella(alumne, area, valorText) {
@@ -113,7 +108,7 @@ export default function NotesGenerals() {
     // Si el valor no ha canviat respecte al que ja hi havia desat, no cal
     // tornar a escriure res (evita omplir Firestore de registres iguals
     // cada vegada que es passa pel camp sense modificar-lo).
-    const actual = vigentsEntrada.find((r) => r.alumneId === alumne.id && r.area === area.id)?.nota
+    const actual = vigentsClasse.find((r) => r.alumneId === alumne.id && r.area === area.id && r.trimestre === trimestre)?.nota
     if (actual === nota) {
       setValors((prev) => { const n = { ...prev }; delete n[clau]; return n })
       return
@@ -344,14 +339,18 @@ export default function NotesGenerals() {
 
   const nomFitxerResum = `Notes-per-area-${cursEscolarId}-${trimestre.replace(/\s+/g, '_')}`
 
-  /** Taula de la graella d'entrada de LA CLASSE ACTUAL (totes les àrees). */
+  /** Taula de la graella d'entrada de LA CLASSE ACTUAL: cada àrea amb els
+   *  seus 4 valors (1r, 2n, 3r, Final), igual que als fulls per classe de
+   *  l'Excel original. */
   function taulaClasseActual() {
-    const capçalera = ['Núm.', 'Alumne', ...areesClasse.map((a) => a.label), 'Nota global']
+    const capçalera = ['Núm.', 'Alumne', ...areesClasse.flatMap((a) => [`${a.label} 1r`, `${a.label} 2n`, `${a.label} 3r`, `${a.label} Final`])]
     const files = alumnesClasse.map((alumne) => [
       alumne.numLlista ?? '',
       alumne.nom,
-      ...areesClasse.map((a) => notaAlumne(alumne.id, a.id)),
-      notaGlobalAlumne(alumne.id) ?? '',
+      ...areesClasse.flatMap((a) => [
+        ...TRIMESTRES.map((t) => notaAlumneTrimestre(alumne.id, a.id, t)),
+        notaFinalAlumneArea(alumne.id, a.id) ?? '',
+      ]),
     ])
     return [{ nom: `Notes ${classe}`, files: [capçalera, ...files] }]
   }
@@ -425,7 +424,10 @@ export default function NotesGenerals() {
       {vista === 'entrada' ? (
         <>
           <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 4 }}>
-            Vora vermella = nota per sota de 5 (No Assoliment), igual que al full de càlcul.
+            Cada àrea mostra els tres trimestres i la nota Final (la mitjana dels trimestres ja
+            avaluats). El selector de Trimestre només diu a quina columna s'escriu una nota nova
+            — la columna en blau és l'editable ara mateix. Vora vermella = nota per sota de 5
+            (No Assoliment), igual que al full de càlcul.
           </p>
           <div style={{ display: 'flex', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
             <button
@@ -448,13 +450,35 @@ export default function NotesGenerals() {
           <div style={{ overflowX: 'auto', marginTop: 12 }}>
             <table style={{ borderCollapse: 'collapse', fontSize: 13, width: '100%', marginTop: 0 }}>
               <thead>
-                <tr style={{ textAlign: 'left', borderBottom: '2px solid var(--line)' }}>
-                  <th style={{ padding: '6px 8px', minWidth: 44 }}>Núm.</th>
-                  <th style={{ padding: '6px 8px', minWidth: 180, position: 'sticky', left: 0, background: 'var(--bg)' }}>Alumne</th>
+                <tr style={{ textAlign: 'left' }}>
+                  <th rowSpan={2} style={{ padding: '6px 8px', minWidth: 44, borderBottom: '2px solid var(--line)' }}>Núm.</th>
+                  <th rowSpan={2} style={{ padding: '6px 8px', minWidth: 180, position: 'sticky', left: 0, background: 'var(--bg)', borderBottom: '2px solid var(--line)' }}>Alumne</th>
                   {areesClasse.map((a) => (
-                    <th key={a.id} style={{ padding: '6px 4px', minWidth: 70, fontSize: 11 }}>{a.label}</th>
+                    <th key={a.id} colSpan={4} style={{ padding: '4px', fontSize: 11, textAlign: 'center', borderLeft: '1px solid var(--line)', borderBottom: '1px solid var(--line)' }}>
+                      {a.label}
+                    </th>
                   ))}
-                  <th style={{ padding: '6px 8px', minWidth: 70, fontSize: 11 }}>Nota global</th>
+                </tr>
+                <tr style={{ textAlign: 'left', borderBottom: '2px solid var(--line)' }}>
+                  {areesClasse.map((a) => (
+                    <Fragment key={a.id}>
+                      {TRIMESTRES.map((t, ti) => (
+                        <th
+                          key={`${a.id}-${t}`}
+                          style={{
+                            padding: '4px 3px', minWidth: 46, fontSize: 10, fontWeight: t === trimestre ? 700 : 400,
+                            color: t === trimestre ? 'var(--navy)' : 'var(--ink-soft)',
+                            borderLeft: ti === 0 ? '1px solid var(--line)' : 'none',
+                          }}
+                        >
+                          {t.slice(0, 2)}
+                        </th>
+                      ))}
+                      <th key={`${a.id}-final`} style={{ padding: '4px 3px', minWidth: 50, fontSize: 10, color: 'var(--ink-soft)' }}>
+                        Final
+                      </th>
+                    </Fragment>
+                  ))}
                 </tr>
               </thead>
               <tbody>
@@ -463,41 +487,55 @@ export default function NotesGenerals() {
                     <td style={{ padding: '6px 8px', color: 'var(--ink-soft)' }}>{alumne.numLlista ?? '—'}</td>
                     <td style={{ padding: '6px 8px', fontWeight: 500, position: 'sticky', left: 0, background: 'var(--bg)' }}>{alumne.nom}</td>
                     {areesClasse.map((a) => {
-                      const nota = notaAlumne(alumne.id, a.id)
-                      const nivell = nota !== '' ? nivellDe(Number(nota)) : null
-                      const clau = clauValor(alumne.id, a.id)
-                      const estaDesant = desantClau === clau
+                      const final = notaFinalAlumneArea(alumne.id, a.id)
+                      const nivellFinal = final !== null ? nivellDe(final) : null
                       return (
-                        <td key={a.id} style={{ padding: '4px 3px', position: 'relative' }}>
-                          <input
-                            type="number"
-                            min={0}
-                            max={10}
-                            step={0.1}
-                            value={nota}
-                            disabled={estaDesant}
-                            onChange={(e) => setValors((prev) => ({ ...prev, [clau]: e.target.value }))}
-                            onBlur={(e) => desaCella(alumne, a, e.target.value)}
-                            style={{
-                              border: `1.5px solid ${estaDesant ? 'var(--amber-dark)' : nivell?.id === 'no_assoliment' ? 'var(--red)' : 'var(--line)'}`,
-                              borderRadius: 6,
-                              padding: '4px 4px',
-                              fontSize: 12,
-                              width: 56,
-                            }}
-                          />
-                        </td>
+                        <Fragment key={a.id}>
+                          {TRIMESTRES.map((t, ti) => {
+                            const nota = notaAlumneTrimestre(alumne.id, a.id, t)
+                            const nivell = nota !== '' ? nivellDe(Number(nota)) : null
+                            const clau = clauValor(alumne.id, a.id, t)
+                            const esActiu = t === trimestre
+                            const estaDesant = esActiu && desantClau === clau
+
+                            // Només el trimestre triat al selector és editable — els
+                            // altres dos es veuen però es toquen des del seu propi
+                            // trimestre.
+                            if (!esActiu) {
+                              return (
+                                <td key={t} style={{ padding: '4px 3px', textAlign: 'center', borderLeft: ti === 0 ? '1px solid var(--line)' : 'none', color: nivell?.id === 'no_assoliment' ? 'var(--red)' : 'var(--ink)' }}>
+                                  {nota !== '' ? nota : '—'}
+                                </td>
+                              )
+                            }
+                            return (
+                              <td key={t} style={{ padding: '4px 3px', position: 'relative', borderLeft: ti === 0 ? '1px solid var(--line)' : 'none' }}>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  max={10}
+                                  step={0.1}
+                                  value={nota}
+                                  disabled={estaDesant}
+                                  onChange={(e) => setValors((prev) => ({ ...prev, [clau]: e.target.value }))}
+                                  onBlur={(e) => desaCella(alumne, a, e.target.value)}
+                                  style={{
+                                    border: `1.5px solid ${estaDesant ? 'var(--amber-dark)' : nivell?.id === 'no_assoliment' ? 'var(--red)' : 'var(--navy)'}`,
+                                    borderRadius: 6,
+                                    padding: '4px 4px',
+                                    fontSize: 12,
+                                    width: 44,
+                                  }}
+                                />
+                              </td>
+                            )
+                          })}
+                          <td style={{ padding: '4px 6px', textAlign: 'center', fontWeight: 700, color: nivellFinal?.color ?? 'var(--ink-soft)' }}>
+                            {final ?? '—'}
+                          </td>
+                        </Fragment>
                       )
                     })}
-                    {(() => {
-                      const global = notaGlobalAlumne(alumne.id)
-                      const nivellGlobal = global !== null ? nivellDe(global) : null
-                      return (
-                        <td style={{ padding: '4px 8px', fontWeight: 700, color: nivellGlobal?.color ?? 'var(--ink-soft)' }}>
-                          {global ?? '—'}
-                        </td>
-                      )
-                    })()}
                   </tr>
                 ))}
               </tbody>
