@@ -75,24 +75,50 @@ export default function NotesGenerals() {
     [registres, classe, cursEscolarId]
   )
 
+  // Igual que `vigentsClasse`, però de TOTES les classes alhora — només fa
+  // falta per a la descàrrega de "totes les classes", que no es limita a
+  // la que hi ha oberta al desplegable.
+  const vigentsTotes = useMemo(
+    () => redueixVigents(
+      registres.filter((r) => (r.cursEscolar ?? cursEscolarActual()) === cursEscolarId),
+      (r) => `${r.alumneId}__${r.area}__${r.trimestre}`
+    ),
+    [registres, cursEscolarId]
+  )
+
   function clauValor(alumneId, areaId, trim = trimestre) {
     return `${alumneId}__${areaId}__${trim}`
   }
 
   /** La nota d'un alumne, una àrea i UN trimestre concret. Les edicions
    *  locals encara no desades (`valors`) només existeixen per al trimestre
-   *  actiu al selector, que és l'únic que es pot editar. */
-  function notaAlumneTrimestre(alumneId, areaId, trim) {
+   *  actiu al selector, que és l'únic que es pot editar — i només dins de
+   *  la classe oberta ara mateix a la pantalla.
+   *
+   *  Rep la classe com a paràmetre (i no la variable `classe` de l'estat)
+   *  perquè la descàrrega de "totes les classes" ha de poder consultar
+   *  qualsevol classe, no només la que hi ha oberta al desplegable. */
+  function notaAlumneTrimestreDe(classeAlumne, alumneId, areaId, trim) {
     const clau = clauValor(alumneId, areaId, trim)
-    if (trim === trimestre && valors[clau] !== undefined) return valors[clau]
-    const existent = vigentsClasse.find((r) => r.alumneId === alumneId && r.area === areaId && r.trimestre === trim)
+    if (classeAlumne === classe && trim === trimestre && valors[clau] !== undefined) return valors[clau]
+    const existent = vigentsTotes.find((r) =>
+      r.curs === classeAlumne && r.alumneId === alumneId && r.area === areaId && r.trimestre === trim
+    )
     return existent?.nota ?? ''
+  }
+
+  function notaAlumneTrimestre(alumneId, areaId, trim) {
+    return notaAlumneTrimestreDe(classe, alumneId, areaId, trim)
   }
 
   /** Nota final de l'àrea: la mitjana dels trimestres que l'alumne ja tingui
    *  avaluats (no cal esperar que hi siguin els tres). */
+  function notaFinalAlumneAreaDe(classeAlumne, alumneId, areaId) {
+    return notaFinalArea(TRIMESTRES.map((t) => notaAlumneTrimestreDe(classeAlumne, alumneId, areaId, t)))
+  }
+
   function notaFinalAlumneArea(alumneId, areaId) {
-    return notaFinalArea(TRIMESTRES.map((t) => notaAlumneTrimestre(alumneId, areaId, t)))
+    return notaFinalAlumneAreaDe(classe, alumneId, areaId)
   }
 
   async function desaCella(alumne, area, valorText) {
@@ -357,6 +383,31 @@ export default function NotesGenerals() {
     return [{ nom: `Notes ${classe}`, files: [capçalera, ...files] }]
   }
 
+  /**
+   * Un full per cada classe de primària, amb la mateixa forma que
+   * `taulaClasseActual`. Cada classe pot tenir àrees diferents (p. ex.
+   * "Science" només a partir de 3r), i per això les columnes no es poden
+   * calcular un sol cop per a totes: es recalculen classe per classe.
+   */
+  function taulaTotesLesClasses() {
+    return classes.map((cl) => {
+      const areesCl = AREES.filter((a) => areaAplicaAClasse(a.id, cl))
+      const alumnesCl = alumnesTots.filter((a) => a.curs === cl)
+      const capçalera = ['Núm.', 'Alumne', ...areesCl.flatMap((a) => [`${a.label} 1r`, `${a.label} 2n`, `${a.label} 3r`, `${a.label} Final`])]
+      const files = alumnesCl.map((alumne) => [
+        alumne.numLlista ?? '',
+        alumne.nom,
+        ...areesCl.flatMap((a) => [
+          ...TRIMESTRES.map((t) => (a.calculada ? '' : notaAlumneTrimestreDe(cl, alumne.id, a.id, t))),
+          (a.calculada
+            ? notaFinalArea(a.deArees.map((id) => notaFinalAlumneAreaDe(cl, alumne.id, id)))
+            : notaFinalAlumneAreaDe(cl, alumne.id, a.id)) ?? '',
+        ]),
+      ])
+      return { nom: `Notes ${cl}`, files: [capçalera, ...files] }
+    })
+  }
+
   return (
     <div>
       <p className="module-lead">
@@ -448,6 +499,23 @@ export default function NotesGenerals() {
               type="button"
             >
               📄 Descarrega PDF ({classe})
+            </button>
+            <span style={{ borderLeft: '1px solid var(--line)', margin: '0 4px' }} />
+            <button
+              className="btn-ghost"
+              style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
+              onClick={() => exportaExcel(`Notes-totes-les-classes-${cursEscolarId}`, { cursEscolarId, fulls: taulaTotesLesClasses() })}
+              type="button"
+            >
+              📥 Descarrega Excel (totes les classes)
+            </button>
+            <button
+              className="btn-ghost"
+              style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
+              onClick={() => exportaPDF(`Notes per àrea — totes les classes`, { cursEscolarId, fulls: taulaTotesLesClasses() })}
+              type="button"
+            >
+              📄 Descarrega PDF (totes les classes)
             </button>
           </div>
           <div style={{ overflowX: 'auto', marginTop: 12 }}>
