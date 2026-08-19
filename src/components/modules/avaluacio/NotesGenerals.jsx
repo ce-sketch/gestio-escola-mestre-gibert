@@ -23,6 +23,7 @@ export default function NotesGenerals() {
   const [trimestre, setTrimestre] = useState(TRIMESTRES[0])
   const [classe, setClasse] = useState('')
   const [nivellResum, setNivellResum] = useState(NIVELLS_ESCOLARS[0].label)
+  const [quanResum, setQuanResum] = useState(TRIMESTRES[0]) // '1r trimestre' | '2n trimestre' | '3r trimestre' | 'Final'
   const [valors, setValors] = useState({})
   const [desantClau, setDesantClau] = useState(null) // clau "alumneId__areaId" que s'està desant
   const [dictat, setDictat] = useState(null) // { escoltant, transcripcio, resultat: {numLlista: {areaId: nivellId}} }
@@ -231,11 +232,11 @@ export default function NotesGenerals() {
     () => redueixVigents(
       registres.filter((r) =>
         (r.cursEscolar ?? cursEscolarActual()) === cursEscolarId &&
-        r.trimestre === trimestre
+        r.trimestre === quanResum
       ),
       (r) => `${r.alumneId}__${r.area}`
     ),
-    [registres, cursEscolarId, trimestre]
+    [registres, cursEscolarId, quanResum]
   )
 
   const totesLesClasses = useMemo(
@@ -243,18 +244,45 @@ export default function NotesGenerals() {
     [alumnesTots]
   )
 
+  function buidaComptes() {
+    return { no_assoliment: 0, assoliment_satisfactori: 0, assoliment_notable: 0, 'assoliment_excel·lent': 0 }
+  }
+
+  /**
+   * Equivalent al full "Resum" de l'Excel (quan `quanResum` és "Final") o a
+   * "Resum 1r/2n/3r Trim." (quan és un trimestre): una taula per àrea, amb
+   * totes les classes per separat i TOTAL a baix.
+   *
+   * Les àrees calculades (Artística, Medi global) es deixen fora a posta:
+   * al full original tampoc hi són — són una peça de cada full d'alumne,
+   * no de la graella de resum.
+   */
   const resumGlobalPerArea = useMemo(() => {
-    return AREES.map((a) => {
+    const esFinal = quanResum === 'Final'
+    return AREES.filter((a) => !a.calculada).map((a) => {
       const files = totesLesClasses.map((classe) => {
-        const notesClasse = vigentsResumGlobal.filter((r) => r.area === a.id && r.curs === classe)
-        const comptes = { no_assoliment: 0, assoliment_satisfactori: 0, assoliment_notable: 0, 'assoliment_excel·lent': 0 }
-        for (const r of notesClasse) {
-          const nivell = nivellDe(r.nota)
-          if (nivell) comptes[nivell.id] += 1
+        const comptes = buidaComptes()
+        let avaluats = 0
+        if (esFinal) {
+          for (const alumne of alumnesTots) {
+            if (alumne.curs !== classe) continue
+            const final = notaFinalAlumneAreaDe(classe, alumne.id, a.id)
+            if (final === null) continue
+            const nivell = nivellDe(final)
+            if (nivell) comptes[nivell.id] += 1
+            avaluats += 1
+          }
+        } else {
+          const notesClasse = vigentsResumGlobal.filter((r) => r.area === a.id && r.curs === classe)
+          for (const r of notesClasse) {
+            const nivell = nivellDe(r.nota)
+            if (nivell) comptes[nivell.id] += 1
+          }
+          avaluats = notesClasse.length
         }
-        return { classe, avaluats: notesClasse.length, comptes }
+        return { classe, avaluats, comptes }
       })
-      const total = { no_assoliment: 0, assoliment_satisfactori: 0, assoliment_notable: 0, 'assoliment_excel·lent': 0 }
+      const total = buidaComptes()
       let avaluatsTotal = 0
       files.forEach((f) => {
         for (const k of Object.keys(total)) total[k] += f.comptes[k]
@@ -262,7 +290,36 @@ export default function NotesGenerals() {
       })
       return { area: a, files, total, avaluatsTotal }
     }).filter((f) => f.avaluatsTotal > 0) // amaguem àrees sense cap nota encara
-  }, [vigentsResumGlobal, totesLesClasses])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vigentsResumGlobal, totesLesClasses, quanResum, alumnesTots])
+
+  /**
+   * Equivalent al full "Àrees no superades": per cada classe i cada àrea,
+   * quants alumnes tenen la nota Final per sota de 5 — sempre amb la nota
+   * Final, mai amb la d'un trimestre concret, com al full original.
+   */
+  const areesNoSuperadesPerClasse = useMemo(() => {
+    const areesNoCalculades = AREES.filter((a) => !a.calculada)
+    const files = totesLesClasses.map((classe) => {
+      const alumnesCl = alumnesTots.filter((a) => a.curs === classe)
+      const comptes = {}
+      for (const a of areesNoCalculades) {
+        comptes[a.id] = alumnesCl.filter((alumne) => {
+          const final = notaFinalAlumneAreaDe(classe, alumne.id, a.id)
+          return final !== null && nivellDe(final)?.id === 'no_assoliment'
+        }).length
+      }
+      return { classe, comptes, totalAlumnes: alumnesCl.length }
+    })
+    const total = { comptes: {}, totalAlumnes: 0 }
+    for (const a of areesNoCalculades) total.comptes[a.id] = 0
+    files.forEach((f) => {
+      for (const a of areesNoCalculades) total.comptes[a.id] += f.comptes[a.id]
+      total.totalAlumnes += f.totalAlumnes
+    })
+    return { arees: areesNoCalculades, files, total }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [totesLesClasses, alumnesTots, cursEscolarId, registres])
 
   const alumnesDelNivell = useMemo(
     () => alumnesTots.filter((a) => nivellEscolarDe(a.curs) === nivellResum),
@@ -363,7 +420,20 @@ export default function NotesGenerals() {
     }))
   }
 
-  const nomFitxerResum = `Notes-per-area-${cursEscolarId}-${trimestre.replace(/\s+/g, '_')}`
+  /** El full "Àrees no superades": una sola taula, àrees en columnes. */
+  function taulaAreesNoSuperadesExportable() {
+    const { arees, files, total } = areesNoSuperadesPerClasse
+    return [{
+      nom: 'Àrees no superades',
+      files: [
+        ['Classe', ...arees.map((a) => a.label), 'Total alumnes'],
+        ...files.map((f) => [f.classe, ...arees.map((a) => f.comptes[a.id]), f.totalAlumnes]),
+        ['TOTAL', ...arees.map((a) => total.comptes[a.id]), total.totalAlumnes],
+      ],
+    }]
+  }
+
+  const nomFitxerResum = `Notes-per-area-${cursEscolarId}-${quanResum.replace(/\s+/g, '_')}`
 
   /** Taula de la graella d'entrada de LA CLASSE ACTUAL: cada àrea amb els
    *  seus 4 valors (1r, 2n, 3r, Final), igual que als fulls per classe de
@@ -465,12 +535,21 @@ export default function NotesGenerals() {
         )}
 
         {vista === 'resum' && (
-          <label className="field" style={{ minWidth: 120 }}>
-            <span>Curs (nivell)</span>
-            <select value={nivellResum} onChange={(e) => setNivellResum(e.target.value)} style={{ padding: '10px 12px', border: '1px solid var(--line)', borderRadius: 8 }}>
-              {NIVELLS_ESCOLARS.map((n) => <option key={n.id} value={n.label}>{n.label}</option>)}
-            </select>
-          </label>
+          <>
+            <label className="field" style={{ minWidth: 140 }}>
+              <span>Moment</span>
+              <select value={quanResum} onChange={(e) => setQuanResum(e.target.value)} style={{ padding: '10px 12px', border: '1px solid var(--line)', borderRadius: 8 }}>
+                {TRIMESTRES.map((t) => <option key={t} value={t}>{t}</option>)}
+                <option value="Final">Final</option>
+              </select>
+            </label>
+            <label className="field" style={{ minWidth: 120 }}>
+              <span>Curs (nivell)</span>
+              <select value={nivellResum} onChange={(e) => setNivellResum(e.target.value)} style={{ padding: '10px 12px', border: '1px solid var(--line)', borderRadius: 8 }}>
+                {NIVELLS_ESCOLARS.map((n) => <option key={n.id} value={n.label}>{n.label}</option>)}
+              </select>
+            </label>
+          </>
         )}
       </div>
 
@@ -704,10 +783,11 @@ export default function NotesGenerals() {
         </>
       ) : (
         <>
-          <h3 style={{ marginTop: 8, fontSize: 15 }}>Resum global de tot el centre</h3>
+          <h3 style={{ marginTop: 8, fontSize: 15 }}>Resum global de tot el centre — {quanResum}</h3>
           <p className="module-note" style={{ marginTop: 4 }}>
-            Igual que al full "Resum" de l'Excel: una taula per àrea, amb totes les classes
-            per separat i una fila de TOTAL a baix.
+            Igual que al full "Resum{quanResum === 'Final' ? '' : ` ${quanResum.replace('trimestre', 'Trim.')}`}"
+            de l'Excel: una taula per àrea, amb totes les classes per separat i una fila de TOTAL
+            a baix. Canvia el selector "Moment" per veure un altre trimestre o la nota Final.
           </p>
 
           <div style={{ display: 'flex', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
@@ -722,7 +802,7 @@ export default function NotesGenerals() {
             <button
               className="btn-ghost"
               style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
-              onClick={() => exportaPDF(`Notes per àrea — Resum global (${trimestre})`, { cursEscolarId, fulls: taulesResumGlobalExportables() })}
+              onClick={() => exportaPDF(`Notes per àrea — Resum global (${quanResum})`, { cursEscolarId, fulls: taulesResumGlobalExportables() })}
               type="button"
             >
               📄 Descarrega PDF
@@ -730,7 +810,7 @@ export default function NotesGenerals() {
           </div>
 
           {resumGlobalPerArea.length === 0 ? (
-            <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 12 }}>Encara no hi ha cap nota d'aquest trimestre.</p>
+            <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 12 }}>Encara no hi ha cap nota d'aquest moment.</p>
           ) : resumGlobalPerArea.map(({ area: a, files, total, avaluatsTotal }) => (
             <div key={a.id} style={{ marginTop: 16 }}>
               <p style={{ fontSize: 13, fontWeight: 600 }}>{a.label}</p>
@@ -761,6 +841,62 @@ export default function NotesGenerals() {
               </div>
             </div>
           ))}
+
+          <h3 style={{ marginTop: 32, fontSize: 15 }}>Àrees no superades</h3>
+          <p className="module-note" style={{ marginTop: 4 }}>
+            Igual que al full "Àrees no superades" de l'Excel: quants alumnes de cada classe
+            tenen la nota <strong>Final</strong> per sota de 5 a cada àrea. Sempre amb la Final,
+            independentment del selector "Moment".
+          </p>
+          <button
+            className="btn-ghost"
+            style={{ color: 'var(--navy)', borderColor: 'var(--navy)', marginTop: 10 }}
+            onClick={() => exportaExcel(`Arees-no-superades-${cursEscolarId}`, { cursEscolarId, fulls: taulaAreesNoSuperadesExportable() })}
+            type="button"
+          >
+            📥 Descarrega Excel
+          </button>{' '}
+          <button
+            className="btn-ghost"
+            style={{ color: 'var(--navy)', borderColor: 'var(--navy)', marginTop: 10 }}
+            onClick={() => exportaPDF('Àrees no superades', { cursEscolarId, fulls: taulaAreesNoSuperadesExportable() })}
+            type="button"
+          >
+            📄 Descarrega PDF
+          </button>
+          <div className="taula-scroll" style={{ marginTop: 10 }}>
+            <table style={{ borderCollapse: 'collapse', fontSize: 12, width: '100%' }}>
+              <thead>
+                <tr style={{ textAlign: 'left', borderBottom: '2px solid var(--line)' }}>
+                  <th style={{ padding: '6px 8px', minWidth: 60 }}>Classe</th>
+                  {areesNoSuperadesPerClasse.arees.map((a) => (
+                    <th key={a.id} style={{ padding: '6px 4px', minWidth: 60, fontSize: 11 }}>{a.label}</th>
+                  ))}
+                  <th style={{ padding: '6px 8px', minWidth: 70, fontSize: 11 }}>Total alumnes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {areesNoSuperadesPerClasse.files.map((f) => (
+                  <tr key={f.classe} style={{ borderBottom: '1px solid var(--line)' }}>
+                    <td style={{ padding: '6px 8px', fontWeight: 500 }}>{f.classe}</td>
+                    {areesNoSuperadesPerClasse.arees.map((a) => (
+                      <td key={a.id} style={{ padding: '6px 4px', color: f.comptes[a.id] > 0 ? 'var(--red)' : 'var(--ink-soft)' }}>
+                        {f.comptes[a.id]}
+                      </td>
+                    ))}
+                    <td style={{ padding: '6px 8px' }}>{f.totalAlumnes}</td>
+                  </tr>
+                ))}
+                <tr style={{ background: 'var(--bg-soft, #f5f5f0)' }}>
+                  <td style={{ padding: '6px 8px', fontWeight: 700 }}>TOTAL</td>
+                  {areesNoSuperadesPerClasse.arees.map((a) => (
+                    <td key={a.id} style={{ padding: '6px 4px', fontWeight: 700 }}>{areesNoSuperadesPerClasse.total.comptes[a.id]}</td>
+                  ))}
+                  <td style={{ padding: '6px 8px', fontWeight: 700 }}>{areesNoSuperadesPerClasse.total.totalAlumnes}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
 
           <h3 style={{ marginTop: 32, fontSize: 15 }}>Resum d'un curs concret</h3>
           <div className="taula-scroll">
