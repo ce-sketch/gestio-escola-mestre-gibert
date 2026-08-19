@@ -41,6 +41,25 @@ export function areaAplicaAClasse(areaId, classe) {
 
 export const TRIMESTRES = ['1r trimestre', '2n trimestre', '3r trimestre']
 
+/**
+ * La nota final d'una àrea: la mitjana només dels trimestres on l'alumne
+ * ja té nota, no la mitjana forçada dels tres.
+ *
+ * Al full de càlcul original la fórmula del final només es dispara quan
+ * el 3r trimestre ja té nota (`=IF(F3="","",AVERAGE(D3:F3))`), i deixa la
+ * cel·la buida durant tot el curs fins llavors. Aquí es fa la mitjana dels
+ * trimestres que hi hagi, encara que en falti algun — així la nota final
+ * es pot consultar en qualsevol moment del curs, no només al juny.
+ *
+ * @param {Array<number|''|null|undefined>} notes  els 3 valors, en ordre de trimestre
+ */
+export function notaFinalArea(notes) {
+  const omplertes = (notes ?? []).filter((n) => n !== '' && n !== null && n !== undefined).map(Number)
+  if (omplertes.length === 0) return null
+  const mitjana = omplertes.reduce((a, b) => a + b, 0) / omplertes.length
+  return Math.round(mitjana * 10) / 10
+}
+
 // --- Dictat per veu ---
 
 const CURT_A_ID = {

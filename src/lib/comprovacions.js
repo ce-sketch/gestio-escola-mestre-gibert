@@ -32,6 +32,7 @@ import { primerNom, generaInformeQualitatiu } from './informeQualitatiu'
 import { cerca } from './cercaApp'
 import { classificaFulls, tipusAmbNom } from './plantillesImport'
 import { esClasseAmbLectura } from './rubricaLectura'
+import { notaFinalArea, TRIMESTRES } from './notesArea'
 import { colorCella } from './matriuColors'
 import { interpretaResum, interpretaFullObjectiu } from './comissioTemplateParser'
 import { llegeixCosmos, resumClasse, rendimentAPercentatge } from './cosmosParser'
@@ -963,6 +964,42 @@ function grupInforme() {
 
 // ── Buscador de l'Inici ─────────────────────────────────────────────────
 
+function grupNotesArea() {
+  const proves = []
+
+  proves.push(comprova(
+    'La final és la mitjana dels tres trimestres quan hi són tots',
+    7,
+    () => notaFinalArea([6, 7, 8])
+  ))
+
+  proves.push(comprova(
+    "La final es calcula encara que només hi hagi el 1r trimestre — no cal esperar el 3r com al full original",
+    6,
+    () => notaFinalArea([6, '', ''])
+  ))
+
+  proves.push(comprova(
+    'Amb dos trimestres fets, la final és la mitjana només d\'aquests dos',
+    7,
+    () => notaFinalArea([6, '', 8])
+  ))
+
+  proves.push(comprova(
+    'Sense cap trimestre encara, la final és buida',
+    null,
+    () => notaFinalArea(['', '', ''])
+  ))
+
+  proves.push(comprova(
+    'Són exactament tres trimestres, en ordre',
+    ['1r trimestre', '2n trimestre', '3r trimestre'],
+    () => TRIMESTRES
+  ))
+
+  return { titol: "Notes per àrea", proves }
+}
+
 function grupCerca() {
   const proves = []
   const moduls = [
@@ -1247,5 +1284,5 @@ function grupReconeixement() {
 }
 
 export function executaComprovacions() {
-  return [grupPgac(), grupValoracions(), grupFestes(), grupCooperatiu(), grupAbsencies(), grupInforme(), grupCerca(), grupCosmos(), grupConmat(), grupEscales(), grupLectors(), grupReconeixement()]
+  return [grupPgac(), grupValoracions(), grupFestes(), grupCooperatiu(), grupAbsencies(), grupInforme(), grupNotesArea(), grupCerca(), grupCosmos(), grupConmat(), grupEscales(), grupLectors(), grupReconeixement()]
 }
