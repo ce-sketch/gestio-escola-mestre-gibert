@@ -17,6 +17,7 @@ import LectoescripturaEI from './avaluacio/LectoescripturaEI.jsx'
 import NotesGenerals from './avaluacio/NotesGenerals.jsx'
 import ResumPerArea from './avaluacio/ResumPerArea.jsx'
 import AreesNoSuperades from './avaluacio/AreesNoSuperades.jsx'
+import Descarregues from './avaluacio/Descarregues.jsx'
 import InformeCatala from './avaluacio/InformeCatala.jsx'
 import Resum from './avaluacio/Resum.jsx'
 
@@ -45,6 +46,8 @@ const GRUPS = [
       { id: 'resum-area', label: 'Resum per àrea', component: ResumPerArea },
       // Separat del "Resum per àrea": són dues coses diferents.
       { id: 'arees-no-superades', label: 'Àrees no superades', component: AreesNoSuperades },
+      // El "lloc per imprimir": tot Notes per àrea en un sol Excel/PDF.
+      { id: 'descarregues', label: 'Descàrregues', component: Descarregues },
     ],
   },
 ]
