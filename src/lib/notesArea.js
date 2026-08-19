@@ -16,6 +16,11 @@ export const AREES = [
   { id: 'science', label: 'Science' },
   { id: 'plastica', label: 'Plàstica' },
   { id: 'musica', label: 'Música' },
+  // No té notes pròpies: al full és un títol de grup ("ARTÍSTICA") que la
+  // seva columna "GF" calcula fent la mitjana de les Finals de Plàstica i
+  // de Música. Aquí és una àrea més a la taula, però no editable — es
+  // reconeix per `calculada`.
+  { id: 'artistica', label: 'Artística', calculada: true, deArees: ['plastica', 'musica'] },
   { id: 'efisica', label: 'Ed. Física' },
   { id: 'religio', label: 'Religió' },
   { id: 'valors', label: 'Valors' },

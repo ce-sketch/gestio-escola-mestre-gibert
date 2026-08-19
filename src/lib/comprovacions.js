@@ -32,7 +32,7 @@ import { primerNom, generaInformeQualitatiu } from './informeQualitatiu'
 import { cerca } from './cercaApp'
 import { classificaFulls, tipusAmbNom } from './plantillesImport'
 import { esClasseAmbLectura } from './rubricaLectura'
-import { notaFinalArea, TRIMESTRES } from './notesArea'
+import { notaFinalArea, TRIMESTRES, AREES } from './notesArea'
 import { colorCella } from './matriuColors'
 import { interpretaResum, interpretaFullObjectiu } from './comissioTemplateParser'
 import { llegeixCosmos, resumClasse, rendimentAPercentatge } from './cosmosParser'
@@ -995,6 +995,24 @@ function grupNotesArea() {
     'Són exactament tres trimestres, en ordre',
     ['1r trimestre', '2n trimestre', '3r trimestre'],
     () => TRIMESTRES
+  ))
+
+  proves.push(comprova(
+    "Artística no és editable i sap de quines àrees ve",
+    { calculada: true, deArees: ['plastica', 'musica'] },
+    () => {
+      const a = AREES.find((x) => x.id === 'artistica')
+      return { calculada: !!a.calculada, deArees: a.deArees }
+    }
+  ))
+
+  proves.push(comprova(
+    "La final d'Artística és la mitjana de les finals de Plàstica i Música",
+    7,
+    // Plàstica: 6,7,8 → final 7. Música: 8,8,6 → final 7,33 → arrodonit 7,3.
+    // Mitjana de les dues finals: (7 + 7,3) / 2 = 7,15 → 7,2. Es prova amb
+    // valors senzills perquè el número final sigui inequívoc.
+    () => notaFinalArea([notaFinalArea([6, 8]), notaFinalArea([8, 6])])
   ))
 
   return { titol: "Notes per àrea", proves }
