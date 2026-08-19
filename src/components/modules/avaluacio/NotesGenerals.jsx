@@ -348,8 +348,10 @@ export default function NotesGenerals() {
       alumne.numLlista ?? '',
       alumne.nom,
       ...areesClasse.flatMap((a) => [
-        ...TRIMESTRES.map((t) => notaAlumneTrimestre(alumne.id, a.id, t)),
-        notaFinalAlumneArea(alumne.id, a.id) ?? '',
+        ...TRIMESTRES.map((t) => (a.calculada ? '' : notaAlumneTrimestre(alumne.id, a.id, t))),
+        (a.calculada
+          ? notaFinalArea(a.deArees.map((id) => notaFinalAlumneArea(alumne.id, id)))
+          : notaFinalAlumneArea(alumne.id, a.id)) ?? '',
       ]),
     ])
     return [{ nom: `Notes ${classe}`, files: [capçalera, ...files] }]
@@ -427,7 +429,8 @@ export default function NotesGenerals() {
             Cada àrea mostra els tres trimestres i la nota Final (la mitjana dels trimestres ja
             avaluats). El selector de Trimestre només diu a quina columna s'escriu una nota nova
             — la columna en blau és l'editable ara mateix. Vora vermella = nota per sota de 5
-            (No Assoliment), igual que al full de càlcul.
+            (No Assoliment), igual que al full de càlcul. <strong>Artística *</strong> no s'omple
+            directament: la seva Final és la mitjana de les Finals de Plàstica i Música.
           </p>
           <div style={{ display: 'flex', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
             <button
@@ -455,7 +458,7 @@ export default function NotesGenerals() {
                   <th rowSpan={2} style={{ padding: '6px 8px', minWidth: 180, position: 'sticky', left: 0, background: 'var(--bg)', borderBottom: '2px solid var(--line)' }}>Alumne</th>
                   {areesClasse.map((a) => (
                     <th key={a.id} colSpan={4} style={{ padding: '4px', fontSize: 11, textAlign: 'center', borderLeft: '1px solid var(--line)', borderBottom: '1px solid var(--line)' }}>
-                      {a.label}
+                      {a.label}{a.calculada && <span title="Mitjana de Plàstica i Música" style={{ color: 'var(--ink-soft)', fontWeight: 400 }}> *</span>}
                     </th>
                   ))}
                 </tr>
@@ -487,11 +490,22 @@ export default function NotesGenerals() {
                     <td style={{ padding: '6px 8px', color: 'var(--ink-soft)' }}>{alumne.numLlista ?? '—'}</td>
                     <td style={{ padding: '6px 8px', fontWeight: 500, position: 'sticky', left: 0, background: 'var(--bg)' }}>{alumne.nom}</td>
                     {areesClasse.map((a) => {
-                      const final = notaFinalAlumneArea(alumne.id, a.id)
+                      const final = a.calculada
+                        ? notaFinalArea(a.deArees.map((id) => notaFinalAlumneArea(alumne.id, id)))
+                        : notaFinalAlumneArea(alumne.id, a.id)
                       const nivellFinal = final !== null ? nivellDe(final) : null
                       return (
                         <Fragment key={a.id}>
                           {TRIMESTRES.map((t, ti) => {
+                            // Artística no s'introdueix directament: només en
+                            // surt la Final, calculada de Plàstica i Música.
+                            if (a.calculada) {
+                              return (
+                                <td key={t} style={{ padding: '4px 3px', textAlign: 'center', borderLeft: ti === 0 ? '1px solid var(--line)' : 'none', color: 'var(--ink-soft)' }}>
+                                  —
+                                </td>
+                              )
+                            }
                             const nota = notaAlumneTrimestre(alumne.id, a.id, t)
                             const nivell = nota !== '' ? nivellDe(Number(nota)) : null
                             const clau = clauValor(alumne.id, a.id, t)
