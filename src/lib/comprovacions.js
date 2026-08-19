@@ -31,6 +31,7 @@ import { indexAlumne, graellaAbsencies } from './indexAbsencies'
 import { primerNom, generaInformeQualitatiu } from './informeQualitatiu'
 import { cerca } from './cercaApp'
 import { classificaFulls, tipusAmbNom } from './plantillesImport'
+import { esClasseAmbLectura } from './rubricaLectura'
 import { interpretaResum, interpretaFullObjectiu } from './comissioTemplateParser'
 import { llegeixCosmos, resumClasse, rendimentAPercentatge } from './cosmosParser'
 import { claueDeNom, nivellAPercentatge, distribucio, casaAmbAlumnes } from './conmatParser'
@@ -367,6 +368,16 @@ function grupValoracions() {
     () => [nomCanonic("Comissió d'Anglès"), nomCanonic('Jardins. AREP')]
   ))
 
+  proves.push(comprova(
+    'Una valoració sense nom no fa petar la llista i va a comissions',
+    { titol: 'Comissions i equips', quantes: 2 },
+    // N'hi ha una de desada per error al Quadre de comandament, sense nom.
+    () => {
+      const g = agrupaValoracions([{ id: '1', nom: '' }, { id: '2', nom: 'Comissió TAC' }], config3)
+      return { titol: g[0].titol, quantes: g[0].valoracions.length }
+    }
+  ))
+
   return { titol: 'Valoracions', proves }
 }
 
@@ -410,6 +421,17 @@ function grupEscales() {
     true,
     () => ESCALES.every((e) => e.opcions.length === 0 ||
       (e.opcions[0].valor === 0 && e.opcions[e.opcions.length - 1].valor === 100))
+  ))
+
+  proves.push(comprova(
+    "La VL/CL no es fa a Educació Infantil, però sí a la resta de classes",
+    { i3: false, i5: false, primer: true, sise: true },
+    () => ({
+      i3: esClasseAmbLectura('I3 A'),
+      i5: esClasseAmbLectura('I5'),
+      primer: esClasseAmbLectura('1r B'),
+      sise: esClasseAmbLectura('6è'),
+    })
   ))
 
   return { titol: 'Escales', proves }

@@ -3,6 +3,17 @@
  * les fórmules del full "Avaluació lecto-escriptura VL/CL".
  */
 
+import { cicleDe } from './rubricaTEE'
+
+/** La VL/CL es fa a partir de Cicle Inicial: a Educació Infantil encara no
+ *  es llegeix amb aquest sentit, i el full oficial no té barem per a I3-I5.
+ *  Es reutilitza el mateix criteri que ja distingeix els cicles a TEE
+ *  (`cicleDe`), perquè una classe és d'Infantil o no és d'Infantil
+ *  independentment de qui ho pregunti. */
+export function esClasseAmbLectura(curs) {
+  return cicleDe(curs) !== 'EI'
+}
+
 // Velocitat Lectora: paraules/minut → nivell lector (equivalent de curs).
 // El mateix barem serveix per als tres moments (Inicial, Mitjana, Final).
 const LLINDARS_VL = [
