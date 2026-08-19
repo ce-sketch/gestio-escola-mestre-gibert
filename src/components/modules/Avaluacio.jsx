@@ -13,6 +13,7 @@ import TEE from './avaluacio/TEE.jsx'
 import Lectura from './avaluacio/Lectura.jsx'
 import Matematiques from './avaluacio/Matematiques.jsx'
 import NotaArea from './avaluacio/NotaArea.jsx'
+import LectoescripturaEI from './avaluacio/LectoescripturaEI.jsx'
 import NotesGenerals from './avaluacio/NotesGenerals.jsx'
 import ResumPerArea from './avaluacio/ResumPerArea.jsx'
 import AreesNoSuperades from './avaluacio/AreesNoSuperades.jsx'
@@ -31,6 +32,7 @@ const GRUPS = [
       // Va a part de "Notes per àrea" a posta: és la graella de Català amb
       // els seus criteris propis, no una àrea més de la graella general.
       { id: 'area', label: 'Graella de Català', component: NotaArea },
+      { id: 'lectoescriptura-ei', label: 'Lectoescriptura EI', component: LectoescripturaEI },
     ],
   },
   {
