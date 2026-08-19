@@ -10,9 +10,31 @@ const GRIS = 'FFF2F0EA'
 const VORA = { style: 'thin', color: { argb: 'FFCCCCCC' } }
 const TOTES_VORES = { top: VORA, left: VORA, bottom: VORA, right: VORA }
 
-function nomFullSegur(nom, sufix = '') {
-  const complet = `${nom}${sufix}`.replace(/[:\\/?*[\]]/g, '')
-  return complet.slice(0, 31) || 'Full'
+/**
+ * Els noms de full d'Excel tenen dos límits durs: 31 caràcters i que no
+ * n'hi hagi dos d'iguals dins del mateix llibre. Retallar a 31 sense més
+ * ja n'hi havia prou per topar: dues valoracions que comencen igual
+ * ("Comissió de Transformem els Patis" i alguna altra prou llarga) es
+ * quedaven amb el mateix nom retallat i el llibre no es podia generar.
+ *
+ * `usats` es passa des de fora i es comparteix per a tot un mateix
+ * export, perquè la comprovació valgui per al llibre sencer, no només
+ * per full.
+ */
+function nomFullSegur(nom, sufix = '', usats = new Set()) {
+  const base = (`${nom}${sufix}`.replace(/[:\\/?*[\]]/g, '') || 'Full').slice(0, 31)
+  if (!usats.has(base)) {
+    usats.add(base)
+    return base
+  }
+  for (let i = 2; ; i++) {
+    const marca = ` (${i})`
+    const candidat = base.slice(0, 31 - marca.length) + marca
+    if (!usats.has(candidat)) {
+      usats.add(candidat)
+      return candidat
+    }
+  }
 }
 
 function estilCapçalera(cell) {
@@ -45,12 +67,13 @@ export async function exportaValoracionsExcel(
   const wb = new ExcelJS.Workbook()
   wb.creator = 'Gestió Escola Mestre Enric Gibert i Camins'
   wb.created = new Date()
+  const nomsUsats = new Set() // compartit per a tot el llibre, evita fulls amb el mateix nom
 
   for (const v of valoracions) {
     const teActuacions = (v.objectius ?? []).some((o) => o.actuacions?.length > 0)
 
     // --- Pestanya principal (Resum, o única si és un cicle sense actuacions) ---
-    const ws = wb.addWorksheet(nomFullSegur(v.nom, teActuacions ? ' - Resum' : ''))
+    const ws = wb.addWorksheet(nomFullSegur(v.nom, teActuacions ? ' - Resum' : '', nomsUsats))
     afegeixCapcalera(ws, { titol: `Valoració ${v.nom}`, cursEscolarId, columnes: 3 })
     ws.addRow(['Departament/comissió/servei:', v.nom])
     if (v.responsable) ws.addRow(['Responsable:', v.responsable])
@@ -95,7 +118,7 @@ export async function exportaValoracionsExcel(
     if (teActuacions) {
       v.objectius.forEach((o, oi) => {
         if (!o.actuacions || o.actuacions.length === 0) return
-        const wsO = wb.addWorksheet(nomFullSegur(v.nom, ` - Obj.${oi + 1}`))
+        const wsO = wb.addWorksheet(nomFullSegur(v.nom, ` - Obj.${oi + 1}`, nomsUsats))
         afegeixCapcalera(wsO, {
           titol: `${v.nom} — Objectiu ${oi + 1}: ${o.text}`,
           cursEscolarId,
@@ -139,7 +162,7 @@ export async function exportaValoracionsExcel(
   // --- Festes: una pestanya amb un resum de totes i el desglossament de
   //     cada grup a sota, en comptes d'una pestanya per festa. ---
   if (festesDetall.length > 0) {
-    const wsF = wb.addWorksheet(nomFullSegur('Festes'))
+    const wsF = wb.addWorksheet(nomFullSegur('Festes', '', nomsUsats))
     afegeixCapcalera(wsF, { titol: 'Festes i celebracions', cursEscolarId, columnes: 2 })
     const capF = wsF.addRow(['Festa', 'Grau general'])
     capF.eachCell((c) => estilCapçalera(c))
@@ -160,7 +183,7 @@ export async function exportaValoracionsExcel(
   // --- Aprenentatge cooperatiu: un document per curs, amb el resultat
   //     global i el de cada cicle a gener i a juny. ---
   if (cooperatiu) {
-    const wsC = wb.addWorksheet(nomFullSegur('Aprenentatge cooperatiu'))
+    const wsC = wb.addWorksheet(nomFullSegur('Aprenentatge cooperatiu', '', nomsUsats))
     afegeixCapcalera(wsC, { titol: 'Aprenentatge cooperatiu', cursEscolarId, columnes: 3 })
     const capC = wsC.addRow(['', 'Gener', 'Juny'])
     capC.eachCell((c) => estilCapçalera(c))
@@ -175,7 +198,7 @@ export async function exportaValoracionsExcel(
   //     d'assoliment sinó grau de satisfacció (0-10), i per això les seves
   //     columnes no són les mateixes que les altres dues. ---
   if (activitats.length > 0) {
-    const wsA = wb.addWorksheet(nomFullSegur('Activitats complementàries'))
+    const wsA = wb.addWorksheet(nomFullSegur('Activitats complementàries', '', nomsUsats))
     afegeixCapcalera(wsA, { titol: 'Activitats complementàries', cursEscolarId, columnes: 4 })
     const capA = wsA.addRow(['Cicle', 'Satisfacció', 'Valorades', 'Es repetirien'])
     capA.eachCell((c) => estilCapçalera(c))
