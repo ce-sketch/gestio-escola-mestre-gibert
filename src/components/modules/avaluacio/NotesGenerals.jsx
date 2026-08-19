@@ -602,7 +602,7 @@ export default function NotesGenerals() {
             <button
               className="btn-ghost"
               style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
-              onClick={() => exportaExcel(`Notes-totes-les-classes-${cursEscolarId}`, { cursEscolarId, fulls: taulaTotesLesClasses() })}
+              onClick={() => exportaExcel(`Notes-totes-les-classes-${cursEscolarId}`, { cursEscolarId, fulls: taulaTotesLesClasses(), etiqueta: 'Avaluació' })}
               type="button"
             >
               📥 Descarrega Excel (totes les classes)
@@ -813,7 +813,7 @@ export default function NotesGenerals() {
             <button
               className="btn-ghost"
               style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
-              onClick={() => exportaExcel(nomFitxerResum, { cursEscolarId, fulls: taulesResumGlobalExportables() })}
+              onClick={() => exportaExcel(nomFitxerResum, { cursEscolarId, fulls: taulesResumGlobalExportables(), etiqueta: 'Avaluació' })}
               type="button"
             >
               📥 Descarrega Excel
@@ -903,7 +903,7 @@ export default function NotesGenerals() {
           <button
             className="btn-ghost"
             style={{ color: 'var(--navy)', borderColor: 'var(--navy)', marginTop: 10 }}
-            onClick={() => exportaExcel(`Arees-no-superades-${cursEscolarId}`, { cursEscolarId, fulls: taulaAreesNoSuperadesExportable() })}
+            onClick={() => exportaExcel(`Arees-no-superades-${cursEscolarId}`, { cursEscolarId, fulls: taulaAreesNoSuperadesExportable(), etiqueta: 'Avaluació' })}
             type="button"
           >
             📥 Descarrega Excel

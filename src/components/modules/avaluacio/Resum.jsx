@@ -200,7 +200,7 @@ export default function Resum() {
         <button
           className="btn-ghost"
           style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
-          onClick={() => exportaExcel(nomFitxerTEE, { cursEscolarId, fulls: taulesTEE() })}
+          onClick={() => exportaExcel(nomFitxerTEE, { cursEscolarId, fulls: taulesTEE(), etiqueta: 'Avaluació' })}
           type="button"
         >
           📥 Descarrega Excel (TEE)
@@ -247,7 +247,7 @@ export default function Resum() {
         <button
           className="btn-ghost"
           style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
-          onClick={() => exportaExcel(nomFitxerLectura, { cursEscolarId, fulls: taulesLectura() })}
+          onClick={() => exportaExcel(nomFitxerLectura, { cursEscolarId, fulls: taulesLectura(), etiqueta: 'Avaluació' })}
           type="button"
         >
           📥 Descarrega Excel (CL i VL)

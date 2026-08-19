@@ -290,7 +290,7 @@ export default function Lectura() {
             <button
               className="btn-ghost"
               style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
-              onClick={() => exportaExcel(`Lectura-${curs}-${moment.label.replace(/\s+/g, '_')}`, { cursEscolarId, fulls: taulaClasseActual() })}
+              onClick={() => exportaExcel(`Lectura-${curs}-${moment.label.replace(/\s+/g, '_')}`, { cursEscolarId, fulls: taulaClasseActual(), etiqueta: 'Avaluació' })}
               type="button"
             >
               📥 Descarrega Excel ({curs})

@@ -534,7 +534,7 @@ export default function TEE() {
             <button
               className="btn-ghost"
               style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
-              onClick={() => exportaExcel(nomFitxerClasse, { cursEscolarId, fulls: taulaClasseActual() })}
+              onClick={() => exportaExcel(nomFitxerClasse, { cursEscolarId, fulls: taulaClasseActual(), etiqueta: 'Avaluació' })}
               type="button"
             >
               📥 Descarrega Excel ({curs})
