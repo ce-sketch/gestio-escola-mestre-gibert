@@ -863,7 +863,7 @@ export default function MatriuGeneral() {
           <button
             className="btn-ghost"
             style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
-            onClick={() => descarrega('excel', () => exportaValoracionsExcel(valoracions, cursEscolarId, { festesDetall, cooperatiu, activitats }))}
+            onClick={() => descarrega('excel', () => exportaValoracionsExcel(valoracions, cursEscolarId, { festesDetall, cooperatiu, activitats, config }))}
             disabled={descarregant !== null}
             type="button"
           >
@@ -872,7 +872,7 @@ export default function MatriuGeneral() {
           <button
             className="btn-ghost"
             style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
-            onClick={() => descarrega('pdf', () => exportaValoracionsPDF(valoracions, cursEscolarId, { festesDetall, cooperatiu, activitats }))}
+            onClick={() => descarrega('pdf', () => exportaValoracionsPDF(valoracions, cursEscolarId, { festesDetall, cooperatiu, activitats, config }))}
             disabled={descarregant !== null}
             type="button"
           >
