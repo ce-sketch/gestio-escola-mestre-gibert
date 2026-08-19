@@ -25,6 +25,7 @@ export default function Backup() {
   const [carregantVersions, setCarregantVersions] = useState(true)
   const [confirmaRestaura, setConfirmaRestaura] = useState({}) // { [versioId]: text escrit }
   const [restaurant, setRestaurant] = useState(null)
+  const [versioTriadaId, setVersioTriadaId] = useState('')
 
   useEffect(() => {
     async function carrega() {
@@ -47,7 +48,11 @@ export default function Backup() {
     setCarregantVersions(true)
     try {
       const snap = await getDocs(query(collection(db, 'versions'), orderBy('creatEl', 'desc'), limit(30)))
-      setVersions(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+      const llista = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+      setVersions(llista)
+      // La més recent, seleccionada d'entrada: és la que es voldrà mirar
+      // gairebé sempre.
+      setVersioTriadaId((actual) => actual || llista[0]?.id || '')
     } catch (err) {
       // Si encara no hi ha cap versió (o falta l'índex), no cal amoïnar l'usuari.
       setVersions([])
@@ -318,6 +323,9 @@ export default function Backup() {
     }
   }
 
+  const versioTriada = versions.find((v) => v.id === versioTriadaId) ?? null
+  const dataVersioTriada = versioTriada?.creatEl?.toDate?.() ?? null
+
   const diesDesDelBackup = ultimBackup
     ? Math.floor((Date.now() - ultimBackup.getTime()) / (1000 * 60 * 60 * 24))
     : null
@@ -385,48 +393,57 @@ export default function Backup() {
         ) : versions.length === 0 ? (
           <p style={{ marginTop: 12, fontSize: 13, color: 'var(--ink-soft)' }}>Encara no hi ha cap versió desada.</p>
         ) : (
-          <ul className="roster" style={{ marginTop: 12 }}>
-            {versions.map((v) => {
-              const data = v.creatEl?.toDate?.()
-              const confirmText = confirmaRestaura[v.id] ?? ''
-              return (
-                <li key={v.id} className="roster-row" style={{ display: 'block', paddingBottom: 12 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-                    <div>
-                      <strong>{v.nom}</strong>
-                      <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
-                        {data ? data.toLocaleString('ca-ES') : '—'} · {v.creatPer ?? 'desconegut'} ·{' '}
-                        {v.comptadors?.alumnes ?? 0} alumnes, {v.comptadors?.assistencia ?? 0} marques d'assistència,{' '}
-                        {v.comptadors?.avaluacio ?? 0} notes
-                      </div>
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                    <input
-                      type="text"
-                      value={confirmText}
-                      onChange={(e) => setConfirmaRestaura((prev) => ({ ...prev, [v.id]: e.target.value }))}
-                      placeholder="Escriu RESTAURA per confirmar"
-                      style={{ border: '1px solid var(--red)', borderRadius: 6, padding: '6px 8px', fontSize: 12, maxWidth: 200 }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => restauraAlumnes(v)}
-                      disabled={confirmText !== 'RESTAURA' || restaurant === v.id}
-                      style={{
-                        background: 'var(--red)', color: '#fff', border: 'none', borderRadius: 6,
-                        padding: '6px 12px', fontSize: 12, fontWeight: 600,
-                        cursor: confirmText === 'RESTAURA' ? 'pointer' : 'not-allowed',
-                        opacity: confirmText === 'RESTAURA' ? 1 : 0.5,
-                      }}
-                    >
-                      {restaurant === v.id ? 'Restaurant…' : 'Restaura la llista d\'alumnes a aquesta versió'}
-                    </button>
-                  </div>
-                </li>
-              )
-            })}
-          </ul>
+          <>
+            <label className="field" style={{ marginTop: 12, maxWidth: 420 }}>
+              <span>Tria una versió de l&apos;historial ({versions.length}{versions.length === 30 ? ', les 30 més recents' : ''})</span>
+              <select
+                value={versioTriadaId}
+                onChange={(e) => { setVersioTriadaId(e.target.value); setConfirmaRestaura((prev) => ({ ...prev, [e.target.value]: prev[e.target.value] ?? '' })) }}
+                style={{ border: '1px solid var(--line)', borderRadius: 8, padding: '10px 12px' }}
+              >
+                {versions.map((v) => {
+                  const data = v.creatEl?.toDate?.()
+                  return (
+                    <option key={v.id} value={v.id}>
+                      {v.nom} — {data ? data.toLocaleDateString('ca-ES') : '—'}
+                    </option>
+                  )
+                })}
+              </select>
+            </label>
+
+            {versioTriada && (
+              <div style={{ marginTop: 10 }}>
+                <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
+                  {dataVersioTriada ? dataVersioTriada.toLocaleString('ca-ES') : '—'} · {versioTriada.creatPer ?? 'desconegut'} ·{' '}
+                  {versioTriada.comptadors?.alumnes ?? 0} alumnes, {versioTriada.comptadors?.assistencia ?? 0} marques d&apos;assistència,{' '}
+                  {versioTriada.comptadors?.avaluacio ?? 0} notes
+                </div>
+                <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <input
+                    type="text"
+                    value={confirmaRestaura[versioTriada.id] ?? ''}
+                    onChange={(e) => setConfirmaRestaura((prev) => ({ ...prev, [versioTriada.id]: e.target.value }))}
+                    placeholder="Escriu RESTAURA per confirmar"
+                    style={{ border: '1px solid var(--red)', borderRadius: 6, padding: '6px 8px', fontSize: 12, maxWidth: 200 }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => restauraAlumnes(versioTriada)}
+                    disabled={(confirmaRestaura[versioTriada.id] ?? '') !== 'RESTAURA' || restaurant === versioTriada.id}
+                    style={{
+                      background: 'var(--red)', color: '#fff', border: 'none', borderRadius: 6,
+                      padding: '6px 12px', fontSize: 12, fontWeight: 600,
+                      cursor: (confirmaRestaura[versioTriada.id] ?? '') === 'RESTAURA' ? 'pointer' : 'not-allowed',
+                      opacity: (confirmaRestaura[versioTriada.id] ?? '') === 'RESTAURA' ? 1 : 0.5,
+                    }}
+                  >
+                    {restaurant === versioTriada.id ? 'Restaurant…' : "Restaura la llista d'alumnes a aquesta versió"}
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
 

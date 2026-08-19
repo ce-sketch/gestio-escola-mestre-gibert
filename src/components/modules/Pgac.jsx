@@ -9,6 +9,7 @@ import {
 import { ESCALES, escalaDe, opcioDe, opcionsDe } from '../../lib/escales'
 import { llegeixPlantillaPgac } from '../../lib/pgacPlantillaParser'
 import BotoDrive from '../BotoDrive'
+import { exportaPgacExcel, exportaPgacPDF } from '../../lib/pgacExport'
 
 function Barra({ resultat, etiqueta }) {
   if (!resultat || resultat.valor === null) {
@@ -69,6 +70,7 @@ function AvisPesos({ pesTotal, onReparteix }) {
 export default function Pgac() {
   const [cursEscolarId, setCursEscolarId] = useState(cursEscolarActual())
   const [objectius, setObjectius] = useState([])
+  const [descarregant, setDescarregant] = useState(null) // 'excel' | 'pdf' | null
   const [carregant, setCarregant] = useState(true)
   const [desant, setDesant] = useState(false)
   const [missatge, setMissatge] = useState(null)
@@ -180,6 +182,27 @@ export default function Pgac() {
       }
     })
     desa(nous)
+  }
+
+  /**
+   * Genera la descàrrega i ensenya què passa. Abans es cridava la funció
+   * d'exportació directament des de l'onClick: si petava, el navegador
+   * s'empassava l'error i no passava absolutament res, sense cap pista.
+   */
+  async function descarrega(quin, fes) {
+    setDescarregant(quin)
+    setMissatge(null)
+    try {
+      if (objectius.length === 0) {
+        throw new Error('Encara no hi ha cap objectiu carregat en aquest curs escolar.')
+      }
+      await fes()
+      setMissatge({ type: 'ok', text: 'Descàrrega generada.' })
+    } catch (err) {
+      setMissatge({ type: 'error', text: `No s'ha pogut generar la descàrrega: ${err.message}` })
+    } finally {
+      setDescarregant(null)
+    }
   }
 
   async function pujaPlantilla(fitxer) {
@@ -323,6 +346,26 @@ export default function Pgac() {
         </p>
       )}
 
+      <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap' }}>
+        <button
+          className="btn-ghost"
+          style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
+          onClick={() => descarrega('excel', () => exportaPgacExcel(objectius, cursEscolarId))}
+          disabled={descarregant !== null}
+          type="button"
+        >
+          {descarregant === 'excel' ? 'Generant…' : '📥 Descarrega en Excel'}
+        </button>
+        <button
+          className="btn-ghost"
+          style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
+          onClick={() => descarrega('pdf', () => exportaPgacPDF(objectius, cursEscolarId))}
+          disabled={descarregant !== null}
+          type="button"
+        >
+          {descarregant === 'pdf' ? 'Generant…' : '📄 Descarrega en PDF'}
+        </button>
+      </div>
 
       {/* ── Carregar l'estructura: plantilla Excel o curs anterior ── */}
       <div className="placeholder-box" style={{ marginTop: 16, padding: '14px 16px' }}>
