@@ -23,7 +23,7 @@ export default function NotesGenerals() {
   const [trimestre, setTrimestre] = useState(TRIMESTRES[0])
   const [classe, setClasse] = useState('')
   const [nivellResum, setNivellResum] = useState(NIVELLS_ESCOLARS[0].label)
-  const [quanResum, setQuanResum] = useState(TRIMESTRES[0]) // '1r trimestre' | '2n trimestre' | '3r trimestre' | 'Final'
+  const [agrupacioResum, setAgrupacioResum] = useState('classe') // 'classe' | 'nivell'
   const [valors, setValors] = useState({})
   const [desantClau, setDesantClau] = useState(null) // clau "alumneId__areaId" que s'està desant
   const [dictat, setDictat] = useState(null) // { escoltant, transcripcio, resultat: {numLlista: {areaId: nivellId}} }
@@ -228,15 +228,17 @@ export default function NotesGenerals() {
   // l'Excel): una taula per àrea, amb cada CLASSE individual com a fila
   // (no agrupada per nivell) i una fila de TOTAL a baix — exactament com
   // al full original. ----
+  // Els quatre moments que es poden mirar del resum global — sempre tots
+  // alhora, un sota l'altre, tal com al full original (que té una pestanya
+  // per moment i no una de sola amb selector).
+  const MOMENTS_RESUM = [...TRIMESTRES, 'Final']
+
   const vigentsResumGlobal = useMemo(
     () => redueixVigents(
-      registres.filter((r) =>
-        (r.cursEscolar ?? cursEscolarActual()) === cursEscolarId &&
-        r.trimestre === quanResum
-      ),
-      (r) => `${r.alumneId}__${r.area}`
+      registres.filter((r) => (r.cursEscolar ?? cursEscolarActual()) === cursEscolarId),
+      (r) => `${r.alumneId}__${r.area}__${r.trimestre}`
     ),
-    [registres, cursEscolarId, quanResum]
+    [registres, cursEscolarId]
   )
 
   const totesLesClasses = useMemo(
@@ -248,50 +250,63 @@ export default function NotesGenerals() {
     return { no_assoliment: 0, assoliment_satisfactori: 0, assoliment_notable: 0, 'assoliment_excel·lent': 0 }
   }
 
+  /** El comptatge d'una àrea, un moment i un grup de classes concrets
+   *  (una sola classe quan s'agrupa per classe; totes les d'un nivell
+   *  quan s'agrupa per nivell). */
+  function comptaGrup(areaId, moment, classesDelGrup) {
+    const comptes = buidaComptes()
+    let avaluats = 0
+    if (moment === 'Final') {
+      for (const alumne of alumnesTots) {
+        if (!classesDelGrup.includes(alumne.curs)) continue
+        const final = notaFinalAlumneAreaDe(alumne.curs, alumne.id, areaId)
+        if (final === null) continue
+        const nivell = nivellDe(final)
+        if (nivell) comptes[nivell.id] += 1
+        avaluats += 1
+      }
+    } else {
+      const notes = vigentsResumGlobal.filter((r) => r.area === areaId && r.trimestre === moment && classesDelGrup.includes(r.curs))
+      for (const r of notes) {
+        const nivell = nivellDe(r.nota)
+        if (nivell) comptes[nivell.id] += 1
+      }
+      avaluats = notes.length
+    }
+    return { comptes, avaluats }
+  }
+
   /**
-   * Equivalent al full "Resum" de l'Excel (quan `quanResum` és "Final") o a
-   * "Resum 1r/2n/3r Trim." (quan és un trimestre): una taula per àrea, amb
-   * totes les classes per separat i TOTAL a baix.
+   * Equivalent a les pestanyes "Resum 1r/2n/3r Trim." i "Resum" (Final) de
+   * l'Excel, però amb els quatre moments junts en una sola taula per àrea
+   * en comptes de quatre pestanyes soltes, i amb la possibilitat d'agrupar
+   * per classe (1A, 1B...) o per nivell (1r, 2n... A+B junts).
    *
    * Les àrees calculades (Artística, Medi global) es deixen fora a posta:
-   * al full original tampoc hi són — són una peça de cada full d'alumne,
-   * no de la graella de resum.
+   * al full original tampoc hi són.
    */
   const resumGlobalPerArea = useMemo(() => {
-    const esFinal = quanResum === 'Final'
+    const grups = agrupacioResum === 'nivell'
+      ? NIVELLS_ESCOLARS.map((n) => ({ etiqueta: n.label, classes: totesLesClasses.filter((c) => nivellEscolarDe(c) === n.label) }))
+      : totesLesClasses.map((c) => ({ etiqueta: c, classes: [c] }))
+
     return AREES.filter((a) => !a.calculada).map((a) => {
-      const files = totesLesClasses.map((classe) => {
-        const comptes = buidaComptes()
-        let avaluats = 0
-        if (esFinal) {
-          for (const alumne of alumnesTots) {
-            if (alumne.curs !== classe) continue
-            const final = notaFinalAlumneAreaDe(classe, alumne.id, a.id)
-            if (final === null) continue
-            const nivell = nivellDe(final)
-            if (nivell) comptes[nivell.id] += 1
-            avaluats += 1
-          }
-        } else {
-          const notesClasse = vigentsResumGlobal.filter((r) => r.area === a.id && r.curs === classe)
-          for (const r of notesClasse) {
-            const nivell = nivellDe(r.nota)
-            if (nivell) comptes[nivell.id] += 1
-          }
-          avaluats = notesClasse.length
-        }
-        return { classe, avaluats, comptes }
-      })
-      const total = buidaComptes()
-      let avaluatsTotal = 0
+      const files = grups.map((g) => ({
+        etiqueta: g.etiqueta,
+        perMoment: Object.fromEntries(MOMENTS_RESUM.map((m) => [m, comptaGrup(a.id, m, g.classes)])),
+      }))
+      const total = Object.fromEntries(MOMENTS_RESUM.map((m) => [m, { comptes: buidaComptes(), avaluats: 0 }]))
       files.forEach((f) => {
-        for (const k of Object.keys(total)) total[k] += f.comptes[k]
-        avaluatsTotal += f.avaluats
+        for (const m of MOMENTS_RESUM) {
+          for (const k of Object.keys(total[m].comptes)) total[m].comptes[k] += f.perMoment[m].comptes[k]
+          total[m].avaluats += f.perMoment[m].avaluats
+        }
       })
-      return { area: a, files, total, avaluatsTotal }
-    }).filter((f) => f.avaluatsTotal > 0) // amaguem àrees sense cap nota encara
+      const teAlgunaDada = MOMENTS_RESUM.some((m) => total[m].avaluats > 0)
+      return { area: a, files, total, teAlgunaDada }
+    }).filter((f) => f.teAlgunaDada) // amaguem àrees sense cap nota encara, a cap moment
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vigentsResumGlobal, totesLesClasses, quanResum, alumnesTots])
+  }, [vigentsResumGlobal, totesLesClasses, agrupacioResum, alumnesTots])
 
   /**
    * Equivalent al full "Àrees no superades": per cada classe i cada àrea,
@@ -408,14 +423,18 @@ export default function NotesGenerals() {
   if (carregant) return <p>Carregant…</p>
 
   /** Prepara totes les taules del resum global per exportar-les (un full
-   *  per àrea, exactament com es veuen a la pantalla). */
+   *  per àrea, amb els quatre moments un al costat de l'altre, exactament
+   *  com es veuen a la pantalla). */
   function taulesResumGlobalExportables() {
-    return resumGlobalPerArea.map(({ area: a, files, total, avaluatsTotal }) => ({
+    const capçaleraSup = ['', ...MOMENTS_RESUM.flatMap((m) => [m, '', '', '', ''])]
+    const capçaleraInf = [agrupacioResum === 'nivell' ? 'Nivell' : 'Classe', ...MOMENTS_RESUM.flatMap(() => [...NIVELLS.map((n) => n.label), 'Avaluats'])]
+    return resumGlobalPerArea.map(({ area: a, files, total }) => ({
       nom: a.label,
       files: [
-        ['Classe', ...NIVELLS.map((n) => n.label), 'Avaluats'],
-        ...files.map((f) => [f.classe, ...NIVELLS.map((n) => f.comptes[n.id]), f.avaluats]),
-        ['TOTAL', ...NIVELLS.map((n) => total[n.id]), avaluatsTotal],
+        capçaleraSup,
+        capçaleraInf,
+        ...files.map((f) => [f.etiqueta, ...MOMENTS_RESUM.flatMap((m) => [...NIVELLS.map((n) => f.perMoment[m].comptes[n.id]), f.perMoment[m].avaluats])]),
+        ['TOTAL', ...MOMENTS_RESUM.flatMap((m) => [...NIVELLS.map((n) => total[m].comptes[n.id]), total[m].avaluats])],
       ],
     }))
   }
@@ -433,7 +452,7 @@ export default function NotesGenerals() {
     }]
   }
 
-  const nomFitxerResum = `Notes-per-area-${cursEscolarId}-${quanResum.replace(/\s+/g, '_')}`
+  const nomFitxerResum = `Notes-per-area-${cursEscolarId}-${agrupacioResum}`
 
   /** Taula de la graella d'entrada de LA CLASSE ACTUAL: cada àrea amb els
    *  seus 4 valors (1r, 2n, 3r, Final), igual que als fulls per classe de
@@ -536,11 +555,11 @@ export default function NotesGenerals() {
 
         {vista === 'resum' && (
           <>
-            <label className="field" style={{ minWidth: 140 }}>
-              <span>Moment</span>
-              <select value={quanResum} onChange={(e) => setQuanResum(e.target.value)} style={{ padding: '10px 12px', border: '1px solid var(--line)', borderRadius: 8 }}>
-                {TRIMESTRES.map((t) => <option key={t} value={t}>{t}</option>)}
-                <option value="Final">Final</option>
+            <label className="field" style={{ minWidth: 160 }}>
+              <span>Resum global agrupat per</span>
+              <select value={agrupacioResum} onChange={(e) => setAgrupacioResum(e.target.value)} style={{ padding: '10px 12px', border: '1px solid var(--line)', borderRadius: 8 }}>
+                <option value="classe">Classe (1A, 1B, 2A...)</option>
+                <option value="nivell">Nivell (1r, 2n... amb A+B junts)</option>
               </select>
             </label>
             <label className="field" style={{ minWidth: 120 }}>
@@ -783,11 +802,11 @@ export default function NotesGenerals() {
         </>
       ) : (
         <>
-          <h3 style={{ marginTop: 8, fontSize: 15 }}>Resum global de tot el centre — {quanResum}</h3>
+          <h3 style={{ marginTop: 8, fontSize: 15 }}>Resum global de tot el centre</h3>
           <p className="module-note" style={{ marginTop: 4 }}>
-            Igual que al full "Resum{quanResum === 'Final' ? '' : ` ${quanResum.replace('trimestre', 'Trim.')}`}"
-            de l'Excel: una taula per àrea, amb totes les classes per separat i una fila de TOTAL
-            a baix. Canvia el selector "Moment" per veure un altre trimestre o la nota Final.
+            Igual que a les pestanyes "Resum 1r/2n/3r Trim." i "Resum" (Final) de l'Excel, però
+            amb els quatre moments junts, un al costat de l'altre, en comptes de quatre pestanyes
+            soltes.
           </p>
 
           <div style={{ display: 'flex', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
@@ -802,7 +821,7 @@ export default function NotesGenerals() {
             <button
               className="btn-ghost"
               style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
-              onClick={() => exportaPDF(`Notes per àrea — Resum global (${quanResum})`, { cursEscolarId, fulls: taulesResumGlobalExportables() })}
+              onClick={() => exportaPDF('Notes per àrea — Resum global', { cursEscolarId, fulls: taulesResumGlobalExportables() })}
               type="button"
             >
               📄 Descarrega PDF
@@ -810,31 +829,64 @@ export default function NotesGenerals() {
           </div>
 
           {resumGlobalPerArea.length === 0 ? (
-            <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 12 }}>Encara no hi ha cap nota d'aquest moment.</p>
-          ) : resumGlobalPerArea.map(({ area: a, files, total, avaluatsTotal }) => (
+            <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 12 }}>Encara no hi ha cap nota.</p>
+          ) : resumGlobalPerArea.map(({ area: a, files, total }) => (
             <div key={a.id} style={{ marginTop: 16 }}>
               <p style={{ fontSize: 13, fontWeight: 600 }}>{a.label}</p>
               <div className="taula-scroll">
-                <table style={{ borderCollapse: 'collapse', fontSize: 13, width: '100%', marginTop: 6 }}>
+                <table style={{ borderCollapse: 'collapse', fontSize: 12, width: '100%', marginTop: 6 }}>
                   <thead>
+                    <tr style={{ textAlign: 'left' }}>
+                      <th rowSpan={2} style={{ padding: '6px 8px', minWidth: 70, borderBottom: '2px solid var(--line)' }}>
+                        {agrupacioResum === 'nivell' ? 'Nivell' : 'Classe'}
+                      </th>
+                      {MOMENTS_RESUM.map((m) => (
+                        <th key={m} colSpan={5} style={{ padding: '4px', fontSize: 11, textAlign: 'center', borderLeft: '1px solid var(--line)', borderBottom: '1px solid var(--line)' }}>
+                          {m}
+                        </th>
+                      ))}
+                    </tr>
                     <tr style={{ textAlign: 'left', borderBottom: '2px solid var(--line)' }}>
-                      <th style={{ padding: '6px 8px', minWidth: 80 }}>Classe</th>
-                      {NIVELLS.map((n) => <th key={n.id} style={{ padding: '6px 8px', color: n.color }}>{n.curt}</th>)}
-                      <th style={{ padding: '6px 8px' }}>Avaluats</th>
+                      {MOMENTS_RESUM.map((m) => (
+                        <Fragment key={m}>
+                          {NIVELLS.map((n, ni) => (
+                            <th key={n.id} style={{ padding: '4px 3px', fontSize: 10, color: n.color, borderLeft: ni === 0 ? '1px solid var(--line)' : 'none' }}>
+                              {n.curt}
+                            </th>
+                          ))}
+                          <th style={{ padding: '4px 3px', fontSize: 10, color: 'var(--ink-soft)' }}>Av.</th>
+                        </Fragment>
+                      ))}
                     </tr>
                   </thead>
                   <tbody>
                     {files.map((f) => (
-                      <tr key={f.classe} style={{ borderBottom: '1px solid var(--line)' }}>
-                        <td style={{ padding: '6px 8px', fontWeight: 500 }}>{f.classe}</td>
-                        {NIVELLS.map((n) => <td key={n.id} style={{ padding: '6px 8px' }}>{f.comptes[n.id]}</td>)}
-                        <td style={{ padding: '6px 8px' }}>{f.avaluats}</td>
+                      <tr key={f.etiqueta} style={{ borderBottom: '1px solid var(--line)' }}>
+                        <td style={{ padding: '4px 8px', fontWeight: 500 }}>{f.etiqueta}</td>
+                        {MOMENTS_RESUM.map((m) => (
+                          <Fragment key={m}>
+                            {NIVELLS.map((n, ni) => (
+                              <td key={n.id} style={{ padding: '4px 3px', textAlign: 'center', borderLeft: ni === 0 ? '1px solid var(--line)' : 'none' }}>
+                                {f.perMoment[m].comptes[n.id]}
+                              </td>
+                            ))}
+                            <td style={{ padding: '4px 3px', textAlign: 'center', color: 'var(--ink-soft)' }}>{f.perMoment[m].avaluats}</td>
+                          </Fragment>
+                        ))}
                       </tr>
                     ))}
                     <tr style={{ background: 'var(--bg-soft, #f5f5f0)' }}>
-                      <td style={{ padding: '6px 8px', fontWeight: 700 }}>TOTAL</td>
-                      {NIVELLS.map((n) => <td key={n.id} style={{ padding: '6px 8px', fontWeight: 700 }}>{total[n.id]}</td>)}
-                      <td style={{ padding: '6px 8px', fontWeight: 700 }}>{avaluatsTotal}</td>
+                      <td style={{ padding: '4px 8px', fontWeight: 700 }}>TOTAL</td>
+                      {MOMENTS_RESUM.map((m) => (
+                        <Fragment key={m}>
+                          {NIVELLS.map((n, ni) => (
+                            <td key={n.id} style={{ padding: '4px 3px', textAlign: 'center', fontWeight: 700, borderLeft: ni === 0 ? '1px solid var(--line)' : 'none' }}>
+                              {total[m].comptes[n.id]}
+                            </td>
+                          ))}
+                          <td style={{ padding: '4px 3px', textAlign: 'center', fontWeight: 700 }}>{total[m].avaluats}</td>
+                        </Fragment>
+                      ))}
                     </tr>
                   </tbody>
                 </table>
