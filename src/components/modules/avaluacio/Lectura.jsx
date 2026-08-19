@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { collection, query, where, getDocs, addDoc, doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'
 import { db, auth } from '../../../firebase'
 import { redueixVigents } from '../../../lib/avaluacioCatala'
-import { MOMENTS_LECTURA, nivellVL, nivellCL, LLINDARS_CL_DEFECTE } from '../../../lib/rubricaLectura'
+import { MOMENTS_LECTURA, nivellVL, nivellCL, LLINDARS_CL_DEFECTE, esClasseAmbLectura } from '../../../lib/rubricaLectura'
 import { cursEscolarActual } from '../../../lib/cursEscolar'
 import { esAdmin } from '../../../lib/roles'
 import { exportaExcel, exportaPDF } from '../../../lib/exportTaula'
@@ -38,7 +38,9 @@ export default function Lectura() {
           getDocs(query(collection(db, 'alumnes'), where('actiu', '==', true))),
           getDoc(doc(db, 'configuracio', 'llindarsCL')),
         ])
-        const llista = snapAlumnes.docs.map((d) => ({ id: d.id, ...d.data() }))
+        // La VL/CL no es fa a Educació Infantil: es filtren les seves
+        // classes abans que arribin enlloc, no només al desplegable.
+        const llista = snapAlumnes.docs.map((d) => ({ id: d.id, ...d.data() })).filter((a) => esClasseAmbLectura(a.curs))
         llista.sort((a, b) => (a.numLlista ?? 999) - (b.numLlista ?? 999) || a.nom.localeCompare(b.nom))
         setAlumnesTots(llista)
         if (llista.length > 0) setCurs((c) => c || llista[0].curs)
