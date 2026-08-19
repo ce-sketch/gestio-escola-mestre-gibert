@@ -162,6 +162,15 @@ service cloud.firestore {
       allow delete: if esAdmin();
     }
 
+    // Lectoescriptura d'Educació Infantil (escala Teberosky), un document
+    // per classe (I4A, I4B, I5A, I5B) i curs escolar — mateix accés que la
+    // resta de valoracions.
+    match /lectoescripturaEI/{documentId} {
+      allow read: if esComptePersonal();
+      allow create, update: if esComptePersonal();
+      allow delete: if esAdmin();
+    }
+
     // Configuració de quines comissions/equips i festes estan actives cada
     // curs — nomès l'administrador la pot canviar, però tot el personal la
     // pot llegir (per saber quines opcions els han de sortir).
