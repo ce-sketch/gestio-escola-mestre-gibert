@@ -208,7 +208,7 @@ export default function Resum() {
         <button
           className="btn-ghost"
           style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
-          onClick={() => exportaPDF(`Resum TEE — ${trimestre}`, { cursEscolarId, fulls: taulesTEE() })}
+          onClick={() => exportaPDF(`Resum TEE — ${trimestre}`, { cursEscolarId, fulls: taulesTEE(), etiqueta: 'Avaluació' })}
           type="button"
         >
           📄 Descarrega PDF (TEE)
@@ -255,7 +255,7 @@ export default function Resum() {
         <button
           className="btn-ghost"
           style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
-          onClick={() => exportaPDF('Resum CL i VL', { cursEscolarId, fulls: taulesLectura() })}
+          onClick={() => exportaPDF('Resum CL i VL', { cursEscolarId, fulls: taulesLectura(), etiqueta: 'Avaluació' })}
           type="button"
         >
           📄 Descarrega PDF (CL i VL)

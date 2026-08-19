@@ -542,7 +542,7 @@ export default function TEE() {
             <button
               className="btn-ghost"
               style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
-              onClick={() => exportaPDF(`TEE — ${curs} — ${trimestre}`, { cursEscolarId, fulls: taulaClasseActual() })}
+              onClick={() => exportaPDF(`TEE — ${curs} — ${trimestre}`, { cursEscolarId, fulls: taulaClasseActual(), etiqueta: 'Avaluació' })}
               type="button"
             >
               📄 Descarrega PDF ({curs})

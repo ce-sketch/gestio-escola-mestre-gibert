@@ -105,7 +105,7 @@ export default function AreesNoSuperades() {
         <button
           className="btn-ghost"
           style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
-          onClick={() => exportaPDF('Àrees no superades', { cursEscolarId, fulls: taulaAreesNoSuperadesExportable() })}
+          onClick={() => exportaPDF('Àrees no superades', { cursEscolarId, fulls: taulaAreesNoSuperadesExportable(), etiqueta: 'Avaluació' })}
           type="button"
         >
           📄 Descarrega PDF

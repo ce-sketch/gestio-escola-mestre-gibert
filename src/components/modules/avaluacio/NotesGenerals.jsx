@@ -294,7 +294,7 @@ export default function NotesGenerals() {
             <button
               className="btn-ghost"
               style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
-              onClick={() => exportaPDF(`Notes per àrea — ${classe} — ${trimestre}`, { cursEscolarId, fulls: taulaClasseActual() })}
+              onClick={() => exportaPDF(`Notes per àrea — ${classe} — ${trimestre}`, { cursEscolarId, fulls: taulaClasseActual(), etiqueta: 'Avaluació' })}
               type="button"
             >
               📄 Descarrega PDF ({classe})

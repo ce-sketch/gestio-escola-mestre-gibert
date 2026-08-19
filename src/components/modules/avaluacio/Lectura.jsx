@@ -298,7 +298,7 @@ export default function Lectura() {
             <button
               className="btn-ghost"
               style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
-              onClick={() => exportaPDF(`Lectura — ${curs} — ${moment.label}`, { cursEscolarId, fulls: taulaClasseActual() })}
+              onClick={() => exportaPDF(`Lectura — ${curs} — ${moment.label}`, { cursEscolarId, fulls: taulaClasseActual(), etiqueta: 'Avaluació' })}
               type="button"
             >
               📄 Descarrega PDF ({curs})

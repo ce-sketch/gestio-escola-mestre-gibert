@@ -212,7 +212,7 @@ export default function Descarregues() {
         <button
           className="btn-ghost"
           style={{ color: 'var(--navy)', borderColor: 'var(--navy)', maxWidth: 280 }}
-          onClick={() => descarrega('pdf', () => exportaPDF('Avaluació — resum complet', { cursEscolarId, fulls: totsElsFulls() }))}
+          onClick={() => descarrega('pdf', () => exportaPDF('Avaluació — resum complet', { cursEscolarId, fulls: totsElsFulls(), etiqueta: 'Avaluació' }))}
           disabled={generant !== null}
           type="button"
         >

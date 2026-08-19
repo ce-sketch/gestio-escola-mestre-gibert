@@ -338,7 +338,7 @@ export default function NotaArea() {
         <button
           className="btn-ghost"
           style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
-          onClick={() => exportaPDF(`Nota d'àrea Català — ${curs} — ${trimestre}`, { cursEscolarId, fulls: taulaClasseActual() })}
+          onClick={() => exportaPDF(`Nota d'àrea Català — ${curs} — ${trimestre}`, { cursEscolarId, fulls: taulaClasseActual(), etiqueta: 'Avaluació' })}
           type="button"
         >
           📄 Descarrega PDF ({curs})

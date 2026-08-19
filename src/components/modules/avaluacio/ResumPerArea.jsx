@@ -272,7 +272,7 @@ export default function ResumPerArea() {
         <button
           className="btn-ghost"
           style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
-          onClick={() => exportaPDF('Notes per àrea — Resum global', { cursEscolarId, fulls: taulesResumGlobalExportables() })}
+          onClick={() => exportaPDF('Notes per àrea — Resum global', { cursEscolarId, fulls: taulesResumGlobalExportables(), etiqueta: 'Avaluació' })}
           type="button"
         >
           📄 Descarrega PDF
