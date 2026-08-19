@@ -31,6 +31,7 @@ import { indexAlumne, graellaAbsencies } from './indexAbsencies'
 import { primerNom, generaInformeQualitatiu } from './informeQualitatiu'
 import { cerca } from './cercaApp'
 import { classificaFulls, tipusAmbNom } from './plantillesImport'
+import { NIVELLS_TEBEROSKY, ETAPES_TEBEROSKY, esClasseEI4o5, comptaNivells, nivellsBuits } from './lectoescripturaEI'
 import { esClasseAmbLectura } from './rubricaLectura'
 import { notaFinalArea, TRIMESTRES, AREES, areaAplicaAClasse } from './notesArea'
 import { colorCella } from './matriuColors'
@@ -1044,6 +1045,60 @@ function grupNotesArea() {
   return { titol: "Notes per àrea", proves }
 }
 
+// ── Lectoescriptura EI (escala Teberosky) ─────────────────────────────────
+
+function grupLectoescripturaEI() {
+  const proves = []
+
+  proves.push(comprova(
+    'Són 18 nivells en total, com al full original (columnes C a T)',
+    18,
+    () => NIVELLS_TEBEROSKY.length
+  ))
+
+  proves.push(comprova(
+    "Es reparteixen en 5 etapes: 7 + 2 + 2 + 6 + 1",
+    [7, 2, 2, 6, 1],
+    () => ETAPES_TEBEROSKY.map((e) => e.nivells.length)
+  ))
+
+  proves.push(comprova(
+    'Només I4 i I5 fan aquesta prova, no I3 — el document original no en té cap full',
+    { i3: false, i4: true, i4b: true, i5: true },
+    () => ({
+      i3: esClasseEI4o5('I3 A'),
+      i4: esClasseEI4o5('I4 A'),
+      i4b: esClasseEI4o5('I4B'),
+      i5: esClasseEI4o5('I5'),
+    })
+  ))
+
+  proves.push(comprova(
+    'El comptatge (equivalent a "RESUM EI") suma els alumnes que tenen marcat cada nivell',
+    { dibuix: 2, autocorregeix: 1, escriptures_unigrafiques: 0 },
+    () => {
+      const marques = {
+        a1: { ...nivellsBuits(), dibuix: true, grafismes_primitius: true },
+        a2: { ...nivellsBuits(), dibuix: true, autocorregeix: true },
+      }
+      const c = comptaNivells(['a1', 'a2'], marques)
+      return { dibuix: c.dibuix, autocorregeix: c.autocorregeix, escriptures_unigrafiques: c.escriptures_unigrafiques }
+    }
+  ))
+
+  proves.push(comprova(
+    "No és una tria única: un alumne pot tenir diversos nivells marcats alhora",
+    2,
+    () => {
+      const marques = { a1: { ...nivellsBuits(), dibuix: true, amb_vsc: true } }
+      const c = comptaNivells(['a1'], marques)
+      return c.dibuix + c.amb_vsc
+    }
+  ))
+
+  return { titol: 'Lectoescriptura EI', proves }
+}
+
 function grupCerca() {
   const proves = []
   const moduls = [
@@ -1328,5 +1383,5 @@ function grupReconeixement() {
 }
 
 export function executaComprovacions() {
-  return [grupPgac(), grupValoracions(), grupFestes(), grupCooperatiu(), grupAbsencies(), grupInforme(), grupNotesArea(), grupCerca(), grupCosmos(), grupConmat(), grupEscales(), grupLectors(), grupReconeixement()]
+  return [grupPgac(), grupValoracions(), grupFestes(), grupCooperatiu(), grupAbsencies(), grupInforme(), grupNotesArea(), grupLectoescripturaEI(), grupCerca(), grupCosmos(), grupConmat(), grupEscales(), grupLectors(), grupReconeixement()]
 }

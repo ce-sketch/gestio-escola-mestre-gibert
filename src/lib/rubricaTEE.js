@@ -84,7 +84,7 @@ export const CRITERIS_TEE = [
   { id: 'lexic', label: 'Lèxic' },
   { id: 'presentacio', label: 'Presentació' },
   { id: 'ortografia', label: 'Ortografia' },
-  { id: 'morfosintaxis', label: 'Morfosintaxis' },
+  { id: 'morfosintaxis', label: 'Morfosintaxi' },
 ]
 
 /** Punts (0-10) d'un sol criteri, seguint la fórmula real del full de càlcul. */
