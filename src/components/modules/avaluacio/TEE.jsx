@@ -192,7 +192,7 @@ export default function TEE() {
         }
 
         if (filaCapçalera === -1) {
-          setErrorFitxer('No s\'han trobat les columnes dels criteris (Coherència, Lèxic, Presentació, Ortografia, Morfosintaxis) al fitxer.')
+          setErrorFitxer('No s\'han trobat les columnes dels criteris (Coherència, Lèxic, Presentació, Ortografia, Morfosintaxi) al fitxer.')
           return
         }
 
@@ -481,7 +481,7 @@ export default function TEE() {
       </p>
       <p className="module-note" style={{ marginTop: 4 }}>
         El fitxer Excel ha de tenir una fila de capçalera amb "Coherència", "Lèxic",
-        "Presentació", "Ortografia" i "Morfosintaxis", i una columna amb el nom de l'alumne
+        "Presentació", "Ortografia" i "Morfosintaxi", i una columna amb el nom de l'alumne
         (ha de coincidir amb el nom ja carregat a "Alumnes"). Els valors de cada criteri
         poden ser 1-5 (1=AE, 2=AN, 3=AS, 4=NA, 5=NA amb 0 punts).
       </p>

@@ -124,7 +124,7 @@ export default function NotaArea() {
     const explicita = vigentsArea.find((r) => r.alumneId === alumneId)?.nivell
     if (explicita) return explicita
     // 2a prioritat: si no hi ha res desat encara, s'omple sola amb la nota
-    // de Català introduïda al mòdul "Notes per àrea (totes)" — estalvia
+    // de Català introduïda al mòdul "Notes per àrea" — estalvia
     // haver d'entrar la mateixa informació dues vegades. Es pot sobreescriure
     // igualment triant un altre valor al desplegable.
     const notaArea = vigentsNotesArea.find((r) => r.alumneId === alumneId)?.nota
@@ -289,7 +289,7 @@ export default function NotaArea() {
     <div>
       <p className="module-lead">
         Nota general de Català del trimestre (l'informe consolidat per àrees). Si ja has
-        introduït la nota de Català al mòdul "Notes per àrea (totes)", aquí surt <strong>omplerta
+        introduït la nota de Català al mòdul "Notes per àrea", aquí surt <strong>omplerta
         sola</strong> (marcada amb un asterisc) — la pots deixar tal qual o canviar-la manualment.
         L'app avisa automàticament si aquesta nota no quadra amb els resultats de TEE, CL o VL.
       </p>
@@ -372,7 +372,7 @@ export default function NotaArea() {
                         border: `1px solid ${autoOmplert ? 'var(--amber-dark)' : 'var(--line)'}`,
                         borderRadius: 6, padding: '4px 6px', fontSize: 12,
                       }}
-                      title={autoOmplert ? 'Omplert automàticament des de "Notes per àrea (totes)"' : undefined}
+                      title={autoOmplert ? 'Omplert automàticament des de "Notes per àrea"' : undefined}
                     >
                       <option value="">—</option>
                       {NIVELLS.map((n) => <option key={n.id} value={n.id}>{n.label}</option>)}
