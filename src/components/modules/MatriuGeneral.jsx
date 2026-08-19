@@ -6,6 +6,10 @@ import { FESTES, mitjanaValoracio, mitjanaObjectiu, afegeixALlista, agrupaValora
 import { exportaValoracionsExcel, exportaValoracionsPDF } from '../../lib/valoracionsExport'
 import { carregaConfigValoracions, desaConfigValoracions } from '../../lib/valoracionsConfig'
 import { analitzaLlibre, TIPUS } from '../../lib/plantillesImport'
+import { CICLES } from '../../lib/valoracions'
+import { normalitzaFesta, mitjanaGeneralFesta, mitjanaGrup } from '../../lib/festesDetall'
+import { normalitzaCooperatiu, grauGlobal, grauCicle, CICLES_COOPERATIU } from '../../lib/aprenentatgeCooperatiu'
+import { grauSatisfaccioCicle, percentValorades, totalRepetirSi, mitjanaActivitat } from '../../lib/activitatsComplementariesDetall'
 import { triaDocumentsDelDrive } from '../../lib/drivePicker'
 import { slug } from '../../lib/slug'
 import { carregaXLSX } from '../../lib/carregaLlibreries'
@@ -143,6 +147,63 @@ function TaulaPendents({ pendents, onCanviaTipus, onTreu }) {
   )
 }
 
+/** Una de les seccions del resum, amb el seu propi format de columnes:
+ *  els cicles/comissions i el cooperatiu tenen gener/juny, les festes un
+ *  sol grau, i les activitats complementàries satisfacció/valorades. */
+function SeccioResum({ titol, quantes, buit, children }) {
+  return (
+    <div style={{ marginTop: 18 }}>
+      <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-soft)', borderBottom: '1px solid var(--line)', paddingBottom: 4 }}>
+        {titol} <span style={{ fontWeight: 400 }}>({quantes})</span>
+      </p>
+      {quantes === 0
+        ? <p style={{ fontSize: 12, color: 'var(--ink-soft)', padding: '8px 0' }}>{buit}</p>
+        : children}
+    </div>
+  )
+}
+
+function ValorPct({ etiqueta, valor }) {
+  return (
+    <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
+      {etiqueta}: <strong style={{ color: colorPer(valor) }}>{valor === null || valor === undefined ? '—' : `${Math.round(valor)}%`}</strong>
+    </span>
+  )
+}
+
+/** Una fila desplegable, igual que les de la llista de valoracions:
+ *  el resum sempre visible, el desglossament només en obrir-la. */
+function FilaResum({ nom, valors, extra, detall }) {
+  const [oberta, setOberta] = useState(false)
+  return (
+    <div style={{ borderBottom: '1px dashed var(--line)' }}>
+      <div
+        onClick={() => setOberta(!oberta)}
+        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 4px', cursor: 'pointer', gap: 12, flexWrap: 'wrap' }}
+      >
+        <div>
+          <strong>{nom}</strong>
+          {extra && <span style={{ fontSize: 12, color: 'var(--ink-soft)', marginLeft: 8 }}>{extra}</span>}
+        </div>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          {valors.map((v) => <ValorPct key={v.etiqueta} {...v} />)}
+          <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>{oberta ? '▲' : '▼'}</span>
+        </div>
+      </div>
+      {oberta && detall?.length > 0 && (
+        <div style={{ padding: '0 4px 10px 16px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {detall.map((d) => (
+            <div key={d.etiqueta} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+              <span>{d.etiqueta}</span>
+              <strong style={{ color: colorPer(d.valor) }}>{d.valor === null || d.valor === undefined ? '—' : `${Math.round(d.valor)}%`}</strong>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function MatriuGeneral() {
   const [cursEscolarId, setCursEscolarId] = useState(cursEscolarActual())
   const [valoracions, setValoracions] = useState([])
@@ -214,27 +275,35 @@ export default function MatriuGeneral() {
    * l'opció penjada als docents apuntant a una valoració que ja no hi és.
    */
   async function esborraValoracio(v) {
+    const nom = (v.nom ?? '').trim()
     const te = mitjanaValoracio(v, 'gener') !== null || mitjanaValoracio(v, 'juny') !== null
-    const avis = te
-      ? `La valoració "${v.nom}" té dades. S'esborrarà del tot i no es podrà recuperar.\n\nEscriu el nom per confirmar-ho:`
-      : `Segur que vols esborrar la valoració "${v.nom}"?\n\nEscriu el nom per confirmar-ho:`
-    const escrit = window.prompt(avis, '')
-    if (escrit === null) return
-    if (escrit.trim() !== v.nom.trim()) {
-      setMissatge({ type: 'error', text: 'El nom no coincideix: no s\'ha esborrat res.' })
-      return
+
+    // Les files sense nom són restes desades per error: no té sentit
+    // demanar que s'escrigui un nom que no existeix.
+    if (!nom) {
+      if (!window.confirm('Aquesta valoració no té nom i segurament es va desar per error. Vols esborrar-la?')) return
+    } else {
+      const avis = te
+        ? `La valoració "${nom}" té dades. S'esborrarà del tot i no es podrà recuperar.\n\nEscriu el nom per confirmar-ho:`
+        : `Segur que vols esborrar la valoració "${nom}"?\n\nEscriu el nom per confirmar-ho:`
+      const escrit = window.prompt(avis, '')
+      if (escrit === null) return
+      if (escrit.trim() !== nom) {
+        setMissatge({ type: 'error', text: 'El nom no coincideix: no s\'ha esborrat res.' })
+        return
+      }
     }
     try {
       await deleteDoc(doc(db, 'valoracions', v.id))
       const configNova = {
         ...config,
-        comissions: config.comissions.filter((c) => !mateixNom(c.nom, v.nom)),
-        mixtes: config.mixtes.filter((c) => !mateixNom(c.nom, v.nom)),
+        comissions: config.comissions.filter((c) => !mateixNom(c.nom, nom)),
+        mixtes: config.mixtes.filter((c) => !mateixNom(c.nom, nom)),
       }
       if (configNova.comissions.length !== config.comissions.length || configNova.mixtes.length !== config.mixtes.length) {
         await desaConfig(configNova)
       }
-      setMissatge({ type: 'ok', text: `Esborrada "${v.nom}".` })
+      setMissatge({ type: 'ok', text: nom ? `Esborrada "${nom}".` : 'Esborrada la valoració sense nom.' })
       await carrega()
     } catch (err) {
       setMissatge({ type: 'error', text: `No s'ha pogut esborrar: ${err.message}` })
@@ -372,6 +441,9 @@ export default function MatriuGeneral() {
   // confirma. El tipus es pot corregir, perquè una comissió mixta que
   // encara no sigui a la llista arriba com a comissió normal.
 
+  const [festesDetall, setFestesDetall] = useState([])
+  const [cooperatiu, setCooperatiu] = useState(null)
+  const [activitats, setActivitats] = useState([])
   const [analitzant, setAnalitzant] = useState(false)
   const [pendents, setPendents] = useState([]) // { id, fitxer, tipus, nom, resum, dades }
   const [important, setImportant] = useState(false)
@@ -491,7 +563,10 @@ export default function MatriuGeneral() {
         }
 
         const { responsable, membres, objectius, metodologies } = p.dades
-        const nom = p.nomExistent ?? p.dades.nom
+        const nom = (p.nomExistent ?? p.dades.nom ?? '').trim()
+        // El nom és l'identificador del document: sense nom sortiria una
+        // fila en blanc a la llista i no hi hauria manera de saber què és.
+        if (!nom) throw new Error('el full no diu de quina comissió és')
         await setDoc(doc(db, 'valoracions', `${cursEscolarId}__${slug(nom)}`), {
           nom,
           responsable,
@@ -540,12 +615,38 @@ export default function MatriuGeneral() {
 
 
 
+  /**
+   * Carrega les quatre coses que es valoren, que viuen en col·leccions
+   * separades: les valoracions de cicle/comissió/equip, les festes (un
+   * document per festa), l'aprenentatge cooperatiu (un per curs) i les
+   * activitats complementàries (un per cicle).
+   */
   async function carrega() {
     setCarregant(true)
     setMissatge(null)
+    const delCurs = (nom) => getDocs(query(collection(db, nom), where('cursEscolar', '==', cursEscolarId)))
     try {
-      const snap = await getDocs(query(collection(db, 'valoracions'), where('cursEscolar', '==', cursEscolarId)))
-      setValoracions(snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => a.nom.localeCompare(b.nom)))
+      const [snapVal, snapFestes, snapCoop, snapAct] = await Promise.all([
+        delCurs('valoracions'),
+        delCurs('festesDetall'),
+        getDoc(doc(db, 'aprenentatgeCooperatiu', cursEscolarId)),
+        delCurs('activitatsComplementariesDetall'),
+      ])
+
+      setValoracions(snapVal.docs
+        .map((d) => ({ id: d.id, ...d.data() }))
+        .sort((a, b) => (a.nom ?? '').localeCompare(b.nom ?? '', 'ca')))
+
+      // Les festes desades amb el model vell es reparteixen en carregar-les.
+      setFestesDetall(snapFestes.docs
+        .map((d) => ({ id: d.id, festa: normalitzaFesta(d.data().festa) }))
+        .filter((f) => f.festa))
+
+      setCooperatiu(snapCoop.exists() ? normalitzaCooperatiu(snapCoop.data()) : null)
+
+      setActivitats(snapAct.docs
+        .map((d) => ({ id: d.id, cicle: d.data().cicle ?? '', activitats: d.data().activitats ?? [] }))
+        .sort((a, b) => CICLES.indexOf(a.cicle) - CICLES.indexOf(b.cicle)))
     } catch (err) {
       setMissatge({ type: 'error', text: `No s'han pogut carregar les valoracions: ${err.message}` })
     } finally {
@@ -713,7 +814,7 @@ export default function MatriuGeneral() {
           <button
             className="btn-ghost"
             style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
-            onClick={() => descarrega('excel', () => exportaValoracionsExcel(valoracions, cursEscolarId))}
+            onClick={() => descarrega('excel', () => exportaValoracionsExcel(valoracions, cursEscolarId, { festesDetall, cooperatiu, activitats }))}
             disabled={descarregant !== null}
             type="button"
           >
@@ -722,7 +823,7 @@ export default function MatriuGeneral() {
           <button
             className="btn-ghost"
             style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
-            onClick={() => descarrega('pdf', () => exportaValoracionsPDF(valoracions, cursEscolarId))}
+            onClick={() => descarrega('pdf', () => exportaValoracionsPDF(valoracions, cursEscolarId, { festesDetall, cooperatiu, activitats }))}
             disabled={descarregant !== null}
             type="button"
           >
@@ -753,7 +854,9 @@ export default function MatriuGeneral() {
                   onClick={() => setObert(oberta ? null : v.id)}
                 >
                   <div>
-                    <strong>{v.nom}</strong>
+                    {v.nom?.trim()
+                      ? <strong>{v.nom}</strong>
+                      : <strong style={{ color: 'var(--red)' }}>(sense nom — desada per error)</strong>}
                     {v.responsable && <span style={{ fontSize: 12, color: 'var(--ink-soft)', marginLeft: 8 }}>Resp: {v.responsable}</span>}
                   </div>
                   <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
@@ -826,6 +929,51 @@ export default function MatriuGeneral() {
           ))}
         </div>
       )}
+
+      <SeccioResum titol="Festes i celebracions" quantes={festesDetall.length} buit="Encara no s'ha valorat cap festa.">
+        {festesDetall.map((f) => (
+          <FilaResum
+            key={f.id}
+            nom={f.festa.activitat || f.id}
+            valors={[{ etiqueta: 'General', valor: mitjanaGeneralFesta(f.festa) }]}
+            detall={f.festa.grups.map((g) => ({ etiqueta: g.nom, valor: mitjanaGrup(f.festa, g.nom) }))}
+          />
+        ))}
+      </SeccioResum>
+
+      <SeccioResum titol="Aprenentatge cooperatiu" quantes={cooperatiu ? 1 : 0} buit="Encara no s'ha començat.">
+        {cooperatiu && (
+          <FilaResum
+            nom="Aprenentatge cooperatiu"
+            valors={[
+              { etiqueta: 'Gener', valor: grauGlobal(cooperatiu, 'gener') },
+              { etiqueta: 'Juny', valor: grauGlobal(cooperatiu, 'juny') },
+            ]}
+            detall={CICLES_COOPERATIU.flatMap((c) => [
+              { etiqueta: `${c.nom} · gener`, valor: grauCicle(cooperatiu, c.id, 'gener') },
+              { etiqueta: `${c.nom} · juny`, valor: grauCicle(cooperatiu, c.id, 'juny') },
+            ])}
+          />
+        )}
+      </SeccioResum>
+
+      {/* Les activitats complementàries no donen un grau d'assoliment sinó
+          un grau de satisfacció (de 0 a 10, aquí en percentatge), i per
+          això les seves columnes no són les mateixes que les altres. */}
+      <SeccioResum titol="Activitats complementàries" quantes={activitats.length} buit="Encara no s'ha valorat cap sortida.">
+        {activitats.map((a) => (
+          <FilaResum
+            key={a.id}
+            nom={a.cicle}
+            valors={[
+              { etiqueta: 'Satisfacció', valor: grauSatisfaccioCicle(a.activitats) },
+              { etiqueta: 'Valorades', valor: percentValorades(a.activitats) },
+            ]}
+            extra={`${a.activitats.length} sortides · ${totalRepetirSi(a.activitats)} es repetirien`}
+            detall={a.activitats.map((act) => ({ etiqueta: `${act.nom || 'Sense nom'} (${act.nivell})`, valor: mitjanaActivitat(act) === null ? null : mitjanaActivitat(act) * 10 }))}
+          />
+        ))}
+      </SeccioResum>
     </div>
   )
 }
