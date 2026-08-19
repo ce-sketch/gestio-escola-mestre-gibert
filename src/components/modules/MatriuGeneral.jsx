@@ -10,6 +10,8 @@ import { CICLES } from '../../lib/valoracions'
 import { normalitzaFesta, mitjanaGeneralFesta, mitjanaGrup } from '../../lib/festesDetall'
 import { normalitzaCooperatiu, grauGlobal, grauCicle, CICLES_COOPERATIU } from '../../lib/aprenentatgeCooperatiu'
 import { grauSatisfaccioCicle, percentValorades, totalRepetirSi, mitjanaActivitat } from '../../lib/activitatsComplementariesDetall'
+import { resultatObjectiu } from '../../lib/pgac'
+import { construeixMatriu, colorCella } from '../../lib/matriuColors'
 import { triaDocumentsDelDrive } from '../../lib/drivePicker'
 import { slug } from '../../lib/slug'
 import { carregaXLSX } from '../../lib/carregaLlibreries'
@@ -200,6 +202,50 @@ function FilaResum({ nom, valors, extra, detall }) {
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+/** La graella de colors, calcada de la pestanya "MATRIU GENERAL" de l'Eina
+ *  PGAC: files = mesures, columnes = grups, i el mateix codi de colors del
+ *  full (vermell ≤30% · taronja 30-60% · blau 60-80% · verd >80%). */
+function MatriuColorsPGA({ files }) {
+  if (files.length === 0) {
+    return <p style={{ fontSize: 12, color: 'var(--ink-soft)', padding: '8px 0' }}>Encara no hi ha res a mostrar.</p>
+  }
+  return (
+    <div style={{ overflowX: 'auto', marginTop: 8 }}>
+      <table style={{ borderCollapse: 'collapse', fontSize: 11 }}>
+        <tbody>
+          {files.map((fila) => (
+            <tr key={fila.titol}>
+              <td style={{ padding: '4px 8px', whiteSpace: 'nowrap', color: 'var(--ink-soft)', borderBottom: '1px solid var(--line)' }}>
+                {fila.titol}
+              </td>
+              {fila.columnes.map((col) => {
+                const c = colorCella(col.valor)
+                return (
+                  <td
+                    key={col.id}
+                    title={`${col.label}: ${col.valor === null ? 'sense dades' : Math.round(col.valor) + '%'}`}
+                    style={{
+                      padding: '4px 6px', textAlign: 'center', minWidth: 44, borderBottom: '1px solid var(--line)',
+                      background: c?.bg ?? 'var(--paper)', color: c?.color ?? 'var(--ink-soft)',
+                      fontWeight: c ? 600 : 400,
+                    }}
+                  >
+                    {col.valor === null ? '—' : `${Math.round(col.valor)}%`}
+                  </td>
+                )
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p style={{ fontSize: 10, color: 'var(--ink-soft)', marginTop: 6 }}>
+        Passa el cursor per una cel·la per veure a què correspon. No hi surten encara TEE ni VL/CL:
+        calen confirmar contra el full quins nivells compten com a assolits a cada cicle.
+      </p>
     </div>
   )
 }
@@ -444,6 +490,7 @@ export default function MatriuGeneral() {
   const [festesDetall, setFestesDetall] = useState([])
   const [cooperatiu, setCooperatiu] = useState(null)
   const [activitats, setActivitats] = useState([])
+  const [objectiusPgac, setObjectiusPgac] = useState([])
   const [analitzant, setAnalitzant] = useState(false)
   const [pendents, setPendents] = useState([]) // { id, fitxer, tipus, nom, resum, dades }
   const [important, setImportant] = useState(false)
@@ -626,12 +673,14 @@ export default function MatriuGeneral() {
     setMissatge(null)
     const delCurs = (nom) => getDocs(query(collection(db, nom), where('cursEscolar', '==', cursEscolarId)))
     try {
-      const [snapVal, snapFestes, snapCoop, snapAct] = await Promise.all([
+      const [snapVal, snapFestes, snapCoop, snapAct, snapPgac] = await Promise.all([
         delCurs('valoracions'),
         delCurs('festesDetall'),
         getDoc(doc(db, 'aprenentatgeCooperatiu', cursEscolarId)),
         delCurs('activitatsComplementariesDetall'),
+        getDoc(doc(db, 'pgac', cursEscolarId)),
       ])
+      setObjectiusPgac(snapPgac.exists() ? (snapPgac.data().objectius ?? []) : [])
 
       setValoracions(snapVal.docs
         .map((d) => ({ id: d.id, ...d.data() }))
@@ -929,6 +978,15 @@ export default function MatriuGeneral() {
           ))}
         </div>
       )}
+
+      <SeccioResum titol="Matriu de colors (PGA)" quantes={valoracions.length + festesDetall.length + (cooperatiu ? 1 : 0) + objectiusPgac.length} buit="Encara no hi ha res a mostrar.">
+        <MatriuColorsPGA
+          files={construeixMatriu(
+            { valoracions, festesDetall, cooperatiu, objectiusPgac },
+            { mitjanaValoracio, mitjanaGeneralFesta, mitjanaGrup, grauGlobal, grauCicle, CICLES_COOPERATIU, resultatObjectiu }
+          )}
+        />
+      </SeccioResum>
 
       <SeccioResum titol="Festes i celebracions" quantes={festesDetall.length} buit="Encara no s'ha valorat cap festa.">
         {festesDetall.map((f) => (
