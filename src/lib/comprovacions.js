@@ -32,6 +32,7 @@ import { primerNom, generaInformeQualitatiu } from './informeQualitatiu'
 import { cerca } from './cercaApp'
 import { classificaFulls, tipusAmbNom } from './plantillesImport'
 import { esClasseAmbLectura } from './rubricaLectura'
+import { colorCella } from './matriuColors'
 import { interpretaResum, interpretaFullObjectiu } from './comissioTemplateParser'
 import { llegeixCosmos, resumClasse, rendimentAPercentatge } from './cosmosParser'
 import { claueDeNom, nivellAPercentatge, distribucio, casaAmbAlumnes } from './conmatParser'
@@ -432,6 +433,18 @@ function grupEscales() {
       primer: esClasseAmbLectura('1r B'),
       sise: esClasseAmbLectura('6è'),
     })
+  ))
+
+  proves.push(comprova(
+    'Els colors de la matriu segueixen exactament les franges del full original',
+    ['#FF0000', '#FF0000', '#FF9900', '#FF9900', '#4A86E8', '#4A86E8', '#00FF00', '#00FF00'],
+    () => [0, 30, 30.1, 60, 60.1, 80, 80.1, 100].map((v) => colorCella(v).bg)
+  ))
+
+  proves.push(comprova(
+    'Una cel·la sense dades no té color',
+    [null, null],
+    () => [colorCella(null), colorCella('')]
   ))
 
   return { titol: 'Escales', proves }
