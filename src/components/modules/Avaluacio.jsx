@@ -14,6 +14,8 @@ import Lectura from './avaluacio/Lectura.jsx'
 import Matematiques from './avaluacio/Matematiques.jsx'
 import NotaArea from './avaluacio/NotaArea.jsx'
 import NotesGenerals from './avaluacio/NotesGenerals.jsx'
+import ResumPerArea from './avaluacio/ResumPerArea.jsx'
+import AreesNoSuperades from './avaluacio/AreesNoSuperades.jsx'
 import InformeCatala from './avaluacio/InformeCatala.jsx'
 import Resum from './avaluacio/Resum.jsx'
 
@@ -37,6 +39,10 @@ const GRUPS = [
     pestanyes: [
       { id: 'informe', label: 'Informe per alumne', component: InformeCatala },
       { id: 'resum', label: 'Resums de proves (TEE i VL/CL)', component: Resum },
+      // Abans era la pestanya "Resum escola" dins de "Notes per àrea".
+      { id: 'resum-area', label: 'Resum per àrea', component: ResumPerArea },
+      // Separat del "Resum per àrea": són dues coses diferents.
+      { id: 'arees-no-superades', label: 'Àrees no superades', component: AreesNoSuperades },
     ],
   },
 ]
