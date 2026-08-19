@@ -241,25 +241,6 @@ export default function NotesGenerals() {
    * "Science" només a partir de 3r), i per això les columnes no es poden
    * calcular un sol cop per a totes: es recalculen classe per classe.
    */
-  function taulaTotesLesClasses() {
-    return classes.map((cl) => {
-      const areesCl = AREES.filter((a) => areaAplicaAClasse(a.id, cl))
-      const alumnesCl = alumnesTots.filter((a) => a.curs === cl)
-      const capçalera = ['Núm.', 'Alumne', ...areesCl.flatMap((a) => [`${a.label} 1r`, `${a.label} 2n`, `${a.label} 3r`, `${a.label} Final`])]
-      const files = alumnesCl.map((alumne) => [
-        alumne.numLlista ?? '',
-        alumne.nom,
-        ...areesCl.flatMap((a) => [
-          ...TRIMESTRES.map((t) => (a.calculada ? '' : notaAlumneTrimestreDe(cl, alumne.id, a.id, t))),
-          (a.calculada
-            ? notaFinalArea(a.deArees.map((id) => notaFinalAlumneAreaDe(cl, alumne.id, id)))
-            : notaFinalAlumneAreaDe(cl, alumne.id, a.id)) ?? '',
-        ]),
-      ])
-      return { nom: `Notes ${cl}`, files: [capçalera, ...files] }
-    })
-  }
-
   if (carregant) return <p>Carregant…</p>
 
   return (
@@ -318,24 +299,11 @@ export default function NotesGenerals() {
             >
               📄 Descarrega PDF ({classe})
             </button>
-            <span style={{ borderLeft: '1px solid var(--line)', margin: '0 4px' }} />
-            <button
-              className="btn-ghost"
-              style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
-              onClick={() => exportaExcel(`Notes-totes-les-classes-${cursEscolarId}`, { cursEscolarId, fulls: taulaTotesLesClasses(), etiqueta: 'Avaluació' })}
-              type="button"
-            >
-              📥 Descarrega Excel (totes les classes)
-            </button>
-            <button
-              className="btn-ghost"
-              style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
-              onClick={() => exportaPDF(`Notes per àrea — totes les classes`, { cursEscolarId, fulls: taulaTotesLesClasses() })}
-              type="button"
-            >
-              📄 Descarrega PDF (totes les classes)
-            </button>
           </div>
+          <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 6 }}>
+            Per baixar totes les classes de cop, ves a la pestanya &quot;Descàrregues&quot;, dins
+            de &quot;Resums i informes&quot;.
+          </p>
           <div style={{ overflowX: 'auto', marginTop: 12 }}>
             <table style={{ borderCollapse: 'collapse', fontSize: 13, width: '100%', marginTop: 0 }}>
               <thead>
