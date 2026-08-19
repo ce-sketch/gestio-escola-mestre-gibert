@@ -907,6 +907,7 @@ export default function NotesGenerals() {
                   {NIVELLS.map((n) => <th key={n.id} style={{ padding: '6px 8px', color: n.color }}>{n.curt}</th>)}
                   <th style={{ padding: '6px 8px' }}>Avaluats</th>
                   <th style={{ padding: '6px 8px' }}>Sense nota</th>
+                  <th style={{ padding: '6px 8px' }}>Total alumnes</th>
                 </tr>
               </thead>
               <tbody>
@@ -920,6 +921,7 @@ export default function NotesGenerals() {
                     <td style={{ padding: '6px 8px', color: 'var(--ink-soft)' }}>
                       {alumnesDelNivell.length - avaluats}
                     </td>
+                    <td style={{ padding: '6px 8px', fontWeight: 600 }}>{alumnesDelNivell.length}</td>
                   </tr>
                 ))}
               </tbody>
