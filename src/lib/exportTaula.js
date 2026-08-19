@@ -30,13 +30,16 @@ function comprovaDades(dades, nomFuncio) {
   if (!dades?.cursEscolarId) {
     throw new Error(`${nomFuncio}: hi falta el curs escolar. Passa-hi { cursEscolarId, fulls }.`)
   }
-  return { cursEscolarId: dades.cursEscolarId, fulls: dades.fulls ?? [] }
+  // `etiqueta` és el text que surt a la dreta de la capçalera. Per defecte
+  // deia sempre "PGAC", també als Excel d'avaluació — que no tenen res a
+  // veure amb el PGAC. Ara cada mòdul hi pot posar el seu.
+  return { cursEscolarId: dades.cursEscolarId, fulls: dades.fulls ?? [], etiqueta: dades.etiqueta }
 }
 
 
 export async function exportaExcel(nomFitxer, dades) {
   const ExcelJS = await carregaExcelJS()
-  const { cursEscolarId, fulls } = comprovaDades(dades, 'exportaExcel')
+  const { cursEscolarId, fulls, etiqueta } = comprovaDades(dades, 'exportaExcel')
   const wb = new ExcelJS.Workbook()
   wb.creator = 'Gestió Escola Mestre Enric Gibert i Camins'
   wb.created = new Date()
@@ -48,7 +51,7 @@ export async function exportaExcel(nomFitxer, dades) {
       // la capçalera del centre ocupa 4 files i la de la taula la 5a
       views: [{ state: 'frozen', ySplit: 5 }],
     })
-    afegeixCapcalera(ws, { titol: nom, cursEscolarId, columnes })
+    afegeixCapcalera(ws, { titol: nom, cursEscolarId, columnes, ...(etiqueta ? { etiqueta } : {}) })
 
     files.forEach((filaDades, i) => {
       const fila = ws.addRow(filaDades)
