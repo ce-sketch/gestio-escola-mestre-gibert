@@ -1,5 +1,8 @@
 import { carregaExcelJS } from './carregaLlibreries'
 import { FESTES, mitjanaObjectiu, mitjanaValoracio } from './valoracions'
+import { mitjanaGeneralFesta, mitjanaGrup } from './festesDetall'
+import { grauGlobal, grauCicle, CICLES_COOPERATIU } from './aprenentatgeCooperatiu'
+import { grauSatisfaccioCicle, percentValorades, totalRepetirSi, mitjanaActivitat } from './activitatsComplementariesDetall'
 import { afegeixCapcalera, ajustaColumnes } from './excelCapcalera'
 
 const BLAU = 'FF1E3A5F'
@@ -22,6 +25,10 @@ function pct(v) {
   return v === '' || v === null || v === undefined ? '' : `${v}%`
 }
 
+function arrodoneix(v) {
+  return v === null || v === undefined ? '' : Math.round(v)
+}
+
 
 /**
  * Descarrega totes les valoracions (cicles, comissions i equips) d'un curs
@@ -30,7 +37,10 @@ function pct(v) {
  * les comissions/equips (amb actuacions dins d'algun objectiu) surten amb
  * una pestanya "Resum" i una pestanya addicional per cada objectiu.
  */
-export async function exportaValoracionsExcel(valoracions, cursEscolarId) {
+export async function exportaValoracionsExcel(
+  valoracions, cursEscolarId,
+  { festesDetall = [], cooperatiu = null, activitats = [] } = {}
+) {
   const ExcelJS = await carregaExcelJS()
   const wb = new ExcelJS.Workbook()
   wb.creator = 'Gestió Escola Mestre Enric Gibert i Camins'
@@ -126,6 +136,70 @@ export async function exportaValoracionsExcel(valoracions, cursEscolarId) {
     }
   }
 
+  // --- Festes: una pestanya amb un resum de totes i el desglossament de
+  //     cada grup a sota, en comptes d'una pestanya per festa. ---
+  if (festesDetall.length > 0) {
+    const wsF = wb.addWorksheet(nomFullSegur('Festes'))
+    afegeixCapcalera(wsF, { titol: 'Festes i celebracions', cursEscolarId, columnes: 2 })
+    const capF = wsF.addRow(['Festa', 'Grau general'])
+    capF.eachCell((c) => estilCapçalera(c))
+    for (const f of festesDetall) {
+      wsF.addRow([f.festa.activitat || f.id, pct(arrodoneix(mitjanaGeneralFesta(f.festa)))]).eachCell((c) => { c.border = TOTES_VORES })
+    }
+    wsF.addRow([])
+    const capG = wsF.addRow(['Festa', 'Grup', 'Grau'])
+    capG.eachCell((c) => estilCapçalera(c))
+    for (const f of festesDetall) {
+      for (const g of f.festa.grups) {
+        wsF.addRow([f.festa.activitat || f.id, g.nom, pct(arrodoneix(mitjanaGrup(f.festa, g.nom)))]).eachCell((c) => { c.border = TOTES_VORES })
+      }
+    }
+    ajustaColumnes(wsF, [30, 24, 12])
+  }
+
+  // --- Aprenentatge cooperatiu: un document per curs, amb el resultat
+  //     global i el de cada cicle a gener i a juny. ---
+  if (cooperatiu) {
+    const wsC = wb.addWorksheet(nomFullSegur('Aprenentatge cooperatiu'))
+    afegeixCapcalera(wsC, { titol: 'Aprenentatge cooperatiu', cursEscolarId, columnes: 3 })
+    const capC = wsC.addRow(['', 'Gener', 'Juny'])
+    capC.eachCell((c) => estilCapçalera(c))
+    wsC.addRow(['Global', pct(arrodoneix(grauGlobal(cooperatiu, 'gener'))), pct(arrodoneix(grauGlobal(cooperatiu, 'juny')))]).eachCell((c) => { c.border = TOTES_VORES; c.font = { bold: true } })
+    for (const cicle of CICLES_COOPERATIU) {
+      wsC.addRow([cicle.nom, pct(arrodoneix(grauCicle(cooperatiu, cicle.id, 'gener'))), pct(arrodoneix(grauCicle(cooperatiu, cicle.id, 'juny')))]).eachCell((c) => { c.border = TOTES_VORES })
+    }
+    ajustaColumnes(wsC, [24, 12, 12])
+  }
+
+  // --- Activitats complementàries: un document per cicle. No tenen grau
+  //     d'assoliment sinó grau de satisfacció (0-10), i per això les seves
+  //     columnes no són les mateixes que les altres dues. ---
+  if (activitats.length > 0) {
+    const wsA = wb.addWorksheet(nomFullSegur('Activitats complementàries'))
+    afegeixCapcalera(wsA, { titol: 'Activitats complementàries', cursEscolarId, columnes: 4 })
+    const capA = wsA.addRow(['Cicle', 'Satisfacció', 'Valorades', 'Es repetirien'])
+    capA.eachCell((c) => estilCapçalera(c))
+    for (const a of activitats) {
+      wsA.addRow([
+        a.cicle,
+        pct(arrodoneix(grauSatisfaccioCicle(a.activitats))),
+        pct(arrodoneix(percentValorades(a.activitats))),
+        `${totalRepetirSi(a.activitats)}/${a.activitats.length}`,
+      ]).eachCell((c) => { c.border = TOTES_VORES })
+    }
+    ajustaColumnes(wsA, [22, 14, 14, 14])
+
+    wsA.addRow([])
+    const capDetall = wsA.addRow(['Cicle', 'Activitat', 'Nivell', 'Satisfacció'])
+    capDetall.eachCell((c) => estilCapçalera(c))
+    for (const a of activitats) {
+      for (const act of a.activitats) {
+        const m = mitjanaActivitat(act)
+        wsA.addRow([a.cicle, act.nom || '(sense nom)', act.nivell, pct(m === null ? '' : arrodoneix(m * 10))]).eachCell((c) => { c.border = TOTES_VORES })
+      }
+    }
+  }
+
   const buffer = await wb.xlsx.writeBuffer()
   const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
   const url = URL.createObjectURL(blob)
@@ -145,7 +219,10 @@ export async function exportaValoracionsExcel(valoracions, cursEscolarId) {
  * llança el diàleg d'impressió — triant "Desa com a PDF" com a impressora
  * s'obté un PDF real).
  */
-export function exportaValoracionsPDF(valoracions, cursEscolarId) {
+export function exportaValoracionsPDF(
+  valoracions, cursEscolarId,
+  { festesDetall = [], cooperatiu = null, activitats = [] } = {}
+) {
   const finestra = window.open('', '_blank')
   if (!finestra) {
     alert('El navegador ha bloquejat la finestra per generar el PDF. Permet finestres emergents per a aquesta pàgina i torna-ho a provar.')
@@ -186,6 +263,46 @@ export function exportaValoracionsPDF(valoracions, cursEscolarId) {
     `
   }).join('')
 
+  const blocFestes = festesDetall.length > 0 ? `
+    <div class="valoracio">
+      <h2>Festes i celebracions</h2>
+      <table class="sub">
+        <thead><tr><th>Festa</th><th>Grau general</th></tr></thead>
+        <tbody>${festesDetall.map((f) => `<tr><td>${f.festa.activitat || f.id}</td><td>${pct(arrodoneix(mitjanaGeneralFesta(f.festa))) || '—'}</td></tr>`).join('')}</tbody>
+      </table>
+      ${festesDetall.map((f) => `
+        <p class="petit"><strong>${f.festa.activitat || f.id}</strong></p>
+        <table class="sub">
+          <thead><tr><th>Grup</th><th>Grau</th></tr></thead>
+          <tbody>${f.festa.grups.map((g) => `<tr><td>${g.nom}</td><td>${pct(arrodoneix(mitjanaGrup(f.festa, g.nom))) || '—'}</td></tr>`).join('')}</tbody>
+        </table>
+      `).join('')}
+    </div>
+  ` : ''
+
+  const blocCooperatiu = cooperatiu ? `
+    <div class="valoracio">
+      <h2>Aprenentatge cooperatiu</h2>
+      <table class="sub">
+        <thead><tr><th></th><th>Gener</th><th>Juny</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Global</strong></td><td>${pct(arrodoneix(grauGlobal(cooperatiu, 'gener'))) || '—'}</td><td>${pct(arrodoneix(grauGlobal(cooperatiu, 'juny'))) || '—'}</td></tr>
+          ${CICLES_COOPERATIU.map((c) => `<tr><td>${c.nom}</td><td>${pct(arrodoneix(grauCicle(cooperatiu, c.id, 'gener'))) || '—'}</td><td>${pct(arrodoneix(grauCicle(cooperatiu, c.id, 'juny'))) || '—'}</td></tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+  ` : ''
+
+  const blocActivitats = activitats.length > 0 ? `
+    <div class="valoracio">
+      <h2>Activitats complementàries</h2>
+      <table class="sub">
+        <thead><tr><th>Cicle</th><th>Satisfacció</th><th>Valorades</th><th>Es repetirien</th></tr></thead>
+        <tbody>${activitats.map((a) => `<tr><td>${a.cicle}</td><td>${pct(arrodoneix(grauSatisfaccioCicle(a.activitats))) || '—'}</td><td>${pct(arrodoneix(percentValorades(a.activitats))) || '—'}</td><td>${totalRepetirSi(a.activitats)}/${a.activitats.length}</td></tr>`).join('')}</tbody>
+      </table>
+    </div>
+  ` : ''
+
   finestra.document.write(`
     <html>
       <head>
@@ -209,6 +326,7 @@ export function exportaValoracionsPDF(valoracions, cursEscolarId) {
         <h1>Valoracions PGAC — Curs ${cursEscolarId}</h1>
         <p class="data">Escola Mestre Enric Gibert i Camins — generat el ${new Date().toLocaleDateString('ca-ES')}</p>
         ${blocs}
+        ${blocFestes}${blocCooperatiu}${blocActivitats}
       </body>
     </html>
   `)
