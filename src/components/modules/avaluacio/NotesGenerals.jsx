@@ -3,6 +3,7 @@ import { collection, query, where, getDocs, addDoc, serverTimestamp } from 'fire
 import { db, auth } from '../../../firebase'
 import { nivellDe, redueixVigents } from '../../../lib/avaluacioCatala'
 import { AREES, TRIMESTRES, areaAplicaAClasse, interpretaDictatNotesArea, notaFinalArea } from '../../../lib/notesArea'
+import { taulesNotesClasse } from '../../../lib/notesTaules'
 import { cursEscolarActual } from '../../../lib/cursEscolar'
 import { grauPrimaria } from '../../../lib/rubricaLectura'
 import { exportaExcel, exportaPDF } from '../../../lib/exportTaula'
@@ -221,7 +222,12 @@ export default function NotesGenerals() {
   }
 
   function taulaClasseActual() {
-    const capçalera = ['Núm.', 'Alumne', ...areesClasse.flatMap((a) => [`${a.label} 1r`, `${a.label} 2n`, `${a.label} 3r`, `${a.label} Final`])]
+    // Capçaleres curtes ("1r", "2n"...) més la llista de grups (el nom de
+    // cada àrea, una vegada, a sobre de les seves 4 columnes) — així es
+    // distingeix cada àrea d'una ullada i el PDF/Excel no s'omple de
+    // columnes que repeteixen el nom de l'àrea quatre vegades seguides.
+    const capçalera = ['Núm.', 'Alumne', ...areesClasse.flatMap(() => ['1r', '2n', '3r', 'Final'])]
+    const grups = areesClasse.map((a) => ({ label: a.label, span: 4 }))
     const files = alumnesClasse.map((alumne) => [
       alumne.numLlista ?? '',
       alumne.nom,
@@ -232,7 +238,7 @@ export default function NotesGenerals() {
           : notaFinalAlumneArea(alumne.id, a.id)) ?? '',
       ]),
     ])
-    return [{ nom: `Notes ${classe}`, files: [capçalera, ...files] }]
+    return [{ nom: `Notes ${classe}`, files: [capçalera, ...files], grups }]
   }
 
   /**
@@ -294,7 +300,12 @@ export default function NotesGenerals() {
             <button
               className="btn-ghost"
               style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
-              onClick={() => exportaPDF(`Notes per àrea — ${classe} — ${trimestre}`, { cursEscolarId, fulls: taulaClasseActual(), etiqueta: 'Avaluació' })}
+              onClick={() => exportaPDF(`Notes per àrea — ${classe}`, {
+                cursEscolarId,
+                fulls: taulesNotesClasse(classe, alumnesClasse, notaAlumneTrimestre),
+                etiqueta: 'Avaluació',
+                subtitol: 'Una taula per moment, amb una columna per àrea.',
+              })}
               type="button"
             >
               📄 Descarrega PDF ({classe})

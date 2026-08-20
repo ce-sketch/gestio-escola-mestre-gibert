@@ -29,7 +29,13 @@ export function useNotesAreaDades() {
           getDocs(query(collection(db, 'avaluacio'), where('tipus', '==', 'nota_area'))),
         ])
         if (!viu) return
-        setAlumnesTots(snapAlumnes.docs.map((d) => ({ id: d.id, ...d.data() })))
+        // Mateix ordre que a "Entrada de notes": per número de llista, i pel
+        // nom quan no n'hi hagi. Sense això, "Descàrregues" i "Resum per
+        // àrea" ensenyaven els alumnes en l'ordre en què Firestore els
+        // retornava — no necessàriament el de la llista de classe.
+        const llista = snapAlumnes.docs.map((d) => ({ id: d.id, ...d.data() }))
+        llista.sort((a, b) => (a.numLlista ?? 999) - (b.numLlista ?? 999) || a.nom.localeCompare(b.nom))
+        setAlumnesTots(llista)
         setRegistres(snapNotes.docs.map((d) => ({ id: d.id, ...d.data() })))
       } catch (err) {
         if (viu) setMissatge({ type: 'error', text: `No s'han pogut carregar les dades: ${err.message}` })

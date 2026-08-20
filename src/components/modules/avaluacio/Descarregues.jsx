@@ -19,6 +19,7 @@ import { AREES, TRIMESTRES, areaAplicaAClasse, notaFinalArea } from '../../../li
 import { cursEscolarActual } from '../../../lib/cursEscolar'
 import { grauPrimaria } from '../../../lib/rubricaLectura'
 import { exportaExcel, exportaPDF } from '../../../lib/exportTaula'
+import { taulesNotesClasse } from '../../../lib/notesTaules'
 import { useNotesAreaDades } from './useNotesAreaDades'
 
 const NIVELLS_RESUM = [
@@ -65,7 +66,8 @@ export default function Descarregues() {
     return totesLesClasses.map((cl) => {
       const areesCl = AREES.filter((a) => areaAplicaAClasse(a.id, cl))
       const alumnesCl = alumnesTots.filter((a) => a.curs === cl)
-      const capçalera = ['Núm.', 'Alumne', ...areesCl.flatMap((a) => [`${a.label} 1r`, `${a.label} 2n`, `${a.label} 3r`, `${a.label} Final`])]
+      const capçalera = ['Núm.', 'Alumne', ...areesCl.flatMap(() => ['1r', '2n', '3r', 'Final'])]
+      const grups = areesCl.map((a) => ({ label: a.label, span: 4 }))
       const files = alumnesCl.map((alumne) => [
         alumne.numLlista ?? '',
         alumne.nom,
@@ -76,7 +78,7 @@ export default function Descarregues() {
             : notaFinalAlumneAreaDe(cl, alumne.id, a.id)) ?? '',
         ]),
       ])
-      return { nom: `Notes ${cl}`, files: [capçalera, ...files] }
+      return { nom: `Notes ${cl}`, files: [capçalera, ...files], grups }
     })
   }
 
@@ -170,6 +172,24 @@ export default function Descarregues() {
     ]
   }
 
+  /**
+   * La versió per imprimir: per cada classe, una taula per moment amb una
+   * sola columna per àrea. L'Excel es queda amb el detall complet (4
+   * columnes per àrea), que és un document de treball i té desplaçament
+   * lateral; el PDF s'ha de poder llegir en paper.
+   */
+  function totsElsFullsPerImprimir() {
+    return [
+      ...totesLesClasses.flatMap((cl) => taulesNotesClasse(
+        cl,
+        alumnesTots.filter((a) => a.curs === cl),
+        (alumneId, areaId, trim) => notaAlumneTrimestreDe(cl, alumneId, areaId, trim)
+      )),
+      ...taulesResumGlobalExportables(),
+      ...taulaAreesNoSuperadesExportable(),
+    ]
+  }
+
   async function descarrega(quin, fes) {
     setGenerant(quin)
     try {
@@ -212,7 +232,12 @@ export default function Descarregues() {
         <button
           className="btn-ghost"
           style={{ color: 'var(--navy)', borderColor: 'var(--navy)', maxWidth: 280 }}
-          onClick={() => descarrega('pdf', () => exportaPDF('Avaluació — resum complet', { cursEscolarId, fulls: totsElsFulls(), etiqueta: 'Avaluació' }))}
+          onClick={() => descarrega('pdf', () => exportaPDF('Notes per àrea', {
+            cursEscolarId,
+            fulls: totsElsFullsPerImprimir(),
+            etiqueta: 'Avaluació',
+            subtitol: 'Annex de la Memòria Anual de centre',
+          }))}
           disabled={generant !== null}
           type="button"
         >
