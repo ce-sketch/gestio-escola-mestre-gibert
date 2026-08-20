@@ -8,6 +8,13 @@
 // centre i s'han de tractar com a intocables. Si un any surt rar (el
 // 19/20 de pandèmia, per exemple), és que al full també hi surt rar.
 //
+// Rellegit del full el 20 d'agost del 2026, després que la direcció hi
+// corregís dues coses: el total de VL del 1r trimestre 24/25 (deia 249 i
+// els recomptes en sumaven 297) i les fórmules de percentatge del 1r
+// trimestre 23/24 (dividien pels totals de la fila de sota). Comprovat
+// que ara els 132 percentatges de VL/CL i els 36 del TEE quadren amb els
+// seus recomptes.
+//
 // Els percentatges NO es desen: es calculen a partir dels recomptes, que
 // és l'única xifra que no es pot recuperar si es perd.
 //
@@ -56,7 +63,7 @@ export const HISTORIC_TEE = [
 /** Històric de VL i CL. Cada any porta les dues proves per separat. */
 export const HISTORIC_VLCL = [
   { curs: '25/26', trimestre: '1r', cursos: '2-3-4-5-6 VL - 2-3-4-5-6 CL', vl: { na: 172, asat: 21, anot: 27, aexc: 78, total: 298 }, cl: { na: 104, asat: 76, anot: 55, aexc: 18, total: 253 } },
-  { curs: '24/25', trimestre: '1r', cursos: '2-3-4-5-6 VL - 2-3-4-5-6 CL', vl: { na: 167, asat: 29, anot: 27, aexc: 74, total: 249 }, cl: { na: 101, asat: 74, anot: 56, aexc: 17, total: 248 } },
+  { curs: '24/25', trimestre: '1r', cursos: '2-3-4-5-6 VL - 2-3-4-5-6 CL', vl: { na: 167, asat: 29, anot: 27, aexc: 74, total: 297 }, cl: { na: 101, asat: 74, anot: 56, aexc: 17, total: 248 } },
   { curs: '23/24', trimestre: '1r', cursos: '2-3-4-5-6 VL - 2-3-4-5-6 CL', vl: { na: 133, asat: 23, anot: 27, aexc: 88, total: 271 }, cl: { na: 109, asat: 78, anot: 59, aexc: 24, total: 270 } },
   { curs: '22/23', trimestre: '1r', cursos: '1-2-3-4-5-6 VL - 2-3-4-5-6 CL', vl: { na: 169, asat: 31, anot: 18, aexc: 101, total: 319 }, cl: { na: 108, asat: 84, anot: 62, aexc: 19, total: 273 } },
   { curs: '21/22', trimestre: '1r', cursos: '1-2-3-4-5-6 VL - 2-3-4-5-6 CL', vl: { na: 173, asat: 32, anot: 26, aexc: 89, total: 320 }, cl: { na: 60, asat: 68, anot: 78, aexc: 64, total: 270 } },
