@@ -85,14 +85,18 @@ export async function exportaExcel(nomFitxer, dades) {
     }
 
     // --- Fila de capçalera pròpiament dita ---
+    // wrapText: els títols llargs ("Assoliment Satisfactòri") es parteixen
+    // en dues línies en comptes d'estirar tota la columna. L'amplada, més
+    // avall, es calcula a partir de les dades perquè això tingui efecte.
     const filaCap = ws.addRow(capçalera)
     for (let c = 1; c <= columnes; c++) {
       const cell = filaCap.getCell(c)
       cell.border = { top: VORA, left: VORA, bottom: VORA, right: VORA }
-      cell.alignment = { vertical: 'middle', wrapText: false }
+      cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true }
       cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }
       cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: BLAU_ESCOLA } }
     }
+    filaCap.height = 30 // prou per a dues línies de capçalera
 
     // --- Files de dades ---
     cosFiles.forEach((filaDades, i) => {
@@ -116,14 +120,24 @@ export async function exportaExcel(nomFitxer, dades) {
     // Amplada de cada columna segons el contingut més llarg de la TAULA —
     // les files de la capçalera no compten, que si no el nom de l'escola
     // eixamplaria la primera columna ella sola.
+    // Abans es feia amb el text més llarg de la columna INCLOENT la
+    // capçalera, i un títol com "Assoliment Satisfactòri" estirava la
+    // columna encara que a sota només hi hagués números. Ara es basa en les
+    // DADES; del títol només es respecta la paraula més llarga (perquè no
+    // es talli a mitges) i la meitat de la seva longitud, de manera que
+    // quedi en dues línies.
     const amplades = []
     for (let c = 1; c <= columnes; c++) {
-      let maxLen = 8
-      files.forEach((filaDades) => {
+      let maxDades = 6
+      cosFiles.forEach((filaDades) => {
         const len = (filaDades[c - 1] ?? '').toString().length
-        if (len > maxLen) maxLen = len
+        if (len > maxDades) maxDades = len
       })
-      amplades.push(Math.min(Math.max(maxLen + 2, 10), 40))
+      const titol = (capçalera[c - 1] ?? '').toString()
+      const paraulaLlarga = Math.max(0, ...titol.split(/\s+/).map((p) => p.length))
+      const meitatTitol = Math.ceil(titol.length / 2)
+      const objectiu = Math.max(maxDades, paraulaLlarga, meitatTitol)
+      amplades.push(Math.min(Math.max(objectiu + 2, 10), 40))
     }
     ajustaColumnes(ws, amplades)
 
