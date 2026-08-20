@@ -49,11 +49,18 @@ const GRUPS = [
       { id: 'resum-area', label: 'Resum per àrea', component: ResumPerArea },
       // Separat del "Resum per àrea": són dues coses diferents.
       { id: 'arees-no-superades', label: 'Àrees no superades', component: AreesNoSuperades },
-      // L'evolució curs rere curs: el passat ve del full del centre i el
-      // curs en marxa es calcula sol.
-      { id: 'historic', label: 'Històric (TEE i VL/CL)', component: Historic, nomesAdmin: true },
       // El "lloc per imprimir": tot Notes per àrea en un sol Excel/PDF.
       { id: 'descarregues', label: 'Descàrregues', component: Descarregues },
+    ],
+  },
+  {
+    // Grup propi, sota de "Descàrregues": l'històric no és el resultat
+    // d'aquest curs sinó l'evolució del centre al llarg dels anys, i
+    // barrejar-lo amb els resums del curs en marxa despistava.
+    id: 'historic',
+    titol: 'Històric',
+    pestanyes: [
+      { id: 'historic', label: 'Històric (TEE, VL i CL)', component: Historic, nomesAdmin: true },
     ],
   },
 ]
@@ -76,8 +83,8 @@ export default function Avaluacio() {
       <h2>Avaluació</h2>
 
       <div style={{ marginTop: 20, borderBottom: '1px solid var(--line)', paddingBottom: 4 }}>
-        {grupsVisibles.map((g) => (
-          <div key={g.id} style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', marginTop: g.id === 'entrada' ? 0 : 10 }}>
+        {grupsVisibles.map((g, i) => (
+          <div key={g.id} style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', marginTop: i === 0 ? 0 : 10 }}>
             <span style={{ fontSize: 11, color: 'var(--ink-soft)', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: 130 }}>
               {g.titol}
             </span>
