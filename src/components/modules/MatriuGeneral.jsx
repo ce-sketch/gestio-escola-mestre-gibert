@@ -247,8 +247,9 @@ function MatriuColorsPGA({ files }) {
       <p style={{ fontSize: 10, color: 'var(--ink-soft)', marginTop: 6 }}>
         Passa el cursor per una cel·la per veure a què correspon. A TEE i VL/CL la xifra és
         el <strong>percentatge de participació</strong>: 100% vol dir que tots els alumnes que
-        havien de fer la prova l&apos;han feta. A l&apos;Avaluació Inicial de VL/CL, el 100% de Cicle
-        Inicial és només l&apos;alumnat de 2n, perquè 1r no la passa.
+        havien de fer la prova l&apos;han feta. L&apos;alumnat de 1r només hi compta al
+        <strong> tercer trimestre</strong> (a l&apos;Avaluació Final, en el cas de VL/CL);
+        abans no passa les proves i per això no entra al 100% de Cicle Inicial.
       </p>
     </div>
   )
