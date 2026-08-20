@@ -10,11 +10,12 @@
 // (`mitjanaValoracio`, `mitjanaGeneralFesta`, `grauCicle`, `resultatObjectiu`…),
 // aplicats a les mateixes files i columnes que el full.
 //
-// Les files de TEE i VL/CL (Avaluació referencial) no hi són encara: la
-// cel·la del full les calcula sumant alumnes en un nivell concret
-// ("=AV.TEE!H10+H11", per exemple), i sense confirmar contra el full quins
-// nivells compten com a "assolit" per a cada cicle, posar-hi un número
-// seria enganyós.
+// Les files de TEE i VL/CL (Avaluació referencial) no fan servir el
+// criteri del full original (que sumava alumnes en un nivell concret,
+// "=AV.TEE!H10+H11"), perquè no s'ha confirmat quins nivells hi compten
+// com a assolits. Fan servir el criteri que va fixar la direcció:
+// **percentatge de participació** — 100% quan tots els alumnes que havien
+// de fer la prova l'han feta. Vegeu `filesProves()` més avall.
 
 export const FRANGES = [
   { fins: 0.30, bg: '#FF0000', color: '#fff' },
@@ -100,6 +101,83 @@ export function construeixMatriu({ valoracions = [], festesDetall = [], cooperat
         columnes: [{ id: 'valor', label: o.titol || `Objectiu ${oi + 1}`, valor: r.valor }],
       })
     }
+  }
+
+  return files
+}
+
+/**
+ * Files de TEE i VL/CL: **percentatge de participació**, no de resultat.
+ *
+ * El criteri, tal com el va fixar la direcció: la cel·la val 100% quan
+ * tots els alumnes que havien de fer la prova l'han feta. És a dir,
+ * alumnes amb registre ÷ alumnes que la fan, per cicle.
+ *
+ * L'excepció és Cicle Inicial a l'**Avaluació Inicial** de VL/CL: allà
+ * primer no la passa, així que el 100% és només l'alumnat de 2n. Si es
+ * comptessin els de 1r, el cicle no arribaria mai al 100% i sortiria
+ * vermell sempre sense que hi hagués res a corregir.
+ *
+ * @param {object[]} alumnes           {id, curs, actiu}
+ * @param {object[]} teeRegistres      {alumneId, curs, trimestre}
+ * @param {object[]} lecturaRegistres  {alumneId, curs, moment}
+ */
+export function filesProves({ alumnes = [], teeRegistres = [], lecturaRegistres = [] }, { cicleDe, MOMENTS_LECTURA }) {
+  const cicleColumnes = COLUMNES_GRUP // EI · CI · CM · CS
+
+  /** Alumnes que han de fer la prova en aquest cicle i moment. */
+  function denominador(cicleId, { nomesSegonACicleInicial = false } = {}) {
+    return alumnes.filter((a) => {
+      if (cicleDe(a.curs) !== cicleId) return false
+      // A l'Avaluació Inicial, 1r no fa la prova: no compta al 100%.
+      if (nomesSegonACicleInicial && cicleId === 'CI' && String(a.curs ?? '').trim()[0] === '1') return false
+      return true
+    }).length
+  }
+
+  /** Alumnes diferents amb registre (un alumne amb dos registres compta un). */
+  function participants(registres, cicleId, { nomesSegonACicleInicial = false } = {}) {
+    const vistos = new Set()
+    for (const r of registres) {
+      if (cicleDe(r.curs) !== cicleId) continue
+      if (nomesSegonACicleInicial && cicleId === 'CI' && String(r.curs ?? '').trim()[0] === '1') continue
+      vistos.add(r.alumneId)
+    }
+    return vistos.size
+  }
+
+  function fila(titol, registres, opcions = {}) {
+    const { senseCicles = [] } = opcions
+    return {
+      titol,
+      columnes: cicleColumnes.map((col) => {
+        // Un cicle que no fa la prova es deixa buit, no a 0%: si no,
+        // sortiria vermell sense que hi hagués res per corregir.
+        if (senseCicles.includes(col.id)) return { id: col.id, label: col.label, valor: null }
+        const total = denominador(col.id, opcions)
+        if (total === 0) return { id: col.id, label: col.label, valor: null }
+        return { id: col.id, label: col.label, valor: (participants(registres, col.id, opcions) / total) * 100 }
+      }),
+    }
+  }
+
+  const files = []
+
+  // --- TEE, un per trimestre -----------------------------------------------
+  const TRIMESTRES = [{ num: 1, label: '1r trimestre' }, { num: 2, label: '2n trimestre' }, { num: 3, label: '3r trimestre' }]
+  for (const t of TRIMESTRES) {
+    files.push(fila(`TEE — ${t.label}`, teeRegistres.filter((r) => Number(r.trimestre) === t.num)))
+  }
+
+  // --- VL/CL, un per moment ------------------------------------------------
+  // Educació Infantil no fa VL/CL (el full oficial no té barem per a
+  // I3-I5), així que la seva columna queda buida, no a zero.
+  for (const m of MOMENTS_LECTURA) {
+    const delMoment = lecturaRegistres.filter((r) => r.moment === m.id)
+    files.push(fila(`VL/CL — ${m.label}`, delMoment, {
+      senseCicles: ['EI'],
+      nomesSegonACicleInicial: m.id === 'inicial',
+    }))
   }
 
   return files
