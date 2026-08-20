@@ -78,13 +78,74 @@ export function ajustaColumnes(ws, amplades) {
   }
 }
 
+// Les línies de columna (verticals) es marquen més que les de fila: així
+// amb moltes columnes seguides l'ull segueix la columna sense perdre's.
+// Dins de la capçalera blava han de ser blanques, que una de grisa sobre
+// blau marí no es veu.
+const VORA_COLUMNA = { style: 'thin', color: { argb: 'FF9AA5B1' } }
+const VORA_FILA = { style: 'hair', color: { argb: 'FFD8DCE2' } }
+const VORA_COLUMNA_CAP = { style: 'thin', color: { argb: 'FFFFFFFF' } }
+
+export const VORES_TAULA = { top: VORA_FILA, bottom: VORA_FILA, left: VORA_COLUMNA, right: VORA_COLUMNA }
+const VORES_CAPCALERA = { top: VORA_COLUMNA_CAP, bottom: VORA_COLUMNA_CAP, left: VORA_COLUMNA_CAP, right: VORA_COLUMNA_CAP }
+
+/**
+ * Estil de la fila de capçalera d'una taula: banda blava, text blanc,
+ * centrat i **partit en dues línies** quan el títol és llarg.
+ *
+ * Abans els títols anaven en una sola línia i un text com "Assoliment
+ * Satisfactòri" estirava tota la columna encara que a sota només hi
+ * hagués números. Amb `wrapText` el títol es parteix i la columna es pot
+ * estrènyer — per això va de la mà d'`amplaColumnes()`.
+ *
+ * @param {object} fila      fila d'ExcelJS
+ * @param {number} columnes  fins a quina columna s'aplica
+ */
+export function estilCapcaleraTaula(fila, columnes, { alcada = 30 } = {}) {
+  for (let c = 1; c <= columnes; c++) {
+    const cell = fila.getCell(c)
+    cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: BLAU } }
+    cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true }
+    cell.border = VORES_CAPCALERA
+  }
+  fila.height = alcada
+  return fila
+}
+
+/**
+ * Amplada de cada columna a partir del contingut de les DADES, no del
+ * títol. Del títol només se'n respecta la paraula més llarga (perquè no
+ * es talli a mitges) i la meitat de la seva longitud, comptant que
+ * `estilCapcaleraTaula()` el partirà en dues línies.
+ *
+ * @param {Array} capçalera  la fila de títols
+ * @param {Array[]} cosFiles les files de dades (sense la capçalera)
+ */
+export function amplaColumnes(capçalera, cosFiles, { min = 10, max = 40 } = {}) {
+  const columnes = Math.max(capçalera.length, ...cosFiles.map((f) => f.length), 1)
+  const amplades = []
+  for (let c = 1; c <= columnes; c++) {
+    let maxDades = 6
+    cosFiles.forEach((fila) => {
+      const len = (fila[c - 1] ?? '').toString().length
+      if (len > maxDades) maxDades = len
+    })
+    const titol = (capçalera[c - 1] ?? '').toString()
+    const paraulaLlarga = Math.max(0, ...titol.split(/\s+/).map((p) => p.length))
+    const meitatTitol = Math.ceil(titol.length / 2)
+    const objectiu = Math.max(maxDades, paraulaLlarga, meitatTitol)
+    amplades.push(Math.min(Math.max(objectiu + 2, min), max))
+  }
+  return amplades
+}
+
 /** Aplica vores i alternança de files només fins a la columna indicada, per
  *  no tacar les de la dreta. */
 export function estilFila(fila, columnes, { fons = null, negreta = false } = {}) {
-  const VORA = { style: 'thin', color: { argb: 'FFCCCCCC' } }
   for (let c = 1; c <= columnes; c++) {
     const cell = fila.getCell(c)
-    cell.border = { top: VORA, left: VORA, bottom: VORA, right: VORA }
+    cell.border = VORES_TAULA
     cell.alignment = { vertical: 'top', wrapText: true }
     if (negreta) cell.font = { bold: true }
     if (fons) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fons } }

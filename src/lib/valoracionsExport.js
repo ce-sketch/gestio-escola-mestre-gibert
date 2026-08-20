@@ -3,13 +3,13 @@ import { FESTES, mitjanaObjectiu, mitjanaValoracio, agrupaValoracions } from './
 import { mitjanaGeneralFesta, mitjanaGrup } from './festesDetall'
 import { grauGlobal, grauCicle, CICLES_COOPERATIU } from './aprenentatgeCooperatiu'
 import { grauSatisfaccioCicle, percentValorades, totalRepetirSi, mitjanaActivitat } from './activitatsComplementariesDetall'
-import { afegeixCapcalera, ajustaColumnes } from './excelCapcalera'
+import { afegeixCapcalera, ajustaColumnes, estilCapcaleraTaula, VORES_TAULA } from './excelCapcalera'
 
-const BLAU = 'FF1E3A5F'
 const BLAU_CSS = '#1E3A5F'
 const GRIS = 'FFF2F0EA'
-const VORA = { style: 'thin', color: { argb: 'FFCCCCCC' } }
-const TOTES_VORES = { top: VORA, left: VORA, bottom: VORA, right: VORA }
+// Vores compartides: la línia de columna (vertical) es marca més que la de
+// fila, perquè amb moltes columnes seguides no es perdi de vista la columna.
+const TOTES_VORES = VORES_TAULA
 
 /**
  * Els noms de full d'Excel tenen dos límits durs: 31 caràcters i que no
@@ -38,10 +38,11 @@ function nomFullSegur(nom, sufix = '', usats = new Set()) {
   }
 }
 
-function estilCapçalera(cell) {
-  cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }
-  cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: BLAU } }
-  cell.border = TOTES_VORES
+/** Capçalera d'una taula: banda blava, títols centrats i partits en dues
+ *  línies quan són llargs, amb la línia de columna marcada en blanc. Rep la
+ *  FILA sencera, no una cel·la. */
+function estilCapçalera(fila) {
+  return estilCapcaleraTaula(fila, fila.cellCount)
 }
 
 /** Full en horitzontal i ajustat a l'amplada del paper: les taules de
@@ -98,7 +99,7 @@ export async function exportaValoracionsExcel(
     ws.addRow([])
 
     const capçalera = ws.addRow(['Objectiu', 'Gener', 'Juny'])
-    capçalera.eachCell((cell) => estilCapçalera(cell))
+    estilCapçalera(capçalera)
     ;(v.objectius ?? []).forEach((o, i) => {
       const fila = ws.addRow([o.text, pct(mitjanaObjectiu(o, 'gener')), pct(mitjanaObjectiu(o, 'juny'))])
       fila.eachCell((cell) => {
@@ -122,7 +123,7 @@ export async function exportaValoracionsExcel(
     if (v.festes) {
       ws.addRow([])
       const capFestes = ws.addRow(['Festa', 'Valoració'])
-      capFestes.eachCell((cell) => estilCapçalera(cell))
+      estilCapçalera(capFestes)
       FESTES.forEach((f) => {
         const fila = ws.addRow([f.label, pct(v.festes[f.id])])
         fila.eachCell((cell) => { cell.border = TOTES_VORES })
@@ -152,7 +153,7 @@ export async function exportaValoracionsExcel(
              'Gener', 'Juny']
           : ["Actuacions/Activitats", "Indicador d'avaluació", 'Gener', 'Juny']
         const capO = wsO.addRow(capçaleres)
-        capO.eachCell((cell) => estilCapçalera(cell))
+        estilCapçalera(capO)
         o.actuacions.forEach((a, ai) => {
           const fila = wsO.addRow(o.recullDades
             ? [a.text, a.indicador, a.dades?.inici ?? '', a.dades?.gener ?? '', a.dades?.juny ?? '', pct(a.gener), pct(a.juny)]
@@ -184,13 +185,13 @@ export async function exportaValoracionsExcel(
     configuraPagina(wsF)
     afegeixCapcalera(wsF, { titol: 'Festes i celebracions', cursEscolarId, columnes: 2 })
     const capF = wsF.addRow(['Festa', 'Grau general'])
-    capF.eachCell((c) => estilCapçalera(c))
+    estilCapçalera(capF)
     for (const f of festesDetall) {
       wsF.addRow([f.festa.activitat || f.id, pct(arrodoneix(mitjanaGeneralFesta(f.festa)))]).eachCell((c) => { c.border = TOTES_VORES })
     }
     wsF.addRow([])
     const capG = wsF.addRow(['Festa', 'Grup', 'Grau'])
-    capG.eachCell((c) => estilCapçalera(c))
+    estilCapçalera(capG)
     for (const f of festesDetall) {
       for (const g of f.festa.grups) {
         wsF.addRow([f.festa.activitat || f.id, g.nom, pct(arrodoneix(mitjanaGrup(f.festa, g.nom)))]).eachCell((c) => { c.border = TOTES_VORES })
@@ -206,7 +207,7 @@ export async function exportaValoracionsExcel(
     configuraPagina(wsC)
     afegeixCapcalera(wsC, { titol: 'Aprenentatge cooperatiu', cursEscolarId, columnes: 3 })
     const capC = wsC.addRow(['', 'Gener', 'Juny'])
-    capC.eachCell((c) => estilCapçalera(c))
+    estilCapçalera(capC)
     wsC.addRow(['Global', pct(arrodoneix(grauGlobal(cooperatiu, 'gener'))), pct(arrodoneix(grauGlobal(cooperatiu, 'juny')))]).eachCell((c) => { c.border = TOTES_VORES; c.font = { bold: true } })
     for (const cicle of CICLES_COOPERATIU) {
       wsC.addRow([cicle.nom, pct(arrodoneix(grauCicle(cooperatiu, cicle.id, 'gener'))), pct(arrodoneix(grauCicle(cooperatiu, cicle.id, 'juny')))]).eachCell((c) => { c.border = TOTES_VORES })
@@ -222,7 +223,7 @@ export async function exportaValoracionsExcel(
     configuraPagina(wsA)
     afegeixCapcalera(wsA, { titol: 'Activitats complementàries', cursEscolarId, columnes: 4 })
     const capA = wsA.addRow(['Cicle', 'Satisfacció', 'Valorades', 'Es repetirien'])
-    capA.eachCell((c) => estilCapçalera(c))
+    estilCapçalera(capA)
     for (const a of activitats) {
       wsA.addRow([
         a.cicle,
@@ -235,7 +236,7 @@ export async function exportaValoracionsExcel(
 
     wsA.addRow([])
     const capDetall = wsA.addRow(['Cicle', 'Activitat', 'Nivell', 'Satisfacció'])
-    capDetall.eachCell((c) => estilCapçalera(c))
+    estilCapçalera(capDetall)
     for (const a of activitats) {
       for (const act of a.activitats) {
         const m = mitjanaActivitat(act)

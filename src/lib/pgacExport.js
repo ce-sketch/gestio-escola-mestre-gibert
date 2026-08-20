@@ -10,15 +10,14 @@
 import { carregaExcelJS } from './carregaLlibreries'
 import { resultatOperatiu, resultatObjectiu } from './pgac'
 import { opcioDe } from './escales'
-import { afegeixCapcalera, ajustaColumnes, NOM_ESCOLA } from './excelCapcalera'
+import { afegeixCapcalera, ajustaColumnes, estilCapcaleraTaula, VORES_TAULA, NOM_ESCOLA } from './excelCapcalera'
 
-const BLAU = 'FF1E3A5F'
-const TOTES_VORES = { top: { style: 'thin', color: { argb: 'FFCCCCCC' } }, left: { style: 'thin', color: { argb: 'FFCCCCCC' } }, bottom: { style: 'thin', color: { argb: 'FFCCCCCC' } }, right: { style: 'thin', color: { argb: 'FFCCCCCC' } } }
+// La línia de columna (vertical) es marca més que la de fila.
+const TOTES_VORES = VORES_TAULA
 
-function estilCapçalera(cell) {
-  cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }
-  cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: BLAU } }
-  cell.border = TOTES_VORES
+/** Capçalera d'una taula: rep la FILA sencera, no una cel·la. */
+function estilCapçalera(fila) {
+  return estilCapcaleraTaula(fila, fila.cellCount)
 }
 
 function pct(v) {
@@ -52,7 +51,7 @@ export async function exportaPgacExcel(objectius, cursEscolarId) {
     ws.addRow([])
 
     const capRes = ws.addRow(['', '', '', '', 'Gener', 'Juny'])
-    capRes.eachCell((c) => estilCapçalera(c))
+    estilCapçalera(capRes)
     const rGener = resultatObjectiu(o, 'gener')
     const rJuny = resultatObjectiu(o, 'juny')
     ws.addRow(['RESULTAT DE L\u2019OBJECTIU', '', '', '', pct(rGener.valor), pct(rJuny.valor)]).eachCell((c) => { c.border = TOTES_VORES; c.font = { bold: true } })

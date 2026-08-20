@@ -1,9 +1,7 @@
 import { carregaExcelJS } from './carregaLlibreries'
-import { afegeixCapcalera, ajustaColumnes, NOM_ESCOLA } from './excelCapcalera'
+import { afegeixCapcalera, ajustaColumnes, amplaColumnes, estilCapcaleraTaula, VORES_TAULA, NOM_ESCOLA } from './excelCapcalera'
 
-const BLAU_ESCOLA = 'FF1E3A5F' // mateix blau marí de l'app (--navy)
 const GRIS_CLAR = 'FFF2F0EA'
-const VORA = { style: 'thin', color: { argb: 'FFCCCCCC' } }
 
 /**
  * Descarrega un Excel (.xlsx) real, amb un full per cada taula, i estil:
@@ -61,27 +59,21 @@ export async function exportaExcel(nomFitxer, dades) {
     // --- Fila de grups: el nom de cada àrea a sobre de les seves columnes,
     // fusionades, perquè es distingeixin d'una ullada quan n'hi ha moltes
     // seguides (p. ex. "Català" a sobre de 1r/2n/3r/Final). ---
+    //
+    // Compte amb l'ordre: les DUES files s'han d'afegir abans de fusionar
+    // res. Fusionar la columna d'índex (A5:A6) abans d'afegir la fila de
+    // capçalera feia que Excel ja donés per existent la fila de sota, i
+    // l'`addRow` següent queia una fila més avall — quedava una fila
+    // buida enmig i el títol de la columna d'índex ("Classe") fora de la
+    // cel·la fusionada.
+    let filaGrups = null
+    let nIndex = 0
     if (teGrups) {
-      const nIndex = capçalera.length - grups.reduce((a, g) => a + g.span, 0)
-      const filaGrups = ws.addRow([
+      nIndex = capçalera.length - grups.reduce((a, g) => a + g.span, 0)
+      filaGrups = ws.addRow([
         ...Array(nIndex).fill(''),
         ...grups.flatMap((g) => [g.label, ...Array(g.span - 1).fill('')]),
       ])
-      for (let c = 1; c <= columnes; c++) {
-        const cell = filaGrups.getCell(c)
-        cell.border = { top: VORA, left: VORA, bottom: VORA, right: VORA }
-        cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: BLAU_ESCOLA } }
-        cell.alignment = { vertical: 'middle', horizontal: 'center' }
-      }
-      const rGrups = filaGrups.number
-      const rCap = rGrups + 1
-      for (let c = 1; c <= nIndex; c++) ws.mergeCells(rGrups, c, rCap, c)
-      let colActual = nIndex + 1
-      for (const g of grups) {
-        if (g.span > 1) ws.mergeCells(rGrups, colActual, rGrups, colActual + g.span - 1)
-        colActual += g.span
-      }
     }
 
     // --- Fila de capçalera pròpiament dita ---
@@ -89,14 +81,24 @@ export async function exportaExcel(nomFitxer, dades) {
     // en dues línies en comptes d'estirar tota la columna. L'amplada, més
     // avall, es calcula a partir de les dades perquè això tingui efecte.
     const filaCap = ws.addRow(capçalera)
-    for (let c = 1; c <= columnes; c++) {
-      const cell = filaCap.getCell(c)
-      cell.border = { top: VORA, left: VORA, bottom: VORA, right: VORA }
-      cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true }
-      cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }
-      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: BLAU_ESCOLA } }
+
+    if (filaGrups) {
+      // El títol de les columnes d'índex va a la fila de grups, que és la
+      // que queda a dalt de la cel·la fusionada de dues files.
+      for (let c = 1; c <= nIndex; c++) filaGrups.getCell(c).value = capçalera[c - 1]
+      estilCapcaleraTaula(filaGrups, columnes, { alcada: 20 })
+      estilCapcaleraTaula(filaCap, columnes)
+      const rGrups = filaGrups.number
+      const rCap = filaCap.number
+      for (let c = 1; c <= nIndex; c++) ws.mergeCells(rGrups, c, rCap, c)
+      let colActual = nIndex + 1
+      for (const g of grups) {
+        if (g.span > 1) ws.mergeCells(rGrups, colActual, rGrups, colActual + g.span - 1)
+        colActual += g.span
+      }
+    } else {
+      estilCapcaleraTaula(filaCap, columnes)
     }
-    filaCap.height = 30 // prou per a dues línies de capçalera
 
     // --- Files de dades ---
     cosFiles.forEach((filaDades, i) => {
@@ -105,7 +107,7 @@ export async function exportaExcel(nomFitxer, dades) {
 
       for (let c = 1; c <= columnes; c++) {
         const cell = fila.getCell(c)
-        cell.border = { top: VORA, left: VORA, bottom: VORA, right: VORA }
+        cell.border = VORES_TAULA
         cell.alignment = { vertical: 'middle', wrapText: false }
 
         if (esTotal) {
@@ -126,20 +128,7 @@ export async function exportaExcel(nomFitxer, dades) {
     // DADES; del títol només es respecta la paraula més llarga (perquè no
     // es talli a mitges) i la meitat de la seva longitud, de manera que
     // quedi en dues línies.
-    const amplades = []
-    for (let c = 1; c <= columnes; c++) {
-      let maxDades = 6
-      cosFiles.forEach((filaDades) => {
-        const len = (filaDades[c - 1] ?? '').toString().length
-        if (len > maxDades) maxDades = len
-      })
-      const titol = (capçalera[c - 1] ?? '').toString()
-      const paraulaLlarga = Math.max(0, ...titol.split(/\s+/).map((p) => p.length))
-      const meitatTitol = Math.ceil(titol.length / 2)
-      const objectiu = Math.max(maxDades, paraulaLlarga, meitatTitol)
-      amplades.push(Math.min(Math.max(objectiu + 2, 10), 40))
-    }
-    ajustaColumnes(ws, amplades)
+    ajustaColumnes(ws, amplaColumnes(capçalera, cosFiles))
 
     // En horitzontal i ajustat a l'amplada del paper: les taules amb
     // moltes àrees tenen moltes columnes, i en vertical (o sense ajustar)
