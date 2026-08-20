@@ -16,9 +16,9 @@ export const ETAPES_TEBEROSKY = [
     id: 'presilabic',
     titol: 'Nivell presil·làbic',
     nivells: [
-      { id: 'dibuix', label: 'Dibuix' },
-      { id: 'grafismes_primitius', label: 'Grafismes primitius' },
-      { id: 'escriptures_unigrafiques', label: 'Escriptures unigràfiques' },
+      { id: 'dibuix', label: 'Dibuix', subgrup: 'Símbols' },
+      { id: 'grafismes_primitius', label: 'Grafismes primitius', subgrup: 'Símbols' },
+      { id: 'escriptures_unigrafiques', label: 'Escriptures unigràfiques', subgrup: 'Símbols' },
       { id: 'repertori_fix_constant', label: 'Repertori fix amb quantitat constant', subgrup: 'Escriptures diferenciades amb predomini de grafies convencionals' },
       { id: 'repertori_fix_variable', label: 'Repertori fix amb quantitat variable', subgrup: 'Escriptures diferenciades amb predomini de grafies convencionals' },
       { id: 'repertori_variable_constant', label: 'Repertori variable amb quantitat constant', subgrup: 'Escriptures diferenciades amb predomini de grafies convencionals' },
