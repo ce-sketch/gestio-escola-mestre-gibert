@@ -20,6 +20,7 @@ import AreesNoSuperades from './avaluacio/AreesNoSuperades.jsx'
 import Descarregues from './avaluacio/Descarregues.jsx'
 import InformeCatala from './avaluacio/InformeCatala.jsx'
 import Resum from './avaluacio/Resum.jsx'
+import Historic from './avaluacio/Historic.jsx'
 
 const GRUPS = [
   {
@@ -46,6 +47,9 @@ const GRUPS = [
       { id: 'resum-area', label: 'Resum per àrea', component: ResumPerArea },
       // Separat del "Resum per àrea": són dues coses diferents.
       { id: 'arees-no-superades', label: 'Àrees no superades', component: AreesNoSuperades },
+      // L'evolució curs rere curs: el passat ve del full del centre i el
+      // curs en marxa es calcula sol.
+      { id: 'historic', label: 'Històric (TEE i VL/CL)', component: Historic },
       // El "lloc per imprimir": tot Notes per àrea en un sol Excel/PDF.
       { id: 'descarregues', label: 'Descàrregues', component: Descarregues },
     ],
