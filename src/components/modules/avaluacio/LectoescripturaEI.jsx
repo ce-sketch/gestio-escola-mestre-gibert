@@ -11,8 +11,10 @@ import { collection, doc, getDoc, getDocs, query, setDoc, where } from 'firebase
 import { db, auth } from '../../../firebase'
 import { cursEscolarActual } from '../../../lib/cursEscolar'
 import { slug } from '../../../lib/slug'
+import { exportaExcel, exportaPDF } from '../../../lib/exportTaula'
 import {
   ETAPES_TEBEROSKY, NIVELLS_TEBEROSKY, esClasseEI4o5, nivellsBuits, comptaNivells,
+  CAPÇALERA_EXPORT_EI, GRUPS_EXPORT_EI, filaAlumneExportEI,
 } from '../../../lib/lectoescripturaEI'
 
 export default function LectoescripturaEI() {
@@ -25,6 +27,7 @@ export default function LectoescripturaEI() {
   const [dades, setDades] = useState(null) // { alumnes: { [alumneId]: { [nivellId]: bool } } }
   const [carregantClasse, setCarregantClasse] = useState(false)
   const [desant, setDesant] = useState(false)
+  const [generant, setGenerant] = useState(null) // 'excel' | 'pdf' | null
 
   useEffect(() => {
     async function carrega() {
@@ -102,6 +105,31 @@ export default function LectoescripturaEI() {
     return comptaNivells(alumnesClasse.map((a) => a.id), dades.alumnes)
   }, [dades, alumnesClasse])
 
+  /** Un full amb la graella (una fila per alumne) i un full amb el resum
+   *  de comptatge, tots dos amb la mateixa capçalera de 18 nivells
+   *  agrupats per etapa — el mateix que es veu en pantalla. */
+  function fullsExportables() {
+    if (!dades) return []
+    const filesAlumnes = alumnesClasse.map((alumne) => filaAlumneExportEI(alumne, dades.alumnes[alumne.id] ?? {}))
+    const filaResum = ['Recompte', ...NIVELLS_TEBEROSKY.map((n) => resumClasse[n.id])]
+    return [
+      { nom: `Lectoescriptura ${classe}`, files: [CAPÇALERA_EXPORT_EI, ...filesAlumnes], grups: GRUPS_EXPORT_EI },
+      { nom: `Resum ${classe}`, files: [CAPÇALERA_EXPORT_EI, filaResum], grups: GRUPS_EXPORT_EI },
+    ]
+  }
+
+  async function descarrega(quin, fes) {
+    setGenerant(quin)
+    setMissatge(null)
+    try {
+      await fes()
+    } catch (err) {
+      setMissatge({ type: 'error', text: `No s'ha pogut generar la descàrrega: ${err.message}` })
+    } finally {
+      setGenerant(null)
+    }
+  }
+
   if (carregant) return <p>Carregant…</p>
 
   return (
@@ -131,6 +159,29 @@ export default function LectoescripturaEI() {
       </div>
 
       {desant && <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 8 }}>Desant…</p>}
+
+      {dades && alumnesClasse.length > 0 && (
+        <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap' }}>
+          <button
+            className="btn-ghost"
+            style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
+            onClick={() => descarrega('excel', () => exportaExcel(`Lectoescriptura-EI-${slug(classe)}-${cursEscolarId}`, { cursEscolarId, etiqueta: 'Avaluació', fulls: fullsExportables() }))}
+            disabled={generant !== null}
+            type="button"
+          >
+            {generant === 'excel' ? 'Generant l\'Excel…' : '📥 Descarrega Excel'}
+          </button>
+          <button
+            className="btn-ghost"
+            style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
+            onClick={() => descarrega('pdf', () => exportaPDF(`Lectoescriptura EI — ${classe}`, { cursEscolarId, etiqueta: 'Avaluació', fulls: fullsExportables() }))}
+            disabled={generant !== null}
+            type="button"
+          >
+            {generant === 'pdf' ? 'Generant el PDF…' : '📄 Descarrega PDF'}
+          </button>
+        </div>
+      )}
 
       {carregantClasse || !dades ? (
         <p style={{ marginTop: 16 }}>Carregant…</p>
