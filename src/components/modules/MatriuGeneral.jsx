@@ -11,7 +11,9 @@ import { normalitzaFesta, mitjanaGeneralFesta, mitjanaGrup } from '../../lib/fes
 import { normalitzaCooperatiu, grauGlobal, grauCicle, CICLES_COOPERATIU } from '../../lib/aprenentatgeCooperatiu'
 import { grauSatisfaccioCicle, percentValorades, totalRepetirSi, mitjanaActivitat } from '../../lib/activitatsComplementariesDetall'
 import { resultatObjectiu } from '../../lib/pgac'
-import { construeixMatriu, colorCella } from '../../lib/matriuColors'
+import { construeixMatriu, filesProves, colorCella } from '../../lib/matriuColors'
+import { cicleDe } from '../../lib/rubricaTEE'
+import { MOMENTS_LECTURA } from '../../lib/rubricaLectura'
 import { triaDocumentsDelDrive } from '../../lib/drivePicker'
 import { slug } from '../../lib/slug'
 import { carregaXLSX } from '../../lib/carregaLlibreries'
@@ -243,8 +245,10 @@ function MatriuColorsPGA({ files }) {
         </tbody>
       </table>
       <p style={{ fontSize: 10, color: 'var(--ink-soft)', marginTop: 6 }}>
-        Passa el cursor per una cel·la per veure a què correspon. No hi surten encara TEE ni VL/CL:
-        calen confirmar contra el full quins nivells compten com a assolits a cada cicle.
+        Passa el cursor per una cel·la per veure a què correspon. A TEE i VL/CL la xifra és
+        el <strong>percentatge de participació</strong>: 100% vol dir que tots els alumnes que
+        havien de fer la prova l&apos;han feta. A l&apos;Avaluació Inicial de VL/CL, el 100% de Cicle
+        Inicial és només l&apos;alumnat de 2n, perquè 1r no la passa.
       </p>
     </div>
   )
@@ -263,6 +267,13 @@ export default function MatriuGeneral() {
   const [nomNovaFesta, setNomNovaFesta] = useState('')
   const [descarregant, setDescarregant] = useState(null)
   const [desantConfig, setDesantConfig] = useState(false)
+
+  // Dades de proves per a les files de TEE i VL/CL de la matriu, i si la
+  // matriu es veu o no (ara s'obre amb un botó, no surt sempre).
+  const [matriuOberta, setMatriuOberta] = useState(false)
+  const [alumnes, setAlumnes] = useState([])
+  const [teeRegistres, setTeeRegistres] = useState([])
+  const [lecturaRegistres, setLecturaRegistres] = useState([])
 
   useEffect(() => {
     carrega()
@@ -673,14 +684,24 @@ export default function MatriuGeneral() {
     setMissatge(null)
     const delCurs = (nom) => getDocs(query(collection(db, nom), where('cursEscolar', '==', cursEscolarId)))
     try {
-      const [snapVal, snapFestes, snapCoop, snapAct, snapPgac] = await Promise.all([
+      const [snapVal, snapFestes, snapCoop, snapAct, snapPgac, snapAlumnes, snapAvaluacio] = await Promise.all([
         delCurs('valoracions'),
         delCurs('festesDetall'),
         getDoc(doc(db, 'aprenentatgeCooperatiu', cursEscolarId)),
         delCurs('activitatsComplementariesDetall'),
         getDoc(doc(db, 'pgac', cursEscolarId)),
+        // Per a les files de TEE i VL/CL de la matriu: qui hi ha i qui ha
+        // fet cada prova. A "avaluacio", `curs` és la classe ("1r A") i
+        // `cursEscolar` l'any — el filtre va per l'any, com al Resum.
+        getDocs(query(collection(db, 'alumnes'), where('actiu', '==', true))),
+        getDocs(query(collection(db, 'avaluacio'), where('cursEscolar', '==', cursEscolarId))),
       ])
       setObjectiusPgac(snapPgac.exists() ? (snapPgac.data().objectius ?? []) : [])
+
+      setAlumnes(snapAlumnes.docs.map((d) => ({ id: d.id, ...d.data() })))
+      const avaluacions = snapAvaluacio.docs.map((d) => ({ id: d.id, ...d.data() }))
+      setTeeRegistres(avaluacions.filter((r) => r.tipus === 'tee'))
+      setLecturaRegistres(avaluacions.filter((r) => r.tipus === 'lectura'))
 
       setValoracions(snapVal.docs
         .map((d) => ({ id: d.id, ...d.data() }))
@@ -863,6 +884,15 @@ export default function MatriuGeneral() {
           <button
             className="btn-ghost"
             style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
+            onClick={() => setMatriuOberta((v) => !v)}
+            type="button"
+            aria-expanded={matriuOberta}
+          >
+            {matriuOberta ? '▲ Amaga la matriu de colors (PGA)' : '🎨 Matriu de colors (PGA)'}
+          </button>
+          <button
+            className="btn-ghost"
+            style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
             onClick={() => descarrega('excel', () => exportaValoracionsExcel(valoracions, cursEscolarId, { festesDetall, cooperatiu, activitats, config }))}
             disabled={descarregant !== null}
             type="button"
@@ -878,6 +908,28 @@ export default function MatriuGeneral() {
           >
             {descarregant === 'pdf' ? 'Generant el PDF…' : '📄 Descarrega totes en PDF'}
           </button>
+        </div>
+      )}
+
+      {/* La matriu, que abans sortia sempre al final de la pàgina, ara
+          s'obre amb el botó de dalt i apareix aquí mateix, al costat. */}
+      {valoracions.length > 0 && matriuOberta && (
+        <div className="placeholder-box" style={{ marginTop: 12 }}>
+          <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--navy)', margin: '0 0 4px' }}>
+            Matriu de colors (PGA)
+          </p>
+          <MatriuColorsPGA
+            files={[
+              ...construeixMatriu(
+                { valoracions, festesDetall, cooperatiu, objectiusPgac },
+                { mitjanaValoracio, mitjanaGeneralFesta, mitjanaGrup, grauGlobal, grauCicle, CICLES_COOPERATIU, resultatObjectiu }
+              ),
+              ...filesProves(
+                { alumnes, teeRegistres, lecturaRegistres },
+                { cicleDe, MOMENTS_LECTURA }
+              ),
+            ]}
+          />
         </div>
       )}
 
@@ -978,15 +1030,6 @@ export default function MatriuGeneral() {
           ))}
         </div>
       )}
-
-      <SeccioResum titol="Matriu de colors (PGA)" quantes={valoracions.length + festesDetall.length + (cooperatiu ? 1 : 0) + objectiusPgac.length} buit="Encara no hi ha res a mostrar.">
-        <MatriuColorsPGA
-          files={construeixMatriu(
-            { valoracions, festesDetall, cooperatiu, objectiusPgac },
-            { mitjanaValoracio, mitjanaGeneralFesta, mitjanaGrup, grauGlobal, grauCicle, CICLES_COOPERATIU, resultatObjectiu }
-          )}
-        />
-      </SeccioResum>
 
       <SeccioResum titol="Festes i celebracions" quantes={festesDetall.length} buit="Encara no s'ha valorat cap festa.">
         {festesDetall.map((f) => (
