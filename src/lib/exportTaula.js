@@ -33,7 +33,7 @@ function comprovaDades(dades, nomFuncio) {
   // `etiqueta` és el text que surt a la dreta de la capçalera. Per defecte
   // deia sempre "PGAC", també als Excel d'avaluació — que no tenen res a
   // veure amb el PGAC. Ara cada mòdul hi pot posar el seu.
-  return { cursEscolarId: dades.cursEscolarId, fulls: dades.fulls ?? [], etiqueta: dades.etiqueta }
+  return { cursEscolarId: dades.cursEscolarId, fulls: dades.fulls ?? [], etiqueta: dades.etiqueta, subtitol: dades.subtitol }
 }
 
 
@@ -159,143 +159,204 @@ function descarregaBlob(buffer, nomFitxer, mimeType) {
  * fulls: [{ nom: 'TEE', files: [[capçalera...], [fila...], ...] }]
  */
 export function exportaPDF(titol, dades) {
-  const { cursEscolarId, fulls, etiqueta } = comprovaDades(dades, 'exportaPDF')
+  const { cursEscolarId, fulls, etiqueta, subtitol } = comprovaDades(dades, 'exportaPDF')
   const finestra = window.open('', '_blank')
   if (!finestra) {
     alert('El navegador ha bloquejat la finestra per generar el PDF. Permet finestres emergents per a aquesta pàgina i torna-ho a provar.')
     return
   }
 
-  // Quantes columnes de dades hi caben en un A4 apaïsat sense que la
-  // lletra deixi de ser llegible. Amb 20 (5 àrees de 4 columnes) la lletra
-  // es pot quedar a 9-10px, que encara es llegeix bé imprès. Més enllà
-  // d'això, encongir la lletra ja no és la solució — cal partir la taula.
-  const MAX_COLUMNES_DADES_PER_PAGINA = 20
+  const escapa = (v) => String(v ?? '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
-  function midaLletraPer(nColumnes) {
-    return nColumnes > 32 ? 7 : nColumnes > 22 ? 8 : nColumnes > 14 ? 9 : 11
+  /**
+   * Amplada de la primera columna de dades i mida de lletra segons quantes
+   * columnes hi ha. Amb 13 columnes (Núm. + Alumne + 11 àrees) en A4
+   * apaïsat es llegeix còmodament; a partir d'aquí s'ajusta.
+   */
+  function estilTaula(nColumnes) {
+    if (nColumnes <= 14) return { lletra: 10.5, coixi: '6px 8px' }
+    if (nColumnes <= 20) return { lletra: 9.5, coixi: '5px 6px' }
+    if (nColumnes <= 28) return { lletra: 8.5, coixi: '4px 4px' }
+    return { lletra: 7.5, coixi: '3px 3px' }
   }
 
-  /** Construeix el <table> d'un tros concret de columnes (o de totes, si
-   *  no calia partir res). `capçalera`/`files_` ja vénen retallades a
-   *  només les columnes d'aquest tros. */
-  function taulaHtml(capçalera, files_, grupsTros, nIndex, midaLletra) {
-    let columnaDeGrup = null
-    let capçaleraHtml
-    if (grupsTros?.length) {
-      columnaDeGrup = Array(nIndex).fill(null)
-      grupsTros.forEach((g, gi) => { for (let i = 0; i < g.span; i++) columnaDeGrup.push(gi) })
-      const filaGrups = capçalera.slice(0, nIndex).map((c) => `<th rowspan="2">${c ?? ''}</th>`).join('')
-        + grupsTros.map((g, gi) => `<th colspan="${g.span}" class="capgrup g${gi % 2}">${g.label}</th>`).join('')
-      const filaSub = capçalera.slice(nIndex).map((c, i) => `<th class="g${columnaDeGrup[nIndex + i] % 2}">${c ?? ''}</th>`).join('')
-      capçaleraHtml = `<tr>${filaGrups}</tr><tr>${filaSub}</tr>`
-    } else {
-      capçaleraHtml = `<tr>${capçalera.map((c) => `<th>${c ?? ''}</th>`).join('')}</tr>`
-    }
+  const taulesHtml = fulls.map(({ nom, files }, index) => {
+    const [capçalera, ...cosFiles] = files
+    const nColumnes = capçalera.length
+    const { lletra, coixi } = estilTaula(nColumnes)
 
-    const cosHtml = files_.map((fila) => {
+    // Les columnes de text (nom de l'alumne) van a l'esquerra; les de
+    // dades, centrades — que és com es llegeix bé una graella de notes.
+    const esColumnaText = capçalera.map((c, i) => i === 1 || /alumne|classe|nivell|àrea|area/i.test(String(c)))
+
+    const capçaleraHtml = `<tr>${capçalera.map((c, i) => {
+      const classe = [
+        esColumnaText[i] ? 'text' : 'num',
+        i === 0 ? 'primera' : '',
+      ].filter(Boolean).join(' ')
+      return `<th class="${classe}">${escapa(c)}</th>`
+    }).join('')}</tr>`
+
+    const cosHtml = cosFiles.map((fila) => {
       const esTotal = typeof fila[0] === 'string' && fila[0].toUpperCase().includes('TOTAL')
-      const cel·les = fila.map((v, ci) => {
-        const classe = columnaDeGrup && columnaDeGrup[ci] !== null ? ` class="g${columnaDeGrup[ci] % 2}"` : ''
-        return `<td${classe}>${v ?? ''}</td>`
+      const cel·les = fila.map((v, i) => {
+        const classe = [
+          esColumnaText[i] ? 'text' : 'num',
+          i === 0 ? 'primera' : '',
+        ].filter(Boolean).join(' ')
+        return `<td class="${classe}">${escapa(v)}</td>`
       }).join('')
       return `<tr${esTotal ? ' class="total"' : ''}>${cel·les}</tr>`
     }).join('')
 
     return `
-      <table style="font-size:${midaLletra}px">
-        <thead>${capçaleraHtml}</thead>
-        <tbody>${cosHtml}</tbody>
-      </table>
+      <section class="bloc${index === 0 ? ' primer' : ''}">
+        <h2>${escapa(nom)}</h2>
+        <table style="font-size:${lletra}px; --coixi:${coixi}">
+          <thead>${capçaleraHtml}</thead>
+          <tbody>${cosHtml}</tbody>
+        </table>
+      </section>
     `
-  }
-
-  const taulesHtml = fulls.map(({ nom, files, grups }) => {
-    const [capçalera, ...files_] = files
-    const totalColumnes = capçalera.length
-
-    // Sense grups (taules normals, poques columnes): tal com sempre.
-    if (!grups?.length) {
-      return `<h2>${nom}</h2>${taulaHtml(capçalera, files_, null, 0, midaLletraPer(totalColumnes))}`
-    }
-
-    const nIndex = totalColumnes - grups.reduce((a, g) => a + g.span, 0)
-    const totalDades = totalColumnes - nIndex
-
-    // Cap en una sola pàgina: com fins ara, una taula, una àrea al costat
-    // de l'altra.
-    if (totalDades <= MAX_COLUMNES_DADES_PER_PAGINA) {
-      return `<h2>${nom}</h2>${taulaHtml(capçalera, files_, grups, nIndex, midaLletraPer(totalColumnes))}`
-    }
-
-    // No hi cap: es parteix en trossos de columnes, cada tros amb Núm. i
-    // Alumne repetits al davant perquè cada full es pugui llegir sol, i
-    // cada tros comença una pàgina nova.
-    const trossos = []
-    let trosActual = []
-    let colsTrosActual = 0
-    for (const g of grups) {
-      if (colsTrosActual + g.span > MAX_COLUMNES_DADES_PER_PAGINA && trosActual.length > 0) {
-        trossos.push(trosActual)
-        trosActual = []
-        colsTrosActual = 0
-      }
-      trosActual.push(g)
-      colsTrosActual += g.span
-    }
-    if (trosActual.length > 0) trossos.push(trosActual)
-
-    return trossos.map((trosGrups, ti) => {
-      let inici = nIndex
-      for (const g of grups) {
-        if (trosGrups.includes(g)) break
-        inici += g.span
-      }
-      const colsTros = trosGrups.reduce((a, g) => a + g.span, 0)
-      const capçaleraTros = [...capçalera.slice(0, nIndex), ...capçalera.slice(inici, inici + colsTros)]
-      const filesTros = files_.map((fila) => [...fila.slice(0, nIndex), ...fila.slice(inici, inici + colsTros)])
-      const midaLletra = midaLletraPer(nIndex + colsTros)
-      const titolTros = ti === 0 ? nom : `${nom} — continuació (${trosGrups.map((g) => g.label).join(', ')})`
-      return `<h2${ti > 0 ? ' class="continua"' : ''}>${titolTros}</h2>${taulaHtml(capçaleraTros, filesTros, trosGrups, nIndex, midaLletra)}`
-    }).join('')
   }).join('')
+
+  const dataAvui = new Date().toLocaleDateString('ca-ES', { day: 'numeric', month: 'long', year: 'numeric' })
 
   finestra.document.write(`
     <html>
       <head>
-        <title>${titol}</title>
+        <title>${escapa(titol)}</title>
         <meta charset="utf-8" />
         <style>
-          @page { size: A4 landscape; margin: 12mm 10mm; }
-          body { font-family: Arial, sans-serif; padding: 0 6mm; color: #1a1a1a; }
-          .banda { background: #1E3A5F; color: #fff; font-weight: 700; font-size: 15px; text-align: center; padding: 8px; }
-          .curs { font-size: 11px; color: #666; text-align: right; margin: 4px 0 12px; }
-          h1 { font-size: 18px; margin-bottom: 4px; color: #1E3A5F; }
-          .data { font-size: 12px; color: #666; margin-bottom: 20px; }
-          h2 { font-size: 14px; margin-top: 28px; margin-bottom: 6px; color: #1E3A5F; border-bottom: 2px solid #1E3A5F; padding-bottom: 4px; break-after: avoid; }
-          h2.continua { break-before: page; font-size: 12px; color: #555; }
-          table { border-collapse: collapse; width: 100%; margin-bottom: 8px; table-layout: fixed; }
-          th, td { border: 1px solid #ccc; padding: 5px 8px; text-align: left; overflow-wrap: break-word; }
-          th { background: #1E3A5F; color: #fff; font-weight: 600; }
-          th.capgrup { text-align: center; }
-          th.g0, td.g0 { background: #E7ECF3; }
-          th.g1, td.g1 { background: #F6F7F9; }
-          th.capgrup.g0, th.capgrup.g1 { background: #1E3A5F; color: #fff; }
-          tbody tr:nth-child(odd) td:not(.g0):not(.g1) { background: #FAFAF7; }
-          tr.total td { background: #F2F0EA !important; font-weight: 700; }
+          @page {
+            size: A4 landscape;
+            margin: 16mm 14mm 18mm;
+          }
+
+          * { box-sizing: border-box; }
+
+          body {
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            color: #1C1C1C;
+            margin: 0;
+            font-variant-numeric: tabular-nums;
+          }
+
+          /* ---- Capçalera del document (només la 1a pàgina) ---- */
+          .portada {
+            border-bottom: 2.5px solid #1E3A5F;
+            padding-bottom: 12px;
+            margin-bottom: 22px;
+          }
+          .escola {
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 1.4px;
+            text-transform: uppercase;
+            color: #1E3A5F;
+          }
+          .titol {
+            font-size: 21px;
+            font-weight: 600;
+            margin: 8px 0 0;
+            letter-spacing: -0.2px;
+          }
+          .meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            margin-top: 8px;
+            font-size: 11px;
+            color: #6B6B6B;
+          }
+
+          /* ---- Cada taula ---- */
+          .bloc { break-before: page; }
+          .bloc.primer { break-before: avoid; }
+
+          h2 {
+            font-size: 13px;
+            font-weight: 600;
+            color: #1E3A5F;
+            margin: 0 0 10px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid #C9D2DE;
+            break-after: avoid;
+          }
+
+          table {
+            border-collapse: collapse;
+            width: 100%;
+            table-layout: auto;
+          }
+
+          th, td {
+            padding: var(--coixi, 5px 7px);
+            border-bottom: 1px solid #E2E5EA;
+          }
+
+          thead th {
+            background: #1E3A5F;
+            color: #fff;
+            font-weight: 600;
+            font-size: 0.92em;
+            border-bottom: none;
+            padding-top: 8px;
+            padding-bottom: 8px;
+          }
+          thead th.num { text-align: center; }
+          thead th.text { text-align: left; }
+          thead th.primera { border-top-left-radius: 3px; }
+          thead th:last-child { border-top-right-radius: 3px; }
+
+          td.num { text-align: center; }
+          td.text { text-align: left; }
+          td.primera { color: #8A8A8A; font-size: 0.9em; }
+
+          tbody tr:nth-child(even) { background: #F7F8FA; }
+          tbody tr.total td {
+            background: #EBEFF5;
+            font-weight: 700;
+            border-top: 1.5px solid #1E3A5F;
+          }
+
+          /* Que la capçalera es repeteixi a cada pàgina i que cap fila es
+             parteixi per la meitat en imprimir. */
           thead { display: table-header-group; }
           tr { break-inside: avoid; }
-          @media print {
-            h2 { break-inside: avoid; }
+
+          /* ---- Peu ---- */
+          .peu {
+            position: fixed;
+            bottom: 6mm;
+            left: 0;
+            right: 0;
+            font-size: 9px;
+            color: #9A9A9A;
+            display: flex;
+            justify-content: space-between;
+            padding: 0 2mm;
           }
         </style>
       </head>
       <body>
-        <div class="banda">${NOM_ESCOLA}</div>
-        <p class="curs">${etiqueta ?? 'PGAC'} · Curs ${cursEscolarId}</p>
-        <h1>${titol}</h1>
-        <p class="data">Generat el ${new Date().toLocaleDateString('ca-ES')}</p>
+        <header class="portada">
+          <div class="escola">${escapa(NOM_ESCOLA)}</div>
+          <h1 class="titol">${escapa(titol)}</h1>
+          <div class="meta">
+            <span>${escapa(etiqueta ?? 'PGAC')} · Curs ${escapa(cursEscolarId)}</span>
+            <span>${escapa(dataAvui)}</span>
+          </div>
+          ${subtitol ? `<p class="meta" style="margin-top:6px">${escapa(subtitol)}</p>` : ''}
+        </header>
+
         ${taulesHtml}
+
+        <div class="peu">
+          <span>${escapa(NOM_ESCOLA)} · Curs ${escapa(cursEscolarId)}</span>
+          <span>${escapa(titol)}</span>
+        </div>
       </body>
     </html>
   `)
