@@ -149,15 +149,29 @@ export default function LectoescripturaEI() {
                 ))}
               </tr>
               <tr>
-                {ETAPES_TEBEROSKY.flatMap((etapa) => etapa.nivells).map((n, i, tots) => {
-                  const anterior = tots[i - 1]
-                  const canviaSubgrup = n.subgrup !== anterior?.subgrup || n.etapa !== anterior?.etapa
-                  return (
-                    <th key={n.id} style={{ padding: '4px 3px', textAlign: 'center', fontSize: 10, color: 'var(--ink-soft)', fontWeight: 400, borderLeft: canviaSubgrup ? '1px solid var(--line)' : 'none' }}>
-                      {n.subgrup ?? ''}
-                    </th>
-                  )
-                })}
+                {(() => {
+                  // Agrupem les columnes consecutives que comparteixen subgrup
+                  // (dins de la mateixa etapa) en una sola cel·la fusionada, en
+                  // comptes de repetir el text a cada columna. Així
+                  // "Escriptures diferenciades amb predomini de grafies
+                  // convencionals" (×4), "Paraula" (×3) i "Frase" (×3) surten
+                  // un sol cop, com al full original.
+                  const grups = []
+                  NIVELLS_TEBEROSKY.forEach((n) => {
+                    const ultim = grups[grups.length - 1]
+                    const mateixGrup = ultim && ultim.etapa === n.etapa && ultim.subgrup && ultim.subgrup === n.subgrup
+                    if (mateixGrup) ultim.span += 1
+                    else grups.push({ key: n.id, subgrup: n.subgrup ?? '', etapa: n.etapa, span: 1 })
+                  })
+                  return grups.map((g, i) => {
+                    const canviaEtapa = g.etapa !== grups[i - 1]?.etapa
+                    return (
+                      <th key={g.key} colSpan={g.span} style={{ padding: '4px 3px', textAlign: 'center', fontSize: 10, color: 'var(--ink-soft)', fontWeight: g.subgrup ? 500 : 400, borderLeft: (canviaEtapa || g.subgrup) ? '1px solid var(--line)' : 'none' }}>
+                        {g.subgrup}
+                      </th>
+                    )
+                  })
+                })()}
               </tr>
               <tr style={{ borderBottom: '2px solid var(--line)' }}>
                 {ETAPES_TEBEROSKY.flatMap((etapa) => etapa.nivells).map((n, i, tots) => {
