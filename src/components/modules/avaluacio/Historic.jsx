@@ -305,11 +305,12 @@ export default function Historic() {
 
       {avisos.length > 0 && (
         <div className="caixa-discreta" style={{ marginTop: 24 }}>
-          <strong style={{ fontSize: 12 }}>Incoherències que ja venen del full original</strong>
+          <strong style={{ fontSize: 12 }}>Files a revisar</strong>
           <p className="nota">
-            Aquestes files no s&apos;han corregit — l&apos;històric es deixa tal com és al document
-            del centre. Els percentatges d&apos;aquesta pantalla, però, es calculen sobre la suma
-            dels recomptes, que és la xifra que no es contradiu a si mateixa.
+            En aquestes files els recomptes no sumen el total que hi ha apuntat. No s&apos;han
+            corregit automàticament — l&apos;històric es deixa tal com és al document del centre —
+            però val la pena mirar-les. Els percentatges d&apos;aquesta pantalla es calculen sobre
+            la suma dels recomptes.
           </p>
           <ul style={{ fontSize: 12, color: 'var(--ink-soft)', paddingLeft: 18, marginTop: 4 }}>
             {avisos.map((a, i) => <li key={i}>{a}</li>)}
