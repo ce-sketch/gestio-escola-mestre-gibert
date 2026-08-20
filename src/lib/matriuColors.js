@@ -125,22 +125,30 @@ export function construeixMatriu({ valoracions = [], festesDetall = [], cooperat
 export function filesProves({ alumnes = [], teeRegistres = [], lecturaRegistres = [] }, { cicleDe, MOMENTS_LECTURA }) {
   const cicleColumnes = COLUMNES_GRUP // EI · CI · CM · CS
 
+  /** Un alumne de 1r de Primària? */
+  const esDePrimer = (curs) => String(curs ?? '').trim()[0] === '1'
+
+  /**
+   * L'alumnat de 1r **només compta al tercer trimestre**: abans no passa
+   * les proves. Si es comptés als altres moments, Cicle Inicial no
+   * arribaria mai al 100% i sortiria vermell sense que hi hagués res a
+   * corregir.
+   */
+  function compta(curs, { nomesTercerTrimestre = false }) {
+    return !(nomesTercerTrimestre && esDePrimer(curs))
+  }
+
   /** Alumnes que han de fer la prova en aquest cicle i moment. */
-  function denominador(cicleId, { nomesSegonACicleInicial = false } = {}) {
-    return alumnes.filter((a) => {
-      if (cicleDe(a.curs) !== cicleId) return false
-      // A l'Avaluació Inicial, 1r no fa la prova: no compta al 100%.
-      if (nomesSegonACicleInicial && cicleId === 'CI' && String(a.curs ?? '').trim()[0] === '1') return false
-      return true
-    }).length
+  function denominador(cicleId, opcions) {
+    return alumnes.filter((a) => cicleDe(a.curs) === cicleId && compta(a.curs, opcions)).length
   }
 
   /** Alumnes diferents amb registre (un alumne amb dos registres compta un). */
-  function participants(registres, cicleId, { nomesSegonACicleInicial = false } = {}) {
+  function participants(registres, cicleId, opcions) {
     const vistos = new Set()
     for (const r of registres) {
       if (cicleDe(r.curs) !== cicleId) continue
-      if (nomesSegonACicleInicial && cicleId === 'CI' && String(r.curs ?? '').trim()[0] === '1') continue
+      if (!compta(r.curs, opcions)) continue
       vistos.add(r.alumneId)
     }
     return vistos.size
@@ -166,7 +174,9 @@ export function filesProves({ alumnes = [], teeRegistres = [], lecturaRegistres 
   // --- TEE, un per trimestre -----------------------------------------------
   const TRIMESTRES = [{ num: 1, label: '1r trimestre' }, { num: 2, label: '2n trimestre' }, { num: 3, label: '3r trimestre' }]
   for (const t of TRIMESTRES) {
-    files.push(fila(`TEE — ${t.label}`, teeRegistres.filter((r) => Number(r.trimestre) === t.num)))
+    files.push(fila(`TEE — ${t.label}`, teeRegistres.filter((r) => Number(r.trimestre) === t.num), {
+      nomesTercerTrimestre: t.num !== 3,
+    }))
   }
 
   // --- VL/CL, un per moment ------------------------------------------------
@@ -176,7 +186,9 @@ export function filesProves({ alumnes = [], teeRegistres = [], lecturaRegistres 
     const delMoment = lecturaRegistres.filter((r) => r.moment === m.id)
     files.push(fila(`VL/CL — ${m.label}`, delMoment, {
       senseCicles: ['EI'],
-      nomesSegonACicleInicial: m.id === 'inicial',
+      // L'Avaluació Final és la del tercer trimestre; a les altres dues,
+      // 1r no hi compta.
+      nomesTercerTrimestre: m.id !== 'final',
     }))
   }
 
