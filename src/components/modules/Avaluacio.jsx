@@ -9,6 +9,8 @@
 // "Llengua catalana" que hi havia venia de quan només hi havia el TEE.
 
 import { useState } from 'react'
+import { auth } from '../../firebase'
+import { esAdmin } from '../../lib/roles'
 import TEE from './avaluacio/TEE.jsx'
 import Lectura from './avaluacio/Lectura.jsx'
 import Matematiques from './avaluacio/Matematiques.jsx'
@@ -49,25 +51,32 @@ const GRUPS = [
       { id: 'arees-no-superades', label: 'Àrees no superades', component: AreesNoSuperades },
       // L'evolució curs rere curs: el passat ve del full del centre i el
       // curs en marxa es calcula sol.
-      { id: 'historic', label: 'Històric (TEE i VL/CL)', component: Historic },
+      { id: 'historic', label: 'Històric (TEE i VL/CL)', component: Historic, nomesAdmin: true },
       // El "lloc per imprimir": tot Notes per àrea en un sol Excel/PDF.
       { id: 'descarregues', label: 'Descàrregues', component: Descarregues },
     ],
   },
 ]
 
-const TOTES = GRUPS.flatMap((g) => g.pestanyes)
-
 export default function Avaluacio() {
   const [actiu, setActiu] = useState('tee')
-  const Actiu = TOTES.find((p) => p.id === actiu)?.component ?? TEE
+
+  // Hi ha pestanyes restringides a direcció (l'Històric). Es filtren aquí
+  // perquè no apareguin ni al menú ni es puguin obrir; el component
+  // també ho torna a comprovar pel seu compte.
+  const admin = esAdmin(auth.currentUser)
+  const grupsVisibles = GRUPS
+    .map((g) => ({ ...g, pestanyes: g.pestanyes.filter((p) => !p.nomesAdmin || admin) }))
+    .filter((g) => g.pestanyes.length > 0)
+  const totes = grupsVisibles.flatMap((g) => g.pestanyes)
+  const Actiu = totes.find((p) => p.id === actiu)?.component ?? TEE
 
   return (
     <div className="module" style={{ maxWidth: 1100 }}>
       <h2>Avaluació</h2>
 
       <div style={{ marginTop: 20, borderBottom: '1px solid var(--line)', paddingBottom: 4 }}>
-        {GRUPS.map((g) => (
+        {grupsVisibles.map((g) => (
           <div key={g.id} style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', marginTop: g.id === 'entrada' ? 0 : 10 }}>
             <span style={{ fontSize: 11, color: 'var(--ink-soft)', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: 130 }}>
               {g.titol}
