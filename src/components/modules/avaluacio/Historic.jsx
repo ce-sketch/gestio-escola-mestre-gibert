@@ -11,7 +11,8 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { collection, getDocs, query, where } from 'firebase/firestore'
-import { db } from '../../../firebase'
+import { db, auth } from '../../../firebase'
+import { esAdmin } from '../../../lib/roles'
 import { cursEscolarActual } from '../../../lib/cursEscolar'
 import { redueixVigents } from '../../../lib/avaluacioCatala'
 import { aEscalaComuna } from '../../../lib/rubricaTEE'
@@ -90,6 +91,12 @@ function TaulaHistoric({ titol, files, nota }) {
 }
 
 export default function Historic() {
+  // Restringit a direcció: l'històric és el registre del centre sencer,
+  // curs rere curs, i no forma part del que necessita el professorat per
+  // fer la seva feina. La pestanya ja no surt al menú si no ets admin;
+  // això és la segona barrera, per si s'hi arriba per una altra via.
+  const potVeure = esAdmin(auth.currentUser)
+
   const [cursEscolarId, setCursEscolarId] = useState(cursEscolarActual())
   const [teeRegistres, setTeeRegistres] = useState([])
   const [lecturaRegistres, setLecturaRegistres] = useState([])
@@ -98,6 +105,7 @@ export default function Historic() {
   const [generant, setGenerant] = useState(null)
 
   useEffect(() => {
+    if (!potVeure) { setCarregant(false); return }
     async function carrega() {
       setCarregant(true)
       try {
@@ -114,7 +122,7 @@ export default function Historic() {
       }
     }
     carrega()
-  }, [cursEscolarId])
+  }, [cursEscolarId, potVeure])
 
   const cursCurt = cursCurtDe(cursEscolarId)
 
@@ -187,6 +195,14 @@ export default function Historic() {
   }
 
   const avisos = useMemo(() => avisosHistoric(), [])
+
+  if (!potVeure) {
+    return (
+      <p style={{ fontSize: 13, color: 'var(--ink-soft)' }}>
+        L&apos;històric de proves només és accessible des del compte de direcció.
+      </p>
+    )
+  }
 
   /** Els mateixos fulls per a l'Excel i el PDF. */
   function fullsExportables() {
