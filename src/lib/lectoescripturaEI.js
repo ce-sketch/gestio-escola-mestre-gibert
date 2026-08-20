@@ -102,3 +102,19 @@ export function comptaNivells(alumnesIds, marquesPerAlumne) {
   }
   return comptes
 }
+
+// ── Per a l'Excel i el PDF ──────────────────────────────────────────────
+// Capçalera i grups (una columna per nivell, agrupades per etapa) que fan
+// servir tant "exportaExcel" com "exportaPDF" de exportTaula.js.
+
+/** ['Alumne', ...18 noms de nivell], en el mateix ordre que la graella. */
+export const CAPÇALERA_EXPORT_EI = ['Alumne', ...NIVELLS_TEBEROSKY.map((n) => n.label)]
+
+/** Una entrada per etapa, amb el seu span — la mateixa fusió que la fila
+ *  de dalt de tot de la graella en pantalla ("Nivell presil·làbic", etc.). */
+export const GRUPS_EXPORT_EI = ETAPES_TEBEROSKY.map((e) => ({ label: e.titol, span: e.nivells.length }))
+
+/** Una fila per alumne: el nom i una marca ('X') per cada nivell assolit. */
+export function filaAlumneExportEI(alumne, marcats) {
+  return [alumne.nom, ...NIVELLS_TEBEROSKY.map((n) => (marcats[n.id] ? 'X' : ''))]
+}
