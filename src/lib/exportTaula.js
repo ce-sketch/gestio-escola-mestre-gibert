@@ -173,21 +173,39 @@ export function exportaPDF(titol, dades) {
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
   /**
-   * Amplada de la primera columna de dades i mida de lletra segons quantes
-   * columnes hi ha. Amb 13 columnes (Núm. + Alumne + 11 àrees) en A4
-   * apaïsat es llegeix còmodament; a partir d'aquí s'ajusta.
+   * Mida de lletra i coixí segons quantes columnes **i quantes files** hi
+   * ha. Abans només es mirava el nombre de columnes, i per això les
+   * classes de 26-27 alumnes es partien en dues pàgines: hi cabien totes
+   * les columnes, però no totes les files.
+   *
+   * En A4 apaïsat, amb els marges d'aquest document, hi ha ~176 mm d'alt
+   * útil. Descomptant el títol de la taula i la fila de capçalera, queden
+   * uns 600 px per a les files, i la classe més nombrosa en té 27 → cada
+   * fila ha de fer 22 px o menys.
    */
-  function estilTaula(nColumnes) {
-    if (nColumnes <= 14) return { lletra: 10.5, coixi: '6px 8px' }
-    if (nColumnes <= 20) return { lletra: 9.5, coixi: '5px 6px' }
-    if (nColumnes <= 28) return { lletra: 8.5, coixi: '4px 4px' }
-    return { lletra: 7.5, coixi: '3px 3px' }
+  function estilTaula(nColumnes, nFiles) {
+    // Límit per amplada (quantes columnes hi caben)
+    let lletra = 10.5
+    let coixiV = 6
+    let coixiH = 8
+    if (nColumnes > 14) { lletra = 9.5; coixiV = 5; coixiH = 6 }
+    if (nColumnes > 20) { lletra = 8.5; coixiV = 4; coixiH = 4 }
+    if (nColumnes > 28) { lletra = 7.5; coixiV = 3; coixiH = 3 }
+
+    // Límit per alçada (quantes files hi caben). Es queda amb el més
+    // estret dels dos, mai amb el més ample.
+    if (nFiles > 20) { lletra = Math.min(lletra, 10); coixiV = Math.min(coixiV, 5) }
+    if (nFiles > 24) { lletra = Math.min(lletra, 9.5); coixiV = Math.min(coixiV, 4) }
+    if (nFiles > 28) { lletra = Math.min(lletra, 8.5); coixiV = Math.min(coixiV, 3) }
+    if (nFiles > 34) { lletra = Math.min(lletra, 7.5); coixiV = Math.min(coixiV, 2) }
+
+    return { lletra, coixi: `${coixiV}px ${coixiH}px` }
   }
 
   const taulesHtml = fulls.map(({ nom, files }, index) => {
     const [capçalera, ...cosFiles] = files
     const nColumnes = capçalera.length
-    const { lletra, coixi } = estilTaula(nColumnes)
+    const { lletra, coixi } = estilTaula(nColumnes, cosFiles.length)
 
     // Les columnes de text (nom de l'alumne) van a l'esquerra; les de
     // dades, centrades — que és com es llegeix bé una graella de notes.
@@ -234,7 +252,7 @@ export function exportaPDF(titol, dades) {
         <style>
           @page {
             size: A4 landscape;
-            margin: 16mm 14mm 18mm;
+            margin: 12mm 12mm 12mm;
           }
 
           * { box-sizing: border-box; }
@@ -275,8 +293,11 @@ export function exportaPDF(titol, dades) {
           }
 
           /* ---- Cada taula ---- */
+          /* Una pàgina per taula. La portada es queda sola a la primera
+             pàgina: així cada classe té la pàgina sencera per a ella i no
+             en queda cap de partida per haver de compartir espai amb la
+             capçalera del document. */
           .bloc { break-before: page; }
-          .bloc.primer { break-before: avoid; }
 
           h2 {
             font-size: 13px;
@@ -297,6 +318,15 @@ export function exportaPDF(titol, dades) {
           th, td {
             padding: var(--coixi, 5px 7px);
             border-bottom: 1px solid #E2E5EA;
+            /* Línia de columna: amb 12-14 àrees seguides, sense separador
+               vertical l'ull salta de columna sense adonar-se'n. Es marca
+               més que la de fila, que ja la fa l'alternança de colors. */
+            border-right: 1px solid #C3CAD4;
+          }
+          th:first-child, td:first-child { border-left: 1px solid #C3CAD4; }
+
+          table {
+            border: 1px solid #A9B3C1;
           }
 
           thead th {
@@ -305,9 +335,14 @@ export function exportaPDF(titol, dades) {
             font-weight: 600;
             font-size: 0.92em;
             border-bottom: none;
+            /* Dins de la banda blava la línia de columna ha de ser clara,
+               que una de grisa sobre blau marí no es veu. */
+            border-right: 1px solid #6B7F9B;
             padding-top: 8px;
             padding-bottom: 8px;
           }
+          thead th:first-child { border-left: 1px solid #6B7F9B; }
+          thead th:last-child { border-right: 1px solid #1E3A5F; }
           thead th.num { text-align: center; }
           thead th.text { text-align: left; }
           thead th.primera { border-top-left-radius: 3px; }
