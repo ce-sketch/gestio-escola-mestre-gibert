@@ -36,7 +36,11 @@ function avuiIso() {
  */
 export default function GraellaMensual({ cursEscolarId, calendari, alumnesTots }) {
   const [curs, setCurs] = useState('')
-  const [mesNum, setMesNum] = useState(new Date().getMonth() + 1)
+  // El mes "actual" pot caure fora del curs (per exemple, agost, entre
+  // cursos): en aquest cas es comença mostrant setembre, el primer mes
+  // amb opció al desplegable, en comptes d'un valor que no hi surt.
+  const mesActual = new Date().getMonth() + 1
+  const [mesNum, setMesNum] = useState(MESOS_CURS.some((m) => m.num === mesActual) ? mesActual : 9)
   const [registres, setRegistres] = useState([])
   const [carregant, setCarregant] = useState(false)
   const [error, setError] = useState(null)
@@ -152,14 +156,7 @@ export default function GraellaMensual({ cursEscolarId, calendari, alumnesTots }
       {carregant && <p style={{ fontSize: 13, color: 'var(--ink-soft)' }}>Carregant…</p>}
 
       {!carregant && dies.length === 0 && (
-        <>
-          <p style={{ fontSize: 13, color: 'var(--ink-soft)' }}>Aquest mes no té cap dia lectiu al calendari del curs.</p>
-          <p style={{ fontSize: 11, color: 'var(--red, #b03030)', marginTop: 6 }}>
-            [Diagnòstic temporal] cursEscolarId: "{String(cursEscolarId)}" · mesNum: {String(mesNum)} · any: {String(any)} ·
-            inici: "{String(calendari?.inici)}" · fi: "{String(calendari?.fi)}" ·
-            diesNoLectius: {calendari?.diesNoLectius?.length ?? 0}
-          </p>
-        </>
+        <p style={{ fontSize: 13, color: 'var(--ink-soft)' }}>Aquest mes no té cap dia lectiu al calendari del curs.</p>
       )}
 
       {!carregant && dies.length > 0 && (
