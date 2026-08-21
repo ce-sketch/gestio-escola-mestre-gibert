@@ -1,9 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  collection, query, where, getDocs, addDoc, serverTimestamp,
+  collection, query, where, getDocs, addDoc, serverTimestamp, doc, getDoc,
 } from 'firebase/firestore'
 import { db, auth } from '../../firebase'
 import { normalitza } from '../../lib/text'
+import { cursEscolarActual } from '../../lib/cursEscolar'
+import GraellaMensual from './assistencia/GraellaMensual'
+
+const CURS_ESCOLAR = cursEscolarActual()
 
 const TORNS = [
   { id: 'mati', label: 'Matí' },
@@ -42,6 +46,8 @@ export default function Assistencia() {
   const [missatge, setMissatge] = useState(null)
   const [dictat, setDictat] = useState(null) // { torn, transcripcio, coincidencies: Set }
   const [pendentMotiu, setPendentMotiu] = useState(null) // { alumneId, torn, estat, text }
+  const [vista, setVista] = useState('dia') // dia · mes
+  const [calendari, setCalendari] = useState(null)
 
   // --- Carrega alumnes actius un sol cop ---
   useEffect(() => {
@@ -60,6 +66,9 @@ export default function Assistencia() {
       }
     }
     carrega()
+    getDoc(doc(db, 'calendari', CURS_ESCOLAR))
+      .then((snap) => { if (snap.exists()) setCalendari(snap.data()) })
+      .catch(() => { /* sense calendari, la vista mensual ja ho avisa */ })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -272,6 +281,32 @@ export default function Assistencia() {
         </div>
       ) : (
         <>
+          <div style={{ display: 'flex', gap: 8, marginTop: 24, borderBottom: '1px solid var(--line)', paddingBottom: 8 }}>
+            {[{ id: 'dia', label: 'Passar llista (dia)' }, { id: 'mes', label: 'Vista mensual' }].map((v) => (
+              <button
+                key={v.id}
+                type="button"
+                onClick={() => setVista(v.id)}
+                style={{
+                  background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, padding: '6px 10px',
+                  fontWeight: vista === v.id ? 700 : 400,
+                  borderBottom: vista === v.id ? '2px solid var(--ink)' : '2px solid transparent',
+                  color: vista === v.id ? 'var(--ink)' : 'var(--ink-soft)',
+                }}
+              >
+                {v.label}
+              </button>
+            ))}
+          </div>
+
+          {vista === 'mes' && (
+            <div style={{ marginTop: 20 }}>
+              <GraellaMensual cursEscolarId={CURS_ESCOLAR} calendari={calendari} alumnesTots={alumnesTots} />
+            </div>
+          )}
+
+          {vista === 'dia' && (
+          <>
           <div style={{ display: 'flex', gap: 16, marginTop: 24, flexWrap: 'wrap' }}>
             <label className="field" style={{ minWidth: 160 }}>
               <span>Classe</span>
@@ -431,6 +466,8 @@ export default function Assistencia() {
                 </li>
               ))}
             </ul>
+          )}
+          </>
           )}
         </>
       )}
