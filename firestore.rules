@@ -77,6 +77,17 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // Històric de proves internes (TEE i VL/CL), curs rere curs.
+    // NOMÉS DIRECCIÓ, ni tan sols lectura per a la resta del personal.
+    // És l'única col·lecció amb la lectura tancada: la resta de dades les
+    // necessita el professorat per fer la seva feina, però l'històric del
+    // centre sencer no. Aquesta regla és la protecció de debò — amagar la
+    // pestanya del menú només evita que es vegi, no que s'hi arribi.
+    match /historicProves/{provaId} {
+      allow read: if esAdmin();
+      allow write: if esAdmin();
+    }
+
     // Fitxa central de l'alumne. Tothom del personal la pot consultar (cal
     // per passar llista, posar notes, etc.), però només l'administrador
     // la pot donar d'alta, editar o desactivar.
