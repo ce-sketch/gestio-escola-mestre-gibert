@@ -9,6 +9,7 @@ import { parseOfficialQuotesText, parseResumSortides } from '../../lib/officialQ
 import { DOC_SORTIDES_OFICIAL_ID, descarregaDocumentSortides } from '../../lib/documentSortides'
 import BotoDrive from '../BotoDrive'
 import { carregaXLSX } from '../../lib/carregaLlibreries'
+import ComunicatGU from './economia/ComunicatGU'
 
 // ID del document "Recull informatiu de les famílies" a Google Docs, amb
 // els preus de quotes. Ha d'estar compartit com "Qualsevol persona amb
@@ -782,6 +783,8 @@ export default function Economia() {
           )
         })}
       </div>
+
+      <ComunicatGU cursEscolarId={cursEscolarId} />
     </div>
   )
 }
