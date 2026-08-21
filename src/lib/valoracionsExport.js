@@ -330,7 +330,13 @@ export function exportaValoracionsPDF(
   const blocs = config
     ? agrupaValoracions(valoracions, config).map((seccio) => `
         ${marcaPrimer(`<h1 class="seccio">${seccio.titol}</h1>`)}
-        ${seccio.valoracions.map((v) => marcaPrimer(blocValoracio(v))).join('')}
+        ${seccio.valoracions.map((v, i) => {
+          const html = blocValoracio(v)
+          // La primera valoració de cada secció va enganxada al seu títol.
+          // Si també forcés salt de pàgina, el títol de secció es quedaria
+          // sol en una pàgina gairebé en blanc.
+          return marcaPrimer(i === 0 ? html.replace(/class="([^"]*)"/, 'class="$1 sota-seccio"') : html)
+        }).join('')}
       `).join('')
     : valoracions.map((v) => marcaPrimer(blocValoracio(v))).join('')
 
@@ -402,6 +408,7 @@ export function exportaValoracionsPDF(
 
           .valoracio { break-before: page; padding-top: 4px; }
           .valoracio.primer-bloc { break-before: avoid; }
+          .valoracio.sota-seccio { break-before: avoid; }
 
           h2 {
             font-size: 14px; color: #1a1a1a; border-bottom: 1px solid ${BLAU_CSS};
