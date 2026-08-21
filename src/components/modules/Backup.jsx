@@ -12,6 +12,7 @@ const DIES_AVIS = 30
 
 export default function Backup() {
   const [exportant, setExportant] = useState(false)
+  const [exportantHistoric, setExportantHistoric] = useState(false)
   const [backupLlegit, setBackupLlegit] = useState(null)   // { nom, dades, contingut }
   const [triades, setTriades] = useState(new Set())
   const [confirmaRestaura2, setConfirmaRestaura2] = useState('')
@@ -289,6 +290,52 @@ export default function Backup() {
     }
   }
 
+  /**
+   * Baixa l'històric de proves (TEE i VL/CL) en el mateix format que espera
+   * el botó "Importa l'històric" de la pestanya Històric. És una còpia a
+   * banda del .zip general perquè és l'única col·lecció amb la lectura
+   * tancada per Firestore (només ce@escolamestregibert.cat hi arriba), i
+   * perquè el fitxer resultant s'ha de poder tornar a pujar tal qual amb
+   * aquell mateix botó, sense passar per la restauració general.
+   */
+  async function exportaHistoric() {
+    setExportantHistoric(true)
+    setMissatge(null)
+    try {
+      const [teeSnap, vlclSnap] = await Promise.all([
+        getDoc(doc(db, 'historicProves', 'tee')),
+        getDoc(doc(db, 'historicProves', 'vlcl')),
+      ])
+      if (!teeSnap.exists() && !vlclSnap.exists()) {
+        setMissatge({ type: 'error', text: "Encara no hi ha cap històric desat a Firestore (la col·lecció és buida)." })
+        return
+      }
+      const teeDades = teeSnap.data() ?? {}
+      const vlclDades = vlclSnap.data() ?? {}
+      const contingut = {
+        tee: { registres: teeDades.registres ?? [] },
+        vlcl: { registres: vlclDades.registres ?? [] },
+        origen: teeDades.origen ?? vlclDades.origen ?? '',
+        llegitEl: teeDades.llegitEl ?? vlclDades.llegitEl ?? '',
+      }
+      const blob = new Blob([JSON.stringify(contingut, null, 1)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const enllac = document.createElement('a')
+      enllac.href = url
+      enllac.download = `historic-proves-copia-${new Date().toISOString().slice(0, 10)}.json`
+      enllac.click()
+      URL.revokeObjectURL(url)
+      setMissatge({
+        type: 'ok',
+        text: `Històric exportat (${contingut.tee.registres.length} registres de TEE, ${contingut.vlcl.registres.length} de VL/CL). Per recuperar-lo: Avaluació → Històric → "📤 Importa l'històric" i tria aquest fitxer.`,
+      })
+    } catch (err) {
+      setMissatge({ type: 'error', text: `No s'ha pogut exportar l'històric: ${err.message}` })
+    } finally {
+      setExportantHistoric(false)
+    }
+  }
+
   async function restauraAlumnes(versio) {
     setRestaurant(versio.id)
     setMissatge(null)
@@ -445,6 +492,22 @@ export default function Backup() {
             )}
           </>
         )}
+      </div>
+
+      <div className="placeholder-box" style={{ borderStyle: 'solid', marginTop: 28 }}>
+        <strong>Còpia de l'històric de proves (TEE, VL/CL)</strong>
+        <p style={{ marginTop: 6, fontSize: 13 }}>
+          Aquesta col·lecció és l'única de tota l'app amb la lectura tancada a
+          Firestore (només hi arriba <code>ce@escolamestregibert.cat</code>), així que
+          no surt al .zip general. A diferència de la còpia de dalt, aquestes dades
+          del passat no canvien mai, així que <strong>no cal repetir aquesta
+          descàrrega sovint</strong>: n'hi ha prou fent-la un cop i guardant-la en un
+          lloc segur. Si mai s'esborrés per error, es recupera pujant aquest mateix
+          fitxer des d'<strong>Avaluació → Històric → "📤 Importa l'històric"</strong>.
+        </p>
+        <button className="btn-ghost" style={{ marginTop: 10 }} onClick={exportaHistoric} disabled={exportantHistoric}>
+          {exportantHistoric ? 'Exportant…' : '⬇ Descarrega historic-proves.json'}
+        </button>
       </div>
 
       <div className="placeholder-box" style={{ borderStyle: 'solid', marginTop: 28 }}>
