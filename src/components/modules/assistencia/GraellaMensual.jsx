@@ -155,8 +155,9 @@ export default function GraellaMensual({ cursEscolarId, calendari, alumnesTots }
         <>
           <p style={{ fontSize: 13, color: 'var(--ink-soft)' }}>Aquest mes no té cap dia lectiu al calendari del curs.</p>
           <p style={{ fontSize: 11, color: 'var(--red, #b03030)', marginTop: 6 }}>
-            [Diagnòstic temporal] inici: "{String(calendari?.inici)}" · fi: "{String(calendari?.fi)}" ·
-            diesNoLectius: {calendari?.diesNoLectius?.length ?? 0} · claus del document: {Object.keys(calendari ?? {}).join(', ')}
+            [Diagnòstic temporal] cursEscolarId: "{String(cursEscolarId)}" · mesNum: {String(mesNum)} · any: {String(any)} ·
+            inici: "{String(calendari?.inici)}" · fi: "{String(calendari?.fi)}" ·
+            diesNoLectius: {calendari?.diesNoLectius?.length ?? 0}
           </p>
         </>
       )}
