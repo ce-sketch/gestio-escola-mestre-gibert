@@ -26,15 +26,19 @@ export function anyDelMes(mesNum, cursEscolarId) {
 
 /** Els dies lectius (dilluns-divendres, fora dels dies no lectius del
  *  calendari) d'un mes concret. Cada dia porta la data ISO, el número de
- *  dia i el nom del dia de la setmana. */
-export function diesLectiusDelMes(mesNum, any, diesNoLectius = []) {
+ *  dia i el nom del dia de la setmana. Es descarten els dies fora de
+ *  l'interval del curs (abans de l'inici o després del final), perquè
+ *  un mes de setembre pot començar abans que el curs de debò.
+ */
+export function diesLectiusDelMes(mesNum, any, diesNoLectius = [], iniciCurs = '', fiCurs = '') {
   const noLectius = new Set((diesNoLectius ?? []).map((d) => d.data))
   const dies = []
   const cursor = new Date(Date.UTC(any, mesNum - 1, 1))
   while (cursor.getUTCMonth() === mesNum - 1) {
     const iso = cursor.toISOString().slice(0, 10)
     const diaSetmana = cursor.getUTCDay()
-    if (diaSetmana !== 0 && diaSetmana !== 6 && !noLectius.has(iso)) {
+    const dinsDelCurs = (!iniciCurs || iso >= iniciCurs) && (!fiCurs || iso <= fiCurs)
+    if (diaSetmana !== 0 && diaSetmana !== 6 && !noLectius.has(iso) && dinsDelCurs) {
       dies.push({ data: iso, dia: cursor.getUTCDate(), nomDia: NOMS_DIA[diaSetmana] })
     }
     cursor.setUTCDate(cursor.getUTCDate() + 1)
