@@ -84,8 +84,8 @@ export default function Avaluacio() {
 
       <div style={{ marginTop: 20, borderBottom: '1px solid var(--line)', paddingBottom: 4 }}>
         {grupsVisibles.map((g, i) => (
-          <div key={g.id} style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', marginTop: i === 0 ? 0 : 10 }}>
-            <span style={{ fontSize: 11, color: 'var(--ink-soft)', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: 130 }}>
+          <div key={g.id} style={{ marginTop: i === 0 ? 0 : 14 }}>
+            <span style={{ display: 'block', fontSize: 11, color: 'var(--ink-soft)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
               {g.titol}
             </span>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
