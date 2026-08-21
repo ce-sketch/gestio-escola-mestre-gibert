@@ -32,6 +32,8 @@ export const COL·LECCIONS = [
   { id: 'festesDetall', nom: 'Festes', sobreescriu: true },
   { id: 'activitatsComplementariesDetall', nom: 'Activitats complementàries', sobreescriu: true },
   { id: 'aprenentatgeCooperatiu', nom: 'Aprenentatge cooperatiu', sobreescriu: true },
+  { id: 'matematiques', nom: 'Matemàtiques', sobreescriu: true },
+  { id: 'lectoescripturaEI', nom: 'Lectoescriptura EI', sobreescriu: true },
   { id: 'economia', nom: 'Economia', sobreescriu: true },
   { id: 'documentacio', nom: 'Documentació', sobreescriu: true },
   { id: 'configuracio', nom: 'Configuració', sobreescriu: true },
