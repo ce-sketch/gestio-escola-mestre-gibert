@@ -10,7 +10,7 @@
 // dia, i quan s'acaba i ja no canviarà, es congela a `historicProves.js`.
 
 import { useEffect, useMemo, useState } from 'react'
-import { collection, getDocs, query, where } from 'firebase/firestore'
+import { collection, doc, getDoc, getDocs, query, setDoc, where } from 'firebase/firestore'
 import { db, auth } from '../../../firebase'
 import { esAdmin } from '../../../lib/roles'
 import { cursEscolarActual } from '../../../lib/cursEscolar'
@@ -19,8 +19,7 @@ import { aEscalaComuna } from '../../../lib/rubricaTEE'
 import { clAEscalaComuna, vlAEscalaComuna, grauPrimaria } from '../../../lib/rubricaLectura'
 import { exportaExcel, exportaPDF } from '../../../lib/exportTaula'
 import {
-  NIVELLS_HISTORIC, HISTORIC_TEE, HISTORIC_VLCL,
-  percentatges, avisosHistoric, ordenaPerCurs, cursCurtDe,
+  NIVELLS_HISTORIC, percentatges, avisosHistoric, ordenaPerCurs, cursCurtDe,
 } from '../../../lib/historicProves'
 
 // L'escala comuna de l'app fa servir uns identificadors llargs; l'històric,
@@ -100,6 +99,10 @@ export default function Historic() {
   const [cursEscolarId, setCursEscolarId] = useState(cursEscolarActual())
   const [teeRegistres, setTeeRegistres] = useState([])
   const [lecturaRegistres, setLecturaRegistres] = useState([])
+  // L'històric ve de Firestore (col·lecció `historicProves`), no del codi.
+  const [historicTee, setHistoricTee] = useState([])
+  const [historicVlcl, setHistoricVlcl] = useState([])
+  const [importat, setImportat] = useState(false)
   const [carregant, setCarregant] = useState(true)
   const [missatge, setMissatge] = useState(null)
   const [generant, setGenerant] = useState(null)
@@ -109,9 +112,13 @@ export default function Historic() {
     async function carrega() {
       setCarregant(true)
       try {
-        const snapAvaluacio = await getDocs(
-          query(collection(db, 'avaluacio'), where('cursEscolar', '==', cursEscolarId))
-        )
+        const [snapAvaluacio, docTee, docVlcl] = await Promise.all([
+          getDocs(query(collection(db, 'avaluacio'), where('cursEscolar', '==', cursEscolarId))),
+          getDoc(doc(db, 'historicProves', 'tee')),
+          getDoc(doc(db, 'historicProves', 'vlcl')),
+        ])
+        setHistoricTee(docTee.exists() ? (docTee.data().registres ?? []) : [])
+        setHistoricVlcl(docVlcl.exists() ? (docVlcl.data().registres ?? []) : [])
         const totes = snapAvaluacio.docs.map((d) => ({ id: d.id, ...d.data() }))
         setTeeRegistres(totes.filter((r) => r.tipus === 'tee'))
         setLecturaRegistres(totes.filter((r) => r.tipus === 'lectura'))
@@ -122,7 +129,7 @@ export default function Historic() {
       }
     }
     carrega()
-  }, [cursEscolarId, potVeure])
+  }, [cursEscolarId, potVeure, importat])
 
   const cursCurt = cursCurtDe(cursEscolarId)
 
@@ -181,12 +188,12 @@ export default function Historic() {
 
   /** Passat + present, per prova i trimestre. */
   function serieTee(trim) {
-    const passat = ordenaPerCurs(HISTORIC_TEE.filter((r) => r.trimestre === trim))
+    const passat = ordenaPerCurs(historicTee.filter((r) => r.trimestre === trim))
       .map((r) => ({ curs: r.curs, cursos: r.cursos, dades: r, esActual: false }))
     return [...teeActual.filter((f) => f.trimestre === trim), ...passat]
   }
   function serieVlcl(trim, prova) {
-    const passat = ordenaPerCurs(HISTORIC_VLCL.filter((r) => r.trimestre === trim))
+    const passat = ordenaPerCurs(historicVlcl.filter((r) => r.trimestre === trim))
       .map((r) => ({ curs: r.curs, cursos: r.cursos, dades: r[prova], esActual: false }))
     return [
       ...vlclActual.filter((f) => f.trimestre === trim).map((f) => ({ ...f, dades: f[prova] })),
@@ -194,7 +201,7 @@ export default function Historic() {
     ]
   }
 
-  const avisos = useMemo(() => avisosHistoric(), [])
+  const avisos = useMemo(() => avisosHistoric({ tee: historicTee, vlcl: historicVlcl }), [historicTee, historicVlcl])
 
   if (!potVeure) {
     return (
@@ -226,6 +233,33 @@ export default function Historic() {
       { nom: 'VL 3r trimestre', files: [capçalera, ...aFiles(serieVlcl('3r', 'vl'))] },
       { nom: 'CL 3r trimestre', files: [capçalera, ...aFiles(serieVlcl('3r', 'cl'))] },
     ].filter((f) => f.files.length > 1)
+  }
+
+  /**
+   * Primera càrrega: puja el JSON de l'històric a Firestore. Es fa amb un
+   * fitxer que tria l'usuari i no amb dades incrustades al codi, perquè
+   * si fossin al codi tornarien a viatjar al navegador de tothom.
+   */
+  async function importaJson(e) {
+    const fitxer = e.target.files?.[0]
+    if (!fitxer) return
+    setMissatge(null)
+    try {
+      const contingut = JSON.parse(await fitxer.text())
+      const tee = contingut?.tee?.registres
+      const vlcl = contingut?.vlcl?.registres
+      if (!Array.isArray(tee) || !Array.isArray(vlcl)) {
+        throw new Error('el fitxer no té la forma esperada (hi falta "tee.registres" o "vlcl.registres")')
+      }
+      await Promise.all([
+        setDoc(doc(db, 'historicProves', 'tee'), { registres: tee, origen: contingut.origen ?? '', llegitEl: contingut.llegitEl ?? '' }),
+        setDoc(doc(db, 'historicProves', 'vlcl'), { registres: vlcl, origen: contingut.origen ?? '', llegitEl: contingut.llegitEl ?? '' }),
+      ])
+      setMissatge({ type: 'ok', text: `Històric importat: ${tee.length} registres de TEE i ${vlcl.length} de VL/CL.` })
+      setImportat((n) => !n)
+    } catch (err) {
+      setMissatge({ type: 'error', text: `No s'ha pogut importar l'històric: ${err.message}` })
+    }
   }
 
   async function descarrega(quin, fes) {
@@ -283,7 +317,25 @@ export default function Historic() {
         </button>
       </div>
 
-      {carregant && <p style={{ marginTop: 12, fontSize: 12, color: 'var(--ink-soft)' }}>Carregant el curs actual…</p>}
+      {carregant && <p style={{ marginTop: 12, fontSize: 12, color: 'var(--ink-soft)' }}>Carregant…</p>}
+
+      {!carregant && historicTee.length === 0 && historicVlcl.length === 0 && (
+        <div className="placeholder-box" style={{ marginTop: 16 }}>
+          <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--navy)', margin: '0 0 4px' }}>
+            Encara no hi ha l&apos;històric
+          </p>
+          <p className="nota" style={{ marginTop: 0 }}>
+            Les xifres dels cursos passats no van dins de l&apos;app: viuen a Firestore, protegides
+            perquè només les pugui llegir el compte de direcció. Importa-les un sol cop amb el
+            fitxer <code>historic-proves.json</code>.
+          </p>
+          <label className="btn-ghost" style={{ color: 'var(--navy)', borderColor: 'var(--navy)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', marginTop: 8 }}>
+            📤 Importa l&apos;històric (JSON)
+            <input type="file" accept=".json,application/json" style={{ display: 'none' }}
+              onChange={(e) => { importaJson(e); e.target.value = '' }} />
+          </label>
+        </div>
+      )}
 
       {missatge && (
         <p style={{ marginTop: 12, fontSize: 13, color: missatge.type === 'error' ? 'var(--red)' : 'var(--green)' }}>
