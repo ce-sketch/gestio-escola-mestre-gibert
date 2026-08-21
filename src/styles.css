@@ -344,7 +344,6 @@ input {
   color: var(--ink-soft);
   line-height: 1.6;
   font-size: 15px;
-  max-width: 60ch;
 }
 
 .module-note {
