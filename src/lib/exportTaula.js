@@ -293,11 +293,11 @@ export function exportaPDF(titol, dades) {
           }
 
           /* ---- Cada taula ---- */
-          /* Una pàgina per taula. La portada es queda sola a la primera
-             pàgina: així cada classe té la pàgina sencera per a ella i no
-             en queda cap de partida per haver de compartir espai amb la
-             capçalera del document. */
+          /* Una pàgina per taula, tret de la primera: aquesta va enganxada
+             a la portada perquè la capçalera del document no es quedi sola
+             en una pàgina gairebé en blanc. */
           .bloc { break-before: page; }
+          .bloc.primer { break-before: avoid; }
 
           h2 {
             font-size: 13px;
