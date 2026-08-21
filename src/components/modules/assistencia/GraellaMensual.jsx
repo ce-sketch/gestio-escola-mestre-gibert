@@ -55,7 +55,7 @@ export default function GraellaMensual({ cursEscolarId, calendari, alumnesTots }
 
   const any = anyDelMes(mesNum, cursEscolarId)
   const dies = useMemo(
-    () => diesLectiusDelMes(mesNum, any, calendari?.diesNoLectius ?? []),
+    () => diesLectiusDelMes(mesNum, any, calendari?.diesNoLectius ?? [], calendari?.inici ?? '', calendari?.fi ?? ''),
     [mesNum, any, calendari]
   )
   const alumnesClasse = useMemo(
