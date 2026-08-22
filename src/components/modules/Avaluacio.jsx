@@ -20,7 +20,7 @@ import NotesGenerals from './avaluacio/NotesGenerals.jsx'
 import ResumPerArea from './avaluacio/ResumPerArea.jsx'
 import AreesNoSuperades from './avaluacio/AreesNoSuperades.jsx'
 import Descarregues from './avaluacio/Descarregues.jsx'
-import InformeCatala from './avaluacio/InformeCatala.jsx'
+import InformeAlumne from './avaluacio/InformeAlumne.jsx'
 import Resum from './avaluacio/Resum.jsx'
 import Historic from './avaluacio/Historic.jsx'
 
@@ -43,7 +43,7 @@ const GRUPS = [
     id: 'resultats',
     titol: 'Resums i informes',
     pestanyes: [
-      { id: 'informe', label: 'Informe per alumne', component: InformeCatala },
+      { id: 'informe', label: 'Informe per alumne', component: InformeAlumne },
       { id: 'resum', label: 'Resums de proves (TEE i VL/CL)', component: Resum },
       // Abans era la pestanya "Resum escola" dins de "Notes per àrea".
       { id: 'resum-area', label: 'Resum per àrea', component: ResumPerArea },
@@ -60,7 +60,7 @@ const GRUPS = [
     id: 'historic',
     titol: 'Històric',
     pestanyes: [
-      { id: 'historic', label: 'Històric (TEE, VL i CL)', component: Historic, nomesAdmin: true },
+      { id: 'historic', label: 'Històric', subLabel: '(TEE, VL i CL)', component: Historic, nomesAdmin: true },
     ],
   },
 ]
@@ -84,8 +84,8 @@ export default function Avaluacio() {
 
       <div style={{ marginTop: 20, borderBottom: '1px solid var(--line)', paddingBottom: 4 }}>
         {grupsVisibles.map((g, i) => (
-          <div key={g.id} style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', marginTop: i === 0 ? 0 : 10 }}>
-            <span style={{ fontSize: 11, color: 'var(--ink-soft)', textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: 130 }}>
+          <div key={g.id} style={{ marginTop: i === 0 ? 0 : 14 }}>
+            <span style={{ display: 'block', fontSize: 11, color: 'var(--ink-soft)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
               {g.titol}
             </span>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -103,9 +103,16 @@ export default function Avaluacio() {
                     color: actiu === p.id ? 'var(--navy)' : 'var(--ink-soft)',
                     cursor: 'pointer',
                     fontSize: 14,
+                    lineHeight: 1.3,
+                    textAlign: 'left',
                   }}
                 >
                   {p.label}
+                  {p.subLabel && (
+                    <span style={{ display: 'block', fontSize: 11, fontWeight: 400 }}>
+                      {p.subLabel}
+                    </span>
+                  )}
                 </button>
               ))}
             </div>
