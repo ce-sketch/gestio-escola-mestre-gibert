@@ -278,7 +278,7 @@ export default function GraellaMensual({ cursEscolarId, calendari, alumnesTots }
                       style={{
                         border: '1px solid var(--line)', padding: '2px 4px', fontWeight: 600, whiteSpace: 'nowrap',
                         borderLeft: obreSetmana.has(d.data) ? '3px solid var(--ink-soft)' : '1px solid var(--line)',
-                        borderRight: tancaSetmana.has(d.data) ? '3px solid var(--ink-soft)' : '1px solid var(--line)',
+                        borderRight: tancaSetmana.has(d.data) ? '3px solid var(--ink-soft)' : '2px solid var(--line)',
                       }}
                     >
                       {d.dia}
@@ -305,7 +305,7 @@ export default function GraellaMensual({ cursEscolarId, calendari, alumnesTots }
                         style={{
                           border: '1px solid var(--line)', padding: '2px 3px', fontWeight: 400, color: 'var(--ink-soft)',
                           borderBottom: '3px solid var(--ink-soft)',
-                          borderRight: tancaSetmana.has(d.data) ? '3px solid var(--ink-soft)' : '1px solid var(--line)',
+                          borderRight: tancaSetmana.has(d.data) ? '3px solid var(--ink-soft)' : '2px solid var(--line)',
                         }}
                       >
                         T
@@ -342,7 +342,9 @@ export default function GraellaMensual({ cursEscolarId, calendari, alumnesTots }
                               background: futur ? '#F4F4F4' : colorFons(estat),
                               fontWeight: def?.curt ? 700 : 400,
                               borderLeft: (obreSetmana.has(d.data) && torn === 'mati') ? '3px solid var(--ink-soft)' : '1px solid var(--line)',
-                              borderRight: (tancaSetmana.has(d.data) && torn === 'tarda') ? '3px solid var(--ink-soft)' : '1px solid var(--line)',
+                              borderRight: torn === 'tarda'
+                                ? (tancaSetmana.has(d.data) ? '3px solid var(--ink-soft)' : '2px solid var(--line)')
+                                : '1px solid var(--line)',
                             }}
                           >
                             {def?.curt ?? ''}
