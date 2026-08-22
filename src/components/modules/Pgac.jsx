@@ -516,7 +516,15 @@ export default function Pgac() {
                       <input
                         type="checkbox"
                         checked={!!cb.actiu}
-                        onChange={(e) => { const nous = canviaCompetencies(objectiuIndex, 'actiu', e.target.checked); desa(nous) }}
+                        onChange={() => {
+                          setObjectius((prev) => {
+                            const nous = prev.map((o, i) => (i === objectiuIndex
+                              ? { ...o, competencies: { ...(o.competencies ?? {}), actiu: !o.competencies?.actiu } }
+                              : o))
+                            desa(nous)
+                            return nous
+                          })
+                        }}
                       />
                       Aquest objectiu barreja els operatius amb les competències bàsiques
                     </label>
