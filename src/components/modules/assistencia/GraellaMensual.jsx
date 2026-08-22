@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, Fragment } from 'react'
-import { collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore'
+import { collection, query, where, getDocs, addDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore'
 import { db, auth } from '../../../firebase'
 import {
   MESOS_CURS, anyDelMes, diesLectiusDelMes, indexaRegistres, estatCasella, resumAlumne,
@@ -35,6 +35,9 @@ function avuiIso() {
  * retards. Clicant una casella es pot corregir la marca.
  */
 export default function GraellaMensual({ cursEscolarId, calendari, alumnesTots }) {
+  const [cursEscolarSel, setCursEscolarSel] = useState(cursEscolarId)
+  const [calendariSel, setCalendariSel] = useState(calendari)
+  const esCursActual = cursEscolarSel === cursEscolarId
   const [curs, setCurs] = useState('')
   // El mes "actual" pot caure fora del curs (per exemple, agost, entre
   // cursos): en aquest cas es comença mostrant setembre, el primer mes
@@ -48,30 +51,81 @@ export default function GraellaMensual({ cursEscolarId, calendari, alumnesTots }
   const [motiu, setMotiu] = useState('')
   const [estatTriat, setEstatTriat] = useState(null)
 
+  const [carregantClasses, setCarregantClasses] = useState(false)
+  const [classesHistoriques, setClassesHistoriques] = useState(null) // null = fes servir 'cursos' (curs actual)
+
   const cursos = useMemo(
-    () => [...new Set(alumnesTots.map((a) => a.curs))].sort(),
-    [alumnesTots]
+    () => (esCursActual || !classesHistoriques ? [...new Set(alumnesTots.map((a) => a.curs))].sort() : classesHistoriques),
+    [alumnesTots, esCursActual, classesHistoriques]
   )
+
+  // Curs actual: les classes ja se saben (les d'ara). Curs anterior: cal
+  // anar a buscar quines classes van existir de debò aquell any — les
+  // d'ara podrien tenir noms diferents (grups fusionats, canviats...).
+  useEffect(() => {
+    if (esCursActual) {
+      setClassesHistoriques(null)
+      return
+    }
+    setCarregantClasses(true)
+    setClassesHistoriques(null)
+    const anyInici = Number(cursEscolarSel.split('-')[0])
+    getDocs(query(
+      collection(db, 'assistencia'),
+      where('data', '>=', `${anyInici}-09-01`),
+      where('data', '<=', `${anyInici + 1}-08-31`)
+    ))
+      .then((snap) => {
+        const trobades = [...new Set(snap.docs.map((d) => d.data().curs).filter(Boolean))].sort()
+        setClassesHistoriques(trobades)
+      })
+      .catch(() => setClassesHistoriques([]))
+      .finally(() => setCarregantClasses(false))
+  }, [cursEscolarSel, esCursActual])
 
   useEffect(() => {
-    if (!curs && cursos.length > 0) setCurs(cursos[0])
+    // Quan canvien les classes disponibles (p. ex. en canviar de curs),
+    // si la triada ja no hi és, es passa a la primera de la llista nova.
+    if (cursos.length > 0 && !cursos.includes(curs)) setCurs(cursos[0])
   }, [cursos, curs])
 
-  const any = anyDelMes(mesNum, cursEscolarId)
+  // El calendari del curs actual ja arriba per prop; si es tria un altre
+  // curs (per consultar anys anteriors), es va a buscar el seu.
+  useEffect(() => {
+    if (esCursActual) {
+      setCalendariSel(calendari)
+      return
+    }
+    getDoc(doc(db, 'calendari', cursEscolarSel))
+      .then((snap) => setCalendariSel(snap.exists() ? snap.data() : null))
+      .catch(() => setCalendariSel(null))
+  }, [cursEscolarSel, esCursActual, calendari])
+
+  const any = anyDelMes(mesNum, cursEscolarSel)
   const dies = useMemo(
-    () => diesLectiusDelMes(mesNum, any, calendari?.diesNoLectius ?? [], calendari?.inici ?? '', calendari?.fi ?? ''),
-    [mesNum, any, calendari]
+    () => diesLectiusDelMes(mesNum, any, calendariSel?.diesNoLectius ?? [], calendariSel?.inici ?? '', calendariSel?.fi ?? ''),
+    [mesNum, any, calendariSel]
   )
-  const alumnesClasse = useMemo(
-    () => alumnesTots.filter((a) => a.curs === curs).sort((a, b) => (a.numLlista ?? 999) - (b.numLlista ?? 999)),
-    [alumnesTots, curs]
-  )
+  // Curs actual: es fa servir el llistat d'alumnes actius (amb ordre de
+  // llista). Cursos anteriors: no hi ha manera de saber qui era a cada
+  // classe fa temps, així que es reconstrueix el llistat directament dels
+  // registres d'assistència d'aquell mes (que ja porten el nom desat).
+  const alumnesClasse = useMemo(() => {
+    if (esCursActual) {
+      return alumnesTots.filter((a) => a.curs === curs).sort((a, b) => (a.numLlista ?? 999) - (b.numLlista ?? 999))
+    }
+    const vistos = new Map()
+    for (const r of registres) {
+      if (!vistos.has(r.alumneId)) vistos.set(r.alumneId, { id: r.alumneId, nom: r.alumneNom ?? '(sense nom)' })
+    }
+    return [...vistos.values()].sort((a, b) => a.nom.localeCompare(b.nom))
+  }, [esCursActual, alumnesTots, curs, registres])
 
   useEffect(() => {
     if (!curs || dies.length === 0) return
     carrega()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [curs, mesNum, any])
+  }, [curs, mesNum, any, cursEscolarSel])
 
   async function carrega() {
     setCarregant(true)
@@ -127,10 +181,10 @@ export default function GraellaMensual({ cursEscolarId, calendari, alumnesTots }
     setMotiu('')
   }
 
-  if (!calendari) {
+  if (!calendariSel) {
     return (
       <p style={{ fontSize: 13, color: 'var(--ink-soft)' }}>
-        Cal tenir el calendari del curs {cursEscolarId} desat al mòdul "Calendari" per saber quins dies són lectius.
+        Cal tenir el calendari del curs {cursEscolarSel} desat al mòdul "Calendari" per saber quins dies són lectius.
       </p>
     )
   }
@@ -138,19 +192,38 @@ export default function GraellaMensual({ cursEscolarId, calendari, alumnesTots }
   return (
     <div>
       <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 14 }}>
+        <label className="field" style={{ maxWidth: 110 }}>
+          <span>Curs escolar</span>
+          <input
+            type="text"
+            value={cursEscolarSel}
+            onChange={(e) => setCursEscolarSel(e.target.value)}
+            style={{ border: '1px solid var(--line)', borderRadius: 8, padding: '8px 10px', fontWeight: 600 }}
+          />
+        </label>
         <label className="field" style={{ maxWidth: 140 }}>
           <span>Classe</span>
-          <select value={curs} onChange={(e) => setCurs(e.target.value)} style={{ border: '1px solid var(--line)', borderRadius: 8, padding: '8px 10px' }}>
+          <select value={curs} onChange={(e) => setCurs(e.target.value)} disabled={carregantClasses} style={{ border: '1px solid var(--line)', borderRadius: 8, padding: '8px 10px' }}>
             {cursos.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
         </label>
         <label className="field" style={{ maxWidth: 160 }}>
           <span>Mes</span>
           <select value={mesNum} onChange={(e) => setMesNum(Number(e.target.value))} style={{ border: '1px solid var(--line)', borderRadius: 8, padding: '8px 10px' }}>
-            {MESOS_CURS.map((m) => <option key={m.num} value={m.num}>{m.label} {anyDelMes(m.num, cursEscolarId)}</option>)}
+            {MESOS_CURS.map((m) => <option key={m.num} value={m.num}>{m.label} {anyDelMes(m.num, cursEscolarSel)}</option>)}
           </select>
         </label>
       </div>
+
+      {carregantClasses && <p style={{ fontSize: 12, color: 'var(--ink-soft)' }}>Buscant les classes reals d'aquell curs…</p>}
+
+      {!esCursActual && !carregantClasses && (
+        <p style={{ fontSize: 11, color: 'var(--ink-soft)', marginBottom: 10 }}>
+          Consultant un curs anterior: les classes i el llistat d'alumnes es reconstrueixen dels
+          registres d'assistència reals d'aquell any (no de les classes ni el llistat d'ara), i les
+          correccions també hi queden desades.
+        </p>
+      )}
 
       {error && <p style={{ color: 'var(--red)', fontSize: 12 }}>{error}</p>}
       {carregant && <p style={{ fontSize: 13, color: 'var(--ink-soft)' }}>Carregant…</p>}
