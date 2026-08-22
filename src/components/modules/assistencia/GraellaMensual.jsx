@@ -13,6 +13,8 @@ const ESTATS = [
   { id: 'absent_injustificat', label: 'Absència sense justificar', curt: 'A', necessitaMotiu: false },
 ]
 
+const ABREUJA_DIA = { Dilluns: 'Dl', Dimarts: 'Dt', Dimecres: 'Dc', Dijous: 'Dj', Divendres: 'Dv' }
+
 function colorFons(estat) {
   if (estat === 'absent_injustificat') return '#F8D7DA'
   if (estat === 'absent_justificat') return '#FDEBD0'
@@ -244,6 +246,9 @@ export default function GraellaMensual({ cursEscolarId, calendari, alumnesTots }
                   {dies.map((d) => (
                     <th key={d.data} colSpan={2} style={{ border: '1px solid var(--line)', padding: '2px 4px', fontWeight: 600, whiteSpace: 'nowrap' }}>
                       {d.dia}
+                      <span style={{ display: 'block', fontSize: 9, fontWeight: 400, color: 'var(--ink-soft)' }}>
+                        {ABREUJA_DIA[d.nomDia] ?? d.nomDia}
+                      </span>
                     </th>
                   ))}
                   <th colSpan={2} style={{ border: '1px solid var(--line)', padding: '2px 6px' }}>Total</th>
