@@ -559,7 +559,13 @@ export default function Pgac() {
                                 <button
                                   key={op.id}
                                   type="button"
-                                  onClick={() => { const nous = canviaCompetencies(objectiuIndex, camp, op.valor); desa(nous) }}
+                                  onClick={() => {
+                                    // Clicar el que ja està triat el desmarca (deixa sense valorar);
+                                    // clicar-ne un altre el substitueix com sempre.
+                                    const valorNou = opcioActual?.id === op.id ? '' : op.valor
+                                    const nous = canviaCompetencies(objectiuIndex, camp, valorNou)
+                                    desa(nous)
+                                  }}
                                   style={{
                                     fontSize: 11, padding: '3px 8px', borderRadius: 6, cursor: 'pointer',
                                     border: `1px solid ${opcioActual?.id === op.id ? 'var(--navy)' : 'var(--line)'}`,
@@ -654,7 +660,9 @@ export default function Pgac() {
                               )}
 
                               {[{ camp: 'gener', etiqueta: 'Gener' }, { camp: 'juny', etiqueta: 'Juny' }].map(({ camp, etiqueta }) => {
-                                const opcioActual = opcions.find((o) => o.valor === Number(ind[camp])) ?? null
+                                const opcioActual = (ind[camp] === '' || ind[camp] === null || ind[camp] === undefined)
+                                  ? null
+                                  : opcions.find((o) => o.valor === Number(ind[camp])) ?? null
                                 return (
                                   <div key={camp} style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
                                     <span style={{ fontSize: 11, color: 'var(--ink-soft)', minWidth: 40 }}>{etiqueta}</span>
@@ -662,7 +670,11 @@ export default function Pgac() {
                                       <button
                                         key={o.id}
                                         type="button"
-                                        onClick={() => { const nous = canviaIndicador(objectiuIndex, op.id, ind.id, camp, o.valor); desa(nous) }}
+                                        onClick={() => {
+                                          const valorNou = opcioActual?.id === o.id ? '' : o.valor
+                                          const nous = canviaIndicador(objectiuIndex, op.id, ind.id, camp, valorNou)
+                                          desa(nous)
+                                        }}
                                         style={{
                                           fontSize: 11, padding: '4px 10px', borderRadius: 6, cursor: 'pointer',
                                           border: `1px solid ${opcioActual?.id === o.id ? 'var(--navy)' : 'var(--line)'}`,
