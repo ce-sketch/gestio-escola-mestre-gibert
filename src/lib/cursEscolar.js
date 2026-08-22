@@ -10,6 +10,17 @@ export function cursSeguent(cursId) {
   return `${any}-${(any + 1).toString().slice(2)}`
 }
 
+/** Interpreta el curs escolar escrit de qualsevol manera raonable
+ *  ("2027-28", "2027-2028", "2027/28"...) i el torna sempre en el
+ *  format que fa servir l'app arreu ("2027-28"). Si el text no
+ *  s'assembla a cap d'aquests formats, el retorna tal qual. */
+export function normalitzaCursEscolar(text) {
+  const m = String(text ?? '').trim().match(/^(\d{4})\s*[-/]\s*(\d{2}|\d{4})$/)
+  if (!m) return text
+  const anyInici = Number(m[1])
+  return `${anyInici}-${(anyInici + 1).toString().slice(2)}`
+}
+
 // Nivells escolars (agrupant les classes A/B d'un mateix curs), en l'ordre
 // en què s'han de mostrar. Cada classe (p. ex. "1A", "1B") pertany al
 // nivell amb el mateix primer dígit.
