@@ -418,9 +418,24 @@ export function exportaValoracionsPDF(
           .objectiu { margin-top: 14px; font-size: 12px; }
           .objectiu > p { margin: 0 0 4px; }
 
-          table.sub { border-collapse: collapse; width: 100%; font-size: 11px; margin: 6px 0 14px; }
-          table.sub th, table.sub td { border: 1px solid #bbb; padding: 5px 8px; text-align: left; vertical-align: top; }
-          table.sub th { background: #EDEFF2; color: #1a1a1a; font-weight: 700; }
+          /* Jerarquia de vores: la de fora tanca la taula, la capçalera
+             se'n separa fort, les columnes marquen mitjà i les files
+             fluix — l'alternança de color ja les separa prou. */
+          table.sub {
+            border-collapse: collapse; width: 100%; font-size: 11px; margin: 6px 0 14px;
+            border: 1.5px solid #8A97A8;
+          }
+          table.sub th, table.sub td {
+            padding: 5px 8px; text-align: left; vertical-align: top;
+            border-right: 1px solid #C3CAD4;
+            border-bottom: 1px solid #E2E5EA;
+          }
+          table.sub th:last-child, table.sub td:last-child { border-right: none; }
+          table.sub tr:last-child td { border-bottom: none; }
+          table.sub th {
+            background: #EDEFF2; color: #1a1a1a; font-weight: 700;
+            border-bottom: 1.5px solid #8A97A8;
+          }
           table.sub tbody tr:nth-child(even) { background: #FAFAFA; }
 
           @media print {

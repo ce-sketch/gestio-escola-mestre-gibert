@@ -138,18 +138,52 @@ export function exportaPgacPDF(objectius, cursEscolarId) {
         <title>PGAC ${cursEscolarId}</title>
         <meta charset="utf-8" />
         <style>
-          body { font-family: Arial, sans-serif; padding: 24px; color: #1a1a1a; }
+          @page { size: A4 portrait; margin: 14mm 12mm; }
+          * { box-sizing: border-box; }
+          body {
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            padding: 0; color: #1a1a1a;
+            font-variant-numeric: tabular-nums;
+          }
           h1 { font-size: 18px; margin-bottom: 4px; color: #1E3A5F; }
-          .data { font-size: 12px; color: #666; margin-bottom: 20px; }
+          .data {
+            font-size: 12px; color: #666; margin: 0 0 20px;
+            padding-bottom: 12px; border-bottom: 2.5px solid #1E3A5F;
+          }
           .objectiu { break-before: page; padding-top: 12px; }
           .objectiu:first-of-type { break-before: avoid; }
-          h2 { font-size: 15px; color: #1E3A5F; border-bottom: 2px solid #1E3A5F; padding-bottom: 4px; margin-top: 0; }
-          .petit { font-size: 12px; margin: 4px 0; }
+          h2 {
+            font-size: 15px; color: #1E3A5F; border-bottom: 2px solid #1E3A5F;
+            padding-bottom: 4px; margin-top: 0; break-after: avoid;
+          }
+          .petit { font-size: 12px; margin: 4px 0; line-height: 1.45; }
           .resultat { font-size: 13px; font-weight: bold; margin: 8px 0; }
           .operatiu { margin-top: 14px; font-size: 12px; }
-          table.sub { border-collapse: collapse; width: 100%; font-size: 11px; margin: 6px 0 12px; }
-          table.sub th, table.sub td { border: 1px solid #ccc; padding: 4px 6px; text-align: left; }
-          table.sub th { background: #f0f0f0; }
+
+          /* Jerarquia de vores: la de fora tanca la taula, la capçalera
+             se'n separa fort, les columnes marquen mitjà i les files
+             fluix — l'alternança de color ja les separa prou. */
+          table.sub {
+            border-collapse: collapse; width: 100%; font-size: 11px; margin: 6px 0 12px;
+            border: 1.5px solid #8A97A8;
+          }
+          table.sub th, table.sub td {
+            padding: 5px 7px; text-align: left; vertical-align: top;
+            border-right: 1px solid #C3CAD4;
+            border-bottom: 1px solid #E2E5EA;
+          }
+          table.sub th:last-child, table.sub td:last-child { border-right: none; }
+          table.sub tr:last-child td { border-bottom: none; }
+          table.sub th {
+            background: #EDEFF2; font-weight: 700;
+            border-bottom: 1.5px solid #8A97A8;
+          }
+          table.sub tbody tr:nth-child(even) { background: #FAFAFA; }
+
+          /* Que la capçalera es repeteixi a cada pàgina i que cap fila es
+             parteixi per la meitat en imprimir. */
+          thead { display: table-header-group; }
+          tr { break-inside: avoid; }
         </style>
       </head>
       <body>

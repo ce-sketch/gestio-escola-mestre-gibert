@@ -148,7 +148,13 @@ export function obreImpressioCartaGU(mesLabel, any, text) {
   // es respecten amb <br>.
   const html = text
     .split(/\n{2,}/)
-    .map((paragraf) => `<p>${paragraf.split('\n').map((l) => l.replace(/&/g, '&amp;').replace(/</g, '&lt;')).join('<br>')}</p>`)
+    .map((paragraf) => {
+      const linies = paragraf.split('\n')
+      // Els blocs de dades d'una sortida són els únics que porten
+      // diverses línies seguides; la prosa de la carta va en una sola.
+      const classe = linies.length > 1 ? ' class="sortida"' : ''
+      return `<p${classe}>${linies.map((l) => l.replace(/&/g, '&amp;').replace(/</g, '&lt;')).join('<br>')}</p>`
+    })
     .join('')
 
   finestra.document.write(`
@@ -161,6 +167,15 @@ export function obreImpressioCartaGU(mesLabel, any, text) {
           * { box-sizing: border-box; }
           body { font-family: 'Georgia', 'Times New Roman', serif; margin: 0; color: #1a1a1a; font-size: 13px; line-height: 1.6; }
           p { margin: 0 0 14px; }
+          /* Cada sortida és un bloc de línies seguides sense línia en
+             blanc; una filet a l'esquerra les agrupa visualment i les
+             separa de la següent sortida sense fer soroll. */
+          p.sortida {
+            border-left: 2px solid #8A97A8;
+            padding-left: 10px;
+            margin-bottom: 18px;
+            break-inside: avoid;
+          }
         </style>
       </head>
       <body>${html}</body>
