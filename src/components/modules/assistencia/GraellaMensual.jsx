@@ -15,6 +15,7 @@ const ESTATS = [
 ]
 
 const ABREUJA_DIA = { Dilluns: 'Dl', Dimarts: 'Dt', Dimecres: 'Dc', Dijous: 'Dj', Divendres: 'Dv' }
+const NUM_DIA = { Dilluns: 1, Dimarts: 2, Dimecres: 3, Dijous: 4, Divendres: 5 }
 
 function colorFons(estat) {
   if (estat === 'absent_injustificat') return '#F8D7DA'
@@ -156,6 +157,22 @@ export default function GraellaMensual({ cursEscolarId, calendari, alumnesTots }
   const index = useMemo(() => indexaRegistres(registres), [registres])
   const ara = avuiIso()
 
+  // Un dia "obre setmana" si és el primer dia lectiu de la seva setmana,
+  // i "tanca setmana" si el següent dia lectiu ja cau en una altra. No es
+  // pot mirar només si és dilluns o divendres: quan aquests són festius,
+  // la setmana comença o s'acaba un altre dia i el requadre quedaria obert.
+  const { obreSetmana, tancaSetmana } = useMemo(() => {
+    const obre = new Set()
+    const tanca = new Set()
+    dies.forEach((d, i) => {
+      const anterior = dies[i - 1]
+      const seguent = dies[i + 1]
+      if (!anterior || d.nomDia === 'Dilluns' || NUM_DIA[d.nomDia] < NUM_DIA[anterior.nomDia]) obre.add(d.data)
+      if (!seguent || seguent.nomDia === 'Dilluns' || NUM_DIA[seguent.nomDia] < NUM_DIA[d.nomDia]) tanca.add(d.data)
+    })
+    return { obreSetmana: obre, tancaSetmana: tanca }
+  }, [dies])
+
   async function desaCorreccio(estat, textMotiu) {
     const { alumne, data, torn } = caixaOberta
     const nou = {
@@ -260,8 +277,8 @@ export default function GraellaMensual({ cursEscolarId, calendari, alumnesTots }
                       colSpan={2}
                       style={{
                         border: '1px solid var(--line)', padding: '2px 4px', fontWeight: 600, whiteSpace: 'nowrap',
-                        borderLeft: d.nomDia === 'Dilluns' ? '3px solid var(--ink-soft)' : '1px solid var(--line)',
-                        borderRight: d.nomDia === 'Divendres' ? '3px solid var(--ink-soft)' : '1px solid var(--line)',
+                        borderLeft: obreSetmana.has(d.data) ? '3px solid var(--ink-soft)' : '1px solid var(--line)',
+                        borderRight: tancaSetmana.has(d.data) ? '3px solid var(--ink-soft)' : '1px solid var(--line)',
                       }}
                     >
                       {d.dia}
@@ -278,7 +295,7 @@ export default function GraellaMensual({ cursEscolarId, calendari, alumnesTots }
                       <th
                         style={{
                           border: '1px solid var(--line)', padding: '2px 3px', fontWeight: 400, color: 'var(--ink-soft)',
-                          borderLeft: d.nomDia === 'Dilluns' ? '3px solid var(--ink-soft)' : '1px solid var(--line)',
+                          borderLeft: obreSetmana.has(d.data) ? '3px solid var(--ink-soft)' : '1px solid var(--line)',
                         }}
                       >
                         M
@@ -286,7 +303,7 @@ export default function GraellaMensual({ cursEscolarId, calendari, alumnesTots }
                       <th
                         style={{
                           border: '1px solid var(--line)', padding: '2px 3px', fontWeight: 400, color: 'var(--ink-soft)',
-                          borderRight: d.nomDia === 'Divendres' ? '3px solid var(--ink-soft)' : '1px solid var(--line)',
+                          borderRight: tancaSetmana.has(d.data) ? '3px solid var(--ink-soft)' : '1px solid var(--line)',
                         }}
                       >
                         T
@@ -322,8 +339,8 @@ export default function GraellaMensual({ cursEscolarId, calendari, alumnesTots }
                               minWidth: 20, cursor: futur ? 'default' : 'pointer',
                               background: futur ? '#F4F4F4' : colorFons(estat),
                               fontWeight: def?.curt ? 700 : 400,
-                              borderLeft: (d.nomDia === 'Dilluns' && torn === 'mati') ? '3px solid var(--ink-soft)' : '1px solid var(--line)',
-                              borderRight: (d.nomDia === 'Divendres' && torn === 'tarda') ? '3px solid var(--ink-soft)' : '1px solid var(--line)',
+                              borderLeft: (obreSetmana.has(d.data) && torn === 'mati') ? '3px solid var(--ink-soft)' : '1px solid var(--line)',
+                              borderRight: (tancaSetmana.has(d.data) && torn === 'tarda') ? '3px solid var(--ink-soft)' : '1px solid var(--line)',
                             }}
                           >
                             {def?.curt ?? ''}
