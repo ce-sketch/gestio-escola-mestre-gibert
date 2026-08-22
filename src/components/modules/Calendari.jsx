@@ -31,7 +31,7 @@ const TRIMESTRES_BUITS = [
 const TRIMESTRES_2026_27 = [
   { nom: '1r trimestre', inici: '2026-09-08', fi: '2027-01-07' },
   { nom: '2n trimestre', inici: '2027-01-08', fi: '2027-03-29' },
-  { nom: '3r trimestre', inici: '2027-03-30', fi: '2027-06-22' },
+  { nom: '3r trimestre', inici: '2027-03-30', fi: '2027-06-21' },
 ]
 
 const DIES_NO_LECTIUS_2026_27 = [
@@ -62,14 +62,14 @@ const DIES_NO_LECTIUS_2026_27 = [
   { data: '2027-03-29', motiu: 'Setmana Santa' },
   { data: '2027-05-01', motiu: 'Festa del Treball' },
   { data: '2027-05-14', motiu: 'Lliure disposició' },
-  { data: '2027-05-17', motiu: 'Pasqua Granada (comprova l\'any: el document deia 2026)' },
+  { data: '2027-05-17', motiu: 'Pasqua Granada' },
 ]
 
 function defectesPer(cursId) {
   if (cursId === '2026-27') {
     return {
       inici: '2026-09-08',
-      fi: '2027-06-22',
+      fi: '2027-06-21',
       trimestres: TRIMESTRES_2026_27,
       diesNoLectius: DIES_NO_LECTIUS_2026_27,
     }
