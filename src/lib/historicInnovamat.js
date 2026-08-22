@@ -70,8 +70,11 @@ export function entradesHistoric(registres) {
     for (const m of momentsConmat(r)) {
       entrades.push({
         cursEscolar: r.cursEscolar,
-        alumneId: r.alumneId,
+        alumneId: r.alumneId ?? null,
         nom: r.nom,
+        // Alumnes que no consten com a actius al centre (cursos passats):
+        // el nom ve del PDF de l'Innovamat, no de la fitxa d'alumne.
+        sensCasar: r.sensCasar === true,
         moment: m.moment,
         classe: m.classe ?? null,
         nivell: m.nivell ?? null,
@@ -94,6 +97,7 @@ export function entradesHistoric(registres) {
  * a l'apartat de matemàtiques de l'informe individual.
  */
 export function ultimConmatDe(registres, alumneId) {
+  if (!alumneId) return null
   return entradesHistoric(registres).find((e) => e.alumneId === alumneId) ?? null
 }
 
