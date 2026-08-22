@@ -264,11 +264,11 @@ export default function GraellaMensual({ cursEscolarId, calendari, alumnesTots }
 
       {!carregant && dies.length > 0 && (
         <>
-          <div style={{ overflowX: 'auto', border: '1px solid var(--line)', borderRadius: 8 }}>
-            <table style={{ borderCollapse: 'collapse', fontSize: 11 }}>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ borderCollapse: 'collapse', fontSize: 11, border: '3px solid var(--ink-soft)' }}>
               <thead>
                 <tr>
-                  <th rowSpan={2} style={{ position: 'sticky', left: 0, background: 'var(--bg, #fff)', border: '1px solid var(--line)', padding: '4px 8px', textAlign: 'left', minWidth: 170, zIndex: 2 }}>
+                  <th rowSpan={2} style={{ position: 'sticky', left: 0, background: 'var(--bg, #fff)', border: '1px solid var(--line)', borderRight: '3px solid var(--ink-soft)', borderBottom: '3px solid var(--ink-soft)', padding: '4px 8px', textAlign: 'left', minWidth: 170, zIndex: 2 }}>
                     Alumne
                   </th>
                   {dies.map((d) => (
@@ -287,7 +287,7 @@ export default function GraellaMensual({ cursEscolarId, calendari, alumnesTots }
                       </span>
                     </th>
                   ))}
-                  <th colSpan={4} style={{ border: '1px solid var(--line)', padding: '2px 6px' }}>Total</th>
+                  <th colSpan={4} style={{ border: '1px solid var(--line)', borderLeft: '3px solid var(--ink-soft)', padding: '2px 6px' }}>Total</th>
                 </tr>
                 <tr>
                   {dies.map((d) => (
@@ -295,6 +295,7 @@ export default function GraellaMensual({ cursEscolarId, calendari, alumnesTots }
                       <th
                         style={{
                           border: '1px solid var(--line)', padding: '2px 3px', fontWeight: 400, color: 'var(--ink-soft)',
+                          borderBottom: '3px solid var(--ink-soft)',
                           borderLeft: obreSetmana.has(d.data) ? '3px solid var(--ink-soft)' : '1px solid var(--line)',
                         }}
                       >
@@ -303,6 +304,7 @@ export default function GraellaMensual({ cursEscolarId, calendari, alumnesTots }
                       <th
                         style={{
                           border: '1px solid var(--line)', padding: '2px 3px', fontWeight: 400, color: 'var(--ink-soft)',
+                          borderBottom: '3px solid var(--ink-soft)',
                           borderRight: tancaSetmana.has(d.data) ? '3px solid var(--ink-soft)' : '1px solid var(--line)',
                         }}
                       >
@@ -310,10 +312,10 @@ export default function GraellaMensual({ cursEscolarId, calendari, alumnesTots }
                       </th>
                     </Fragment>
                   ))}
-                  <th title="Absències justificades" style={{ border: '1px solid var(--line)', padding: '2px 4px', fontWeight: 400, color: 'var(--ink-soft)' }}>AJ</th>
-                  <th title="Absències sense justificar" style={{ border: '1px solid var(--line)', padding: '2px 4px', fontWeight: 400, color: 'var(--ink-soft)' }}>A</th>
-                  <th title="Retards justificats" style={{ border: '1px solid var(--line)', padding: '2px 4px', fontWeight: 400, color: 'var(--ink-soft)' }}>RJ</th>
-                  <th title="Retards sense justificar" style={{ border: '1px solid var(--line)', padding: '2px 4px', fontWeight: 400, color: 'var(--ink-soft)' }}>R</th>
+                  <th title="Absències justificades" style={{ border: '1px solid var(--line)', borderBottom: '3px solid var(--ink-soft)', borderLeft: '3px solid var(--ink-soft)', padding: '2px 4px', fontWeight: 400, color: 'var(--ink-soft)' }}>AJ</th>
+                  <th title="Absències sense justificar" style={{ border: '1px solid var(--line)', borderBottom: '3px solid var(--ink-soft)', padding: '2px 4px', fontWeight: 400, color: 'var(--ink-soft)' }}>A</th>
+                  <th title="Retards justificats" style={{ border: '1px solid var(--line)', borderBottom: '3px solid var(--ink-soft)', padding: '2px 4px', fontWeight: 400, color: 'var(--ink-soft)' }}>RJ</th>
+                  <th title="Retards sense justificar" style={{ border: '1px solid var(--line)', borderBottom: '3px solid var(--ink-soft)', padding: '2px 4px', fontWeight: 400, color: 'var(--ink-soft)' }}>R</th>
                 </tr>
               </thead>
               <tbody>
@@ -321,7 +323,7 @@ export default function GraellaMensual({ cursEscolarId, calendari, alumnesTots }
                   const resum = resumAlumne(index, dies, alumne.id, ara)
                   return (
                     <tr key={alumne.id}>
-                      <td style={{ position: 'sticky', left: 0, background: 'var(--bg, #fff)', border: '1px solid var(--line)', padding: '3px 8px', whiteSpace: 'nowrap', zIndex: 1 }}>
+                      <td style={{ position: 'sticky', left: 0, background: 'var(--bg, #fff)', border: '1px solid var(--line)', borderRight: '3px solid var(--ink-soft)', padding: '3px 8px', whiteSpace: 'nowrap', zIndex: 1 }}>
                         <span style={{ color: 'var(--ink-soft)', marginRight: 6 }}>{alumne.numLlista ?? ''}</span>
                         {alumne.nom}
                       </td>
@@ -347,7 +349,7 @@ export default function GraellaMensual({ cursEscolarId, calendari, alumnesTots }
                           </td>
                         )
                       }))}
-                      <td style={{ border: '1px solid var(--line)', padding: '3px 5px', textAlign: 'center', fontWeight: resum.absentJustificat > 0 ? 700 : 400 }}>
+                      <td style={{ border: '1px solid var(--line)', borderLeft: '3px solid var(--ink-soft)', padding: '3px 5px', textAlign: 'center', fontWeight: resum.absentJustificat > 0 ? 700 : 400 }}>
                         {resum.absentJustificat || ''}
                       </td>
                       <td style={{ border: '1px solid var(--line)', padding: '3px 5px', textAlign: 'center', fontWeight: resum.absentInjustificat > 0 ? 700 : 400 }}>
