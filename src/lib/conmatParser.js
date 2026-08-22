@@ -156,18 +156,84 @@ export async function llegeixConmat(buffer) {
  * @param {Array} delPdf     sortida de llegeixConmat
  * @param {Array} delCentre  { id, nom } de la col·lecció "alumnes"
  */
+/** Les paraules d'un nom, normalitzades i ordenades. Serveix per casar
+ *  noms escrits en ordre diferent o amb parts de menys. */
+export function paraulesDeNom(text) {
+  return String(text ?? '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean)
+    .sort()
+}
+
+/** Clau independent de l'ordre de les paraules: "Pol Pérez" i "Pérez Pol"
+ *  donen la mateixa. S'usa per identificar els alumnes que no consten al
+ *  centre, perquè no se'n creïn dos registres. */
+export function clauOrdenadaDeNom(text) {
+  return paraulesDeNom(text).join('')
+}
+
+/**
+ * Casa els alumnes llegits del PDF amb els del centre.
+ *
+ * Els informes de l'Innovamat NO usen sempre el mateix format de nom: uns
+ * porten els dos cognoms ("Argelaguet Puig Aina") i altres només el primer
+ * ("Abellan Alexandra"). Per això el casament es fa en dues passades:
+ *
+ *   1. Coincidència exacta de la clau (sense accents ni espais).
+ *   2. Si no n'hi ha, coincidència per subconjunt: totes les paraules del
+ *      nom del PDF són dins del nom del centre (o a l'inrevés).
+ *
+ * La segona passada només s'accepta si hi ha UN SOL candidat possible. Si
+ * n'hi ha més d'un (per exemple dos germans o dos alumnes amb el mateix
+ * cognom i nom), es deixa sense casar a posta: val més deixar-ho a la
+ * vista que assignar la nota a qui no toca.
+ */
 export function casaAmbAlumnes(delPdf, delCentre) {
   const perClau = new Map()
   for (const a of delCentre) perClau.set(claueDeNom(a.nom), a)
 
+  const ambParaules = delCentre.map((a) => ({ alumne: a, paraules: paraulesDeNom(a.nom) }))
+  const jaCasats = new Set()
+
   const casats = []
   const sensCasar = []
+  const dubtosos = []
+
   for (const a of delPdf) {
-    const trobat = perClau.get(a.clau)
-    if (trobat) casats.push({ ...a, alumneId: trobat.id, nom: trobat.nom })
-    else sensCasar.push(a)
+    const exacte = perClau.get(a.clau)
+    if (exacte) {
+      casats.push({ ...a, alumneId: exacte.id, nom: exacte.nom })
+      jaCasats.add(exacte.id)
+      continue
+    }
+
+    const delPdfParaules = paraulesDeNom(a.nom)
+    // L'ambigüitat es mira contra TOT l'alumnat del centre, no només
+    // contra els que encara no s'han casat. Si no, un nom incomplet com
+    // "Ruiz Lozano" (dues germanes) s'acabaria assignant a la germana que
+    // quedés lliure, que és precisament el que volem evitar.
+    const candidats = delPdfParaules.length < 2 ? [] : ambParaules.filter(({ paraules }) => {
+      const pdfDinsCentre = delPdfParaules.every((p) => paraules.includes(p))
+      const centreDinsPdf = paraules.every((p) => delPdfParaules.includes(p))
+      return pdfDinsCentre || centreDinsPdf
+    })
+
+    if (candidats.length === 1 && !jaCasats.has(candidats[0].alumne.id)) {
+      const { alumne } = candidats[0]
+      casats.push({ ...a, alumneId: alumne.id, nom: alumne.nom, nomPdf: a.nom, casatPerAproximacio: true })
+      jaCasats.add(alumne.id)
+    } else {
+      if (candidats.length > 1) {
+        dubtosos.push({ nom: a.nom, candidats: candidats.map((c) => c.alumne.nom) })
+      }
+      sensCasar.push(a)
+    }
   }
-  return { casats, sensCasar }
+  return { casats, sensCasar, dubtosos }
 }
 
 /** Distribució per nivells d'una classe, per a l'avaluació referencial. */
