@@ -263,7 +263,7 @@ export default function Assistencia() {
   }
 
   return (
-    <div className="module">
+    <div className="module" style={vista === 'mes' ? { maxWidth: 1400 } : undefined}>
       <p className="module-eyebrow">Passar llista</p>
       <h2>Assistència</h2>
       <p className="module-lead">
