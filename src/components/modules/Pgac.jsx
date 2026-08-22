@@ -525,7 +525,10 @@ export default function Pgac() {
 
                   <AvisPesos pesTotal={rg.pesTotal} onReparteix={() => reparteixOperatius(objectiuIndex)} />
 
-                  {/* ── Competències bàsiques (el 65/35 del document) ── */}
+                  {/* Competències bàsiques (65/35 del document): NOMÉS l'Objectiu 1
+                      (Àmbit pedagògic) combina els operatius amb TEE/VL/CL — els
+                      altres dos objectius no ho fan mai. */}
+                  {objectiuIndex === 0 && (
                   <div style={{ marginTop: 14, padding: '10px 12px', border: '1px dashed var(--line)', borderRadius: 8 }}>
                     <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12, fontWeight: 600 }}>
                       <input
@@ -541,13 +544,13 @@ export default function Pgac() {
                           })
                         }}
                       />
-                      Aquest objectiu barreja els operatius amb les competències bàsiques
+                      Aquest objectiu inclou el resultat de TEE, VL i CL
                     </label>
                     {cb.actiu && (
                       <div style={{ marginTop: 8 }}>
                         <p style={{ fontSize: 12, color: 'var(--ink-soft)' }}>{cb.text}</p>
                         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginTop: 6 }}>
-                          <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}>Pes de les competències</span>
+                          <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}>Pes de TEE, VL i CL</span>
                           <CampPes
                             valor={cb.pes}
                             onChange={(v) => canviaCompetencies(objectiuIndex, 'pes', v)}
@@ -597,6 +600,7 @@ export default function Pgac() {
                       </div>
                     )}
                   </div>
+                  )}
 
                   {/* ── Operatius ── */}
                   {objectiu.operatius.map((op) => {
