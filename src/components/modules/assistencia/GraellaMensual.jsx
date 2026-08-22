@@ -255,7 +255,14 @@ export default function GraellaMensual({ cursEscolarId, calendari, alumnesTots }
                     Alumne
                   </th>
                   {dies.map((d) => (
-                    <th key={d.data} colSpan={2} style={{ border: '1px solid var(--line)', padding: '2px 4px', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                    <th
+                      key={d.data}
+                      colSpan={2}
+                      style={{
+                        border: '1px solid var(--line)', padding: '2px 4px', fontWeight: 600, whiteSpace: 'nowrap',
+                        borderLeft: d.nomDia === 'Dilluns' ? '3px solid var(--ink-soft)' : '1px solid var(--line)',
+                      }}
+                    >
                       {d.dia}
                       <span style={{ display: 'block', fontSize: 9, fontWeight: 400, color: 'var(--ink-soft)' }}>
                         {ABREUJA_DIA[d.nomDia] ?? d.nomDia}
@@ -267,7 +274,14 @@ export default function GraellaMensual({ cursEscolarId, calendari, alumnesTots }
                 <tr>
                   {dies.map((d) => (
                     <Fragment key={d.data}>
-                      <th style={{ border: '1px solid var(--line)', padding: '2px 3px', fontWeight: 400, color: 'var(--ink-soft)' }}>M</th>
+                      <th
+                        style={{
+                          border: '1px solid var(--line)', padding: '2px 3px', fontWeight: 400, color: 'var(--ink-soft)',
+                          borderLeft: d.nomDia === 'Dilluns' ? '3px solid var(--ink-soft)' : '1px solid var(--line)',
+                        }}
+                      >
+                        M
+                      </th>
                       <th style={{ border: '1px solid var(--line)', padding: '2px 3px', fontWeight: 400, color: 'var(--ink-soft)' }}>T</th>
                     </Fragment>
                   ))}
@@ -300,6 +314,7 @@ export default function GraellaMensual({ cursEscolarId, calendari, alumnesTots }
                               minWidth: 20, cursor: futur ? 'default' : 'pointer',
                               background: futur ? '#F4F4F4' : colorFons(estat),
                               fontWeight: def?.curt ? 700 : 400,
+                              borderLeft: (d.nomDia === 'Dilluns' && torn === 'mati') ? '3px solid var(--ink-soft)' : '1px solid var(--line)',
                             }}
                           >
                             {def?.curt ?? ''}
