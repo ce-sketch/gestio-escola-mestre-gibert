@@ -261,6 +261,7 @@ export default function GraellaMensual({ cursEscolarId, calendari, alumnesTots }
                       style={{
                         border: '1px solid var(--line)', padding: '2px 4px', fontWeight: 600, whiteSpace: 'nowrap',
                         borderLeft: d.nomDia === 'Dilluns' ? '3px solid var(--ink-soft)' : '1px solid var(--line)',
+                        borderRight: d.nomDia === 'Divendres' ? '3px solid var(--ink-soft)' : '1px solid var(--line)',
                       }}
                     >
                       {d.dia}
@@ -282,7 +283,14 @@ export default function GraellaMensual({ cursEscolarId, calendari, alumnesTots }
                       >
                         M
                       </th>
-                      <th style={{ border: '1px solid var(--line)', padding: '2px 3px', fontWeight: 400, color: 'var(--ink-soft)' }}>T</th>
+                      <th
+                        style={{
+                          border: '1px solid var(--line)', padding: '2px 3px', fontWeight: 400, color: 'var(--ink-soft)',
+                          borderRight: d.nomDia === 'Divendres' ? '3px solid var(--ink-soft)' : '1px solid var(--line)',
+                        }}
+                      >
+                        T
+                      </th>
                     </Fragment>
                   ))}
                   <th title="Absències justificades" style={{ border: '1px solid var(--line)', padding: '2px 4px', fontWeight: 400, color: 'var(--ink-soft)' }}>AJ</th>
@@ -315,6 +323,7 @@ export default function GraellaMensual({ cursEscolarId, calendari, alumnesTots }
                               background: futur ? '#F4F4F4' : colorFons(estat),
                               fontWeight: def?.curt ? 700 : 400,
                               borderLeft: (d.nomDia === 'Dilluns' && torn === 'mati') ? '3px solid var(--ink-soft)' : '1px solid var(--line)',
+                              borderRight: (d.nomDia === 'Divendres' && torn === 'tarda') ? '3px solid var(--ink-soft)' : '1px solid var(--line)',
                             }}
                           >
                             {def?.curt ?? ''}
