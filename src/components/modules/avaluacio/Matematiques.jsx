@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { collection, doc, getDocs, query, setDoc, where, serverTimestamp } from 'firebase/firestore'
 import { db, auth } from '../../../firebase'
 import { cursEscolarActual } from '../../../lib/cursEscolar'
-import { llegeixConmat, casaAmbAlumnes, distribucio, NIVELLS_CONMAT } from '../../../lib/conmatParser'
+import { llegeixConmat, casaAmbAlumnes, distribucio, NIVELLS_CONMAT, clauOrdenadaDeNom } from '../../../lib/conmatParser'
 import { llegeixCosmos, resumClasse } from '../../../lib/cosmosParser'
 import BotoDrive from '../../BotoDrive'
 import {
@@ -61,8 +61,8 @@ export default function Matematiques() {
     setConmat(null)
     try {
       const resultat = await llegeixConmat(await fitxer.arrayBuffer())
-      const { casats, sensCasar } = casaAmbAlumnes(resultat.alumnes, alumnes)
-      setConmat({ ...resultat, casats, sensCasar, fitxer: fitxer.name })
+      const { casats, sensCasar, dubtosos } = casaAmbAlumnes(resultat.alumnes, alumnes)
+      setConmat({ ...resultat, casats, sensCasar, dubtosos, fitxer: fitxer.name })
     } catch (err) {
       setMissatge({ type: 'error', text: err.message })
     } finally {
@@ -122,6 +122,33 @@ export default function Matematiques() {
           actualitzatPer: auth.currentUser?.email ?? null,
         }, { merge: true })
       }
+      // Els alumnes que NO casen amb cap alumne actiu del centre (típicament
+      // els de cursos passats que ja han marxat) també es desen: si no, cada
+      // any que passa l'històric perdria una part de l'alumnat. Es guarden
+      // amb el nom tal com surt al PDF i un identificador derivat d'aquest
+      // nom, de manera que tornar a pujar el mateix informe els actualitza
+      // en comptes de duplicar-los.
+      for (const a of (conmat.sensCasar ?? [])) {
+        const clau = clauOrdenadaDeNom(a.nom) || clauDe(a.nom)
+        await setDoc(doc(db, 'matematiques', `${cursEscolarId}__pdf__${clau}`), {
+          cursEscolar: cursEscolarId,
+          alumneId: null,
+          nom: a.nom,
+          sensCasar: true,
+          conmat: {
+            [idMoment]: {
+              classe: conmat.classe,
+              moment: conmat.moment,
+              nivell: a.nivell,
+              percentatge: a.percentatge,
+              respostes: a.respostes,
+              preguntes: a.preguntes,
+            },
+          },
+          actualitzatEl: serverTimestamp(),
+          actualitzatPer: auth.currentUser?.email ?? null,
+        }, { merge: true })
+      }
       // Registre de l'informe carregat, per poder consultar després què
       // s'ha pujat, quan i qui ho va fer. Va a la mateixa col·lecció amb
       // un `tipus` que el distingeix dels registres d'alumne.
@@ -136,7 +163,12 @@ export default function Matematiques() {
         actualitzatEl: serverTimestamp(),
         actualitzatPer: auth.currentUser?.email ?? null,
       }, { merge: true })
-      setMissatge({ type: 'ok', text: `${conmat.casats.length} resultats de ConMat desats (${conmat.classe} · ${momentLabel(idMoment)}).` })
+      const nSense = conmat.sensCasar?.length ?? 0
+      setMissatge({
+        type: 'ok',
+        text: `${conmat.casats.length + nSense} resultats de ConMat desats (${conmat.classe} · ${momentLabel(idMoment)})`
+          + (nSense > 0 ? `, dels quals ${nSense} amb el nom del PDF perquè no consten com a alumnes actius.` : '.'),
+      })
       setConmat(null)
       carrega()
     } catch (err) {
@@ -281,14 +313,48 @@ export default function Matematiques() {
               </table>
             </div>
 
+            {conmat.casats.some((a) => a.casatPerAproximacio) && (
+              <div className="caixa-discreta" style={{ marginTop: 10 }}>
+                <strong style={{ fontSize: 12 }}>
+                  {conmat.casats.filter((a) => a.casatPerAproximacio).length} alumnes casats pel nom incomplet — revisa'ls
+                </strong>
+                <p className="nota">
+                  El PDF no en portava el nom sencer (per exemple, només un cognom). S'han
+                  relacionat amb l'única fitxa possible del centre.
+                </p>
+                <ul style={{ fontSize: 12, color: 'var(--ink-soft)', paddingLeft: 18, marginTop: 4 }}>
+                  {conmat.casats.filter((a) => a.casatPerAproximacio).map((a, i) => (
+                    <li key={i}>«{a.nomPdf}» → {a.nom}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {(conmat.dubtosos?.length ?? 0) > 0 && (
+              <div className="caixa-discreta" style={{ marginTop: 10 }}>
+                <strong style={{ fontSize: 12, color: 'var(--red, #b03030)' }}>
+                  {conmat.dubtosos.length} noms encaixen amb més d'un alumne
+                </strong>
+                <p className="nota">
+                  No s'han casat a posta: assignar-los a l'atzar podria donar la nota a qui no toca.
+                  Es desaran amb el nom del PDF.
+                </p>
+                <ul style={{ fontSize: 12, color: 'var(--ink-soft)', paddingLeft: 18, marginTop: 4 }}>
+                  {conmat.dubtosos.map((d, i) => (
+                    <li key={i}>«{d.nom}» podria ser: {d.candidats.join(' o ')}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
             {conmat.sensCasar.length > 0 && (
               <div className="caixa-discreta" style={{ marginTop: 10 }}>
                 <strong style={{ fontSize: 12 }}>
                   {conmat.sensCasar.length} alumnes de l'informe no s'han pogut relacionar amb cap fitxa
                 </strong>
                 <p className="nota">
-                  Els noms del PDF venen enganxats i en ordre invers. Aquests no els he sabut
-                  casar; els seus resultats no es desaran.
+                  Segurament són alumnes que ja no consten com a actius al centre. Els seus
+                  resultats SÍ que es desaran a l'històric, amb el nom tal com surt al PDF.
                 </p>
                 <ul style={{ fontSize: 12, color: 'var(--ink-soft)', paddingLeft: 18, marginTop: 4 }}>
                   {conmat.sensCasar.map((a, i) => <li key={i}>{a.nomPdf} — {a.nivell}</li>)}
@@ -472,7 +538,12 @@ export default function Matematiques() {
                   <div key={`${grup.cursEscolar}-${grup.moment}`} style={{ marginTop: 12 }}>
                     <p style={{ fontSize: 12, fontWeight: 600, margin: '0 0 4px' }}>
                       {grup.cursEscolar} · {momentLabel(grup.moment)}
-                      <span style={{ fontWeight: 400, color: 'var(--ink-soft)' }}> — {dist.total} alumnes</span>
+                      <span style={{ fontWeight: 400, color: 'var(--ink-soft)' }}>
+                        {' '}— {dist.total} alumnes
+                        {grup.entrades.filter((e) => e.sensCasar).length > 0 && (
+                          `, ${grup.entrades.filter((e) => e.sensCasar).length} amb el nom del PDF (ja no són al centre)`
+                        )}
+                      </span>
                     </p>
                     <table style={{ borderCollapse: 'collapse', fontSize: 12 }}>
                       <tbody>
