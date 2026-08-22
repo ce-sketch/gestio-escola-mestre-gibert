@@ -75,6 +75,10 @@ export default function Pgac() {
   const [desant, setDesant] = useState(false)
   const [missatge, setMissatge] = useState(null)
   const [objectiuObert, setObjectiuObert] = useState(0)
+  // Operatius buits (reservats per si algun any calen més) que s'han
+  // desplegat manualment per omplir-los — per defecte queden amagats,
+  // com ja passava a la plantilla original.
+  const [operatiusBuitsMostrats, setOperatiusBuitsMostrats] = useState(new Set())
   const [importacio, setImportacio] = useState(null)
   const [cursOrigen, setCursOrigen] = useState('')
   const [important, setImportant] = useState(false)
@@ -281,6 +285,17 @@ export default function Pgac() {
     const nous = actualitza(objectiuIndex, (o) => ({
       ...o,
       operatius: o.operatius.map((op) => (op.id !== operatiuId ? op : { ...op, indicadors: [...op.indicadors, indicadorBuit()] })),
+    }))
+    desa(nous)
+  }
+
+  function esborraOperatiu(objectiuIndex, operatiuId) {
+    const op = objectius[objectiuIndex]?.operatius.find((o) => o.id === operatiuId)
+    const teDades = op && (op.indicadors.length > 0 || op.text || !(op.pes === '' || op.pes === null || op.pes === undefined))
+    if (teDades && !window.confirm(`Segur que vols esborrar «${op.titol}» i tots els seus indicadors?`)) return
+    const nous = actualitza(objectiuIndex, (o) => ({
+      ...o,
+      operatius: o.operatius.filter((operatiu) => operatiu.id !== operatiuId),
     }))
     desa(nous)
   }
@@ -587,6 +602,32 @@ export default function Pgac() {
                   {objectiu.operatius.map((op) => {
                     const rog = resultatOperatiu(op, 'gener')
                     const roj = resultatOperatiu(op, 'juny')
+                    const esBuitOp = op.indicadors.length === 0
+                      && (op.pes === '' || op.pes === null || op.pes === undefined)
+                      && !op.text
+                    const mostrat = operatiusBuitsMostrats.has(op.id)
+
+                    if (esBuitOp && !mostrat) {
+                      return (
+                        <div key={op.id} style={{ marginTop: 10, borderTop: '1px dashed var(--line)', paddingTop: 10, display: 'flex', gap: 10, alignItems: 'center' }}>
+                          <button
+                            type="button"
+                            onClick={() => setOperatiusBuitsMostrats((prev) => new Set(prev).add(op.id))}
+                            style={{ background: 'none', border: 'none', color: 'var(--ink-soft)', fontSize: 12, cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
+                          >
+                            + {op.titol} (reservat, buit — clica per omplir-lo)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => esborraOperatiu(objectiuIndex, op.id)}
+                            style={{ background: 'none', border: 'none', color: 'var(--red)', fontSize: 11, cursor: 'pointer', padding: 0 }}
+                          >
+                            Esborra
+                          </button>
+                        </div>
+                      )
+                    }
+
                     return (
                       <div key={op.id} style={{ marginTop: 16, borderTop: '1px dashed var(--line)', paddingTop: 12 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap' }}>
@@ -600,9 +641,16 @@ export default function Pgac() {
                               titol="Pes d'aquest operatiu dins de l'objectiu. Els pesos de tots els operatius han de sumar 100%."
                             />
                           </div>
-                          <div style={{ display: 'flex', gap: 16 }}>
+                          <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
                             <Barra resultat={rog} etiqueta="Gener" />
                             <Barra resultat={roj} etiqueta="Juny" />
+                            <button
+                              type="button"
+                              onClick={() => esborraOperatiu(objectiuIndex, op.id)}
+                              style={{ background: 'none', border: '1px solid var(--red)', color: 'var(--red)', borderRadius: 6, padding: '4px 8px', fontSize: 11, cursor: 'pointer' }}
+                            >
+                              Esborra
+                            </button>
                           </div>
                         </div>
                         <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 4 }}>{op.text}</p>
