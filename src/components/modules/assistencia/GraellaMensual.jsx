@@ -4,6 +4,7 @@ import { db, auth } from '../../../firebase'
 import {
   MESOS_CURS, anyDelMes, diesLectiusDelMes, indexaRegistres, estatCasella, resumAlumne,
 } from '../../../lib/graellaMensual'
+import { normalitzaCursEscolar } from '../../../lib/cursEscolar'
 
 const ESTATS = [
   { id: 'present', label: 'Present', curt: '', necessitaMotiu: false },
@@ -38,8 +39,13 @@ function avuiIso() {
  */
 export default function GraellaMensual({ cursEscolarId, calendari, alumnesTots }) {
   const [cursEscolarSel, setCursEscolarSel] = useState(cursEscolarId)
+  // El que la persona escriu a la caixa pot venir en qualsevol format
+  // raonable ("2027-2028", "2027/28"...); tota la lògica interna sempre
+  // fa servir la versió normalitzada ("2027-28"), que és com es desa
+  // arreu de l'app.
+  const cursEscolarNorm = normalitzaCursEscolar(cursEscolarSel)
   const [calendariSel, setCalendariSel] = useState(calendari)
-  const esCursActual = cursEscolarSel === cursEscolarId
+  const esCursActual = cursEscolarNorm === cursEscolarId
   const [curs, setCurs] = useState('')
   // El mes "actual" pot caure fora del curs (per exemple, agost, entre
   // cursos): en aquest cas es comença mostrant setembre, el primer mes
@@ -71,7 +77,7 @@ export default function GraellaMensual({ cursEscolarId, calendari, alumnesTots }
     }
     setCarregantClasses(true)
     setClassesHistoriques(null)
-    const anyInici = Number(cursEscolarSel.split('-')[0])
+    const anyInici = Number(cursEscolarNorm.split('-')[0])
     getDocs(query(
       collection(db, 'assistencia'),
       where('data', '>=', `${anyInici}-09-01`),
@@ -83,7 +89,7 @@ export default function GraellaMensual({ cursEscolarId, calendari, alumnesTots }
       })
       .catch(() => setClassesHistoriques([]))
       .finally(() => setCarregantClasses(false))
-  }, [cursEscolarSel, esCursActual])
+  }, [cursEscolarNorm, esCursActual])
 
   useEffect(() => {
     // Quan canvien les classes disponibles (p. ex. en canviar de curs),
@@ -98,12 +104,12 @@ export default function GraellaMensual({ cursEscolarId, calendari, alumnesTots }
       setCalendariSel(calendari)
       return
     }
-    getDoc(doc(db, 'calendari', cursEscolarSel))
+    getDoc(doc(db, 'calendari', cursEscolarNorm))
       .then((snap) => setCalendariSel(snap.exists() ? snap.data() : null))
       .catch(() => setCalendariSel(null))
-  }, [cursEscolarSel, esCursActual, calendari])
+  }, [cursEscolarNorm, esCursActual, calendari])
 
-  const any = anyDelMes(mesNum, cursEscolarSel)
+  const any = anyDelMes(mesNum, cursEscolarNorm)
   const dies = useMemo(
     () => diesLectiusDelMes(mesNum, any, calendariSel?.diesNoLectius ?? [], calendariSel?.inici ?? '', calendariSel?.fi ?? ''),
     [mesNum, any, calendariSel]
@@ -127,7 +133,7 @@ export default function GraellaMensual({ cursEscolarId, calendari, alumnesTots }
     if (!curs || dies.length === 0) return
     carrega()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [curs, mesNum, any, cursEscolarSel])
+  }, [curs, mesNum, any, cursEscolarNorm])
 
   async function carrega() {
     setCarregant(true)
@@ -186,7 +192,7 @@ export default function GraellaMensual({ cursEscolarId, calendari, alumnesTots }
   if (!calendariSel) {
     return (
       <p style={{ fontSize: 13, color: 'var(--ink-soft)' }}>
-        Cal tenir el calendari del curs {cursEscolarSel} desat al mòdul "Calendari" per saber quins dies són lectius.
+        Cal tenir el calendari del curs {cursEscolarNorm} desat al mòdul "Calendari" per saber quins dies són lectius.
       </p>
     )
   }
@@ -202,6 +208,11 @@ export default function GraellaMensual({ cursEscolarId, calendari, alumnesTots }
             onChange={(e) => setCursEscolarSel(e.target.value)}
             style={{ border: '1px solid var(--line)', borderRadius: 8, padding: '8px 10px', fontWeight: 600 }}
           />
+          {cursEscolarSel.trim() !== '' && cursEscolarSel.trim() !== cursEscolarNorm && (
+            <span style={{ fontSize: 10, color: 'var(--ink-soft)' }}>
+              {/\d{4}/.test(cursEscolarNorm) ? `→ ${cursEscolarNorm}` : 'Format no reconegut'}
+            </span>
+          )}
         </label>
         <label className="field" style={{ maxWidth: 140 }}>
           <span>Classe</span>
@@ -212,7 +223,7 @@ export default function GraellaMensual({ cursEscolarId, calendari, alumnesTots }
         <label className="field" style={{ maxWidth: 160 }}>
           <span>Mes</span>
           <select value={mesNum} onChange={(e) => setMesNum(Number(e.target.value))} style={{ border: '1px solid var(--line)', borderRadius: 8, padding: '8px 10px' }}>
-            {MESOS_CURS.map((m) => <option key={m.num} value={m.num}>{m.label} {anyDelMes(m.num, cursEscolarSel)}</option>)}
+            {MESOS_CURS.map((m) => <option key={m.num} value={m.num}>{m.label} {anyDelMes(m.num, cursEscolarNorm)}</option>)}
           </select>
         </label>
       </div>
