@@ -251,7 +251,7 @@ export default function GraellaMensual({ cursEscolarId, calendari, alumnesTots }
                       </span>
                     </th>
                   ))}
-                  <th colSpan={2} style={{ border: '1px solid var(--line)', padding: '2px 6px' }}>Total</th>
+                  <th colSpan={4} style={{ border: '1px solid var(--line)', padding: '2px 6px' }}>Total</th>
                 </tr>
                 <tr>
                   {dies.map((d) => (
@@ -260,8 +260,10 @@ export default function GraellaMensual({ cursEscolarId, calendari, alumnesTots }
                       <th style={{ border: '1px solid var(--line)', padding: '2px 3px', fontWeight: 400, color: 'var(--ink-soft)' }}>T</th>
                     </Fragment>
                   ))}
-                  <th style={{ border: '1px solid var(--line)', padding: '2px 4px', fontWeight: 400, color: 'var(--ink-soft)' }}>Abs</th>
-                  <th style={{ border: '1px solid var(--line)', padding: '2px 4px', fontWeight: 400, color: 'var(--ink-soft)' }}>Ret</th>
+                  <th title="Absències justificades" style={{ border: '1px solid var(--line)', padding: '2px 4px', fontWeight: 400, color: 'var(--ink-soft)' }}>AJ</th>
+                  <th title="Absències sense justificar" style={{ border: '1px solid var(--line)', padding: '2px 4px', fontWeight: 400, color: 'var(--ink-soft)' }}>A</th>
+                  <th title="Retards justificats" style={{ border: '1px solid var(--line)', padding: '2px 4px', fontWeight: 400, color: 'var(--ink-soft)' }}>RJ</th>
+                  <th title="Retards sense justificar" style={{ border: '1px solid var(--line)', padding: '2px 4px', fontWeight: 400, color: 'var(--ink-soft)' }}>R</th>
                 </tr>
               </thead>
               <tbody>
@@ -293,11 +295,17 @@ export default function GraellaMensual({ cursEscolarId, calendari, alumnesTots }
                           </td>
                         )
                       }))}
-                      <td style={{ border: '1px solid var(--line)', padding: '3px 5px', textAlign: 'center', fontWeight: resum.totalAbsencies > 0 ? 700 : 400 }}>
-                        {resum.totalAbsencies || ''}
+                      <td style={{ border: '1px solid var(--line)', padding: '3px 5px', textAlign: 'center', fontWeight: resum.absentJustificat > 0 ? 700 : 400 }}>
+                        {resum.absentJustificat || ''}
                       </td>
-                      <td style={{ border: '1px solid var(--line)', padding: '3px 5px', textAlign: 'center', fontWeight: resum.totalRetards > 0 ? 700 : 400 }}>
-                        {resum.totalRetards || ''}
+                      <td style={{ border: '1px solid var(--line)', padding: '3px 5px', textAlign: 'center', fontWeight: resum.absentInjustificat > 0 ? 700 : 400 }}>
+                        {resum.absentInjustificat || ''}
+                      </td>
+                      <td style={{ border: '1px solid var(--line)', padding: '3px 5px', textAlign: 'center', fontWeight: resum.retardJustificat > 0 ? 700 : 400 }}>
+                        {resum.retardJustificat || ''}
+                      </td>
+                      <td style={{ border: '1px solid var(--line)', padding: '3px 5px', textAlign: 'center', fontWeight: resum.retardInjustificat > 0 ? 700 : 400 }}>
+                        {resum.retardInjustificat || ''}
                       </td>
                     </tr>
                   )
