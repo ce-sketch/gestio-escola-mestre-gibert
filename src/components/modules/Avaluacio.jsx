@@ -23,6 +23,7 @@ import Descarregues from './avaluacio/Descarregues.jsx'
 import InformeAlumne from './avaluacio/InformeAlumne.jsx'
 import Resum from './avaluacio/Resum.jsx'
 import Historic from './avaluacio/Historic.jsx'
+import HistoricInnovamat from './avaluacio/HistoricInnovamat.jsx'
 
 const GRUPS = [
   {
@@ -61,6 +62,7 @@ const GRUPS = [
     titol: 'Històric',
     pestanyes: [
       { id: 'historic', label: 'Històric', subLabel: '(TEE, VL i CL)', component: Historic, nomesAdmin: true },
+      { id: 'historic-innovamat', label: 'Històric', subLabel: '(Innovamat)', component: HistoricInnovamat, nomesAdmin: true },
     ],
   },
 ]
