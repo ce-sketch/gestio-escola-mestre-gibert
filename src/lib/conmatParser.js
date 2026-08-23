@@ -86,14 +86,24 @@ async function textDeLesPagines(buffer) {
  * @param {ArrayBuffer} buffer
  * @returns {Promise<{classe, moment, curs, alumnes, avisos}>}
  */
-export async function llegeixConmat(buffer) {
+export async function llegeixConmat(buffer, nomFitxer = '') {
   const pagines = await textDeLesPagines(buffer)
   const avisos = []
 
   // ── Portada: classe, moment i nivell ────────────────────────────────
   const portada = (pagines[0] ?? '').split('\n').map((l) => l.trim()).filter(Boolean)
-  const moment = portada.find((l) => /Avaluació\s*(inicial|final)/i.test(l)) ?? null
-  const classe = portada.find((l) => /^\d+\s*[A-DaD]$/i.test(l.replace(/\s/g, ''))) ?? null
+  const moment = portada.find((l) => /Avaluació\s*(inicial|final)/i.test(l))
+    ?? (/final/i.test(nomFitxer) ? 'Avaluació final' : /inici/i.test(nomFitxer) ? 'Avaluació inicial' : null)
+  // La classe surt a la portada amb l'ordinal enmig: "3rA", "3rB",
+  // "4rtA", "5èB"... Ha de sortir d'aquí i no del nom del fitxer, perquè
+  // l'Innovamat anomena igual els informes de les dues classes d'un
+  // mateix nivell (només es diferencien pel "(1)" que hi afegeix el
+  // Drive). Fiar-se del nom del fitxer faria que la segona classe
+  // sobreescrigués la primera.
+  const classe = portada
+    .map((l) => l.replace(/\s/g, ''))
+    .find((l) => /^\d+(r|n|t|rt|è|e)?[A-D]$/i.test(l))
+    ?? (nomFitxer.replace(/\s/g, '').match(/(\d+(?:r|n|t|rt|è|e)?[A-D])Prim/i)?.[1] ?? null)
   const curs = portada.find((l) => /^\d+$/.test(l)) ?? null
 
   // ── Participació: quants alumnes hauria d'haver-hi ──────────────────
