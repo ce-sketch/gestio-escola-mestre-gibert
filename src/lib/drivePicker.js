@@ -92,9 +92,13 @@ export async function triaDocumentsDelDrive(tipus = 'fulls', multiple = true) {
     // documents de text, els informes de l'Innovamat arriben en CSV, i la
     // resta són fulls de càlcul. Un CSV no surt a la vista de fulls de
     // Google, perquè per al Drive és un fitxer qualsevol.
+    // Compte amb la vista DOCUMENTS: només ensenya documents de Google
+    // Docs. Els informes de l'Innovamat són PDF, que per al Drive són un
+    // tipus diferent, i per això les carpetes sortien buides. Els PDF
+    // s'han de demanar per mime type sobre la vista genèrica DOCS.
     const idVista = tipus === 'documents'
       ? window.google.picker.ViewId.DOCUMENTS
-      : tipus === 'csv'
+      : (tipus === 'csv' || tipus === 'pdf')
         ? window.google.picker.ViewId.DOCS
         : window.google.picker.ViewId.SPREADSHEETS
     const vista = new window.google.picker.DocsView(idVista)
@@ -104,6 +108,9 @@ export async function triaDocumentsDelDrive(tipus = 'fulls', multiple = true) {
       // Els CSV pujats i els fulls de Google, que també es poden exportar
       // a CSV. La resta de fitxers queden fora per no despistar.
       vista.setMimeTypes('text/csv,text/plain,application/vnd.google-apps.spreadsheet')
+    }
+    if (tipus === 'pdf') {
+      vista.setMimeTypes('application/pdf')
     }
 
     const constructor = new window.google.picker.PickerBuilder()
