@@ -456,8 +456,8 @@ export default function Matematiques({ cursEscolarFixat = null, nomesCarrega = f
 
             {cosmos.sensCasar.length > 0 && (
               <p className="nota nota-avis">
-                {cosmos.sensCasar.length} alumnes del CSV no s'han pogut relacionar amb cap fitxa
-                i no es desaran.
+                {cosmos.sensCasar.length} alumnes del CSV no consten com a alumnes actius del
+                centre. Es desaran igualment, amb el nom tal com surt al CSV.
               </p>
             )}
 
