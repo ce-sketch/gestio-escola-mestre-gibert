@@ -5,9 +5,7 @@ import { cursEscolarActual } from '../../../lib/cursEscolar'
 import { llegeixConmat, casaAmbAlumnes, distribucio, NIVELLS_CONMAT, clauOrdenadaDeNom } from '../../../lib/conmatParser'
 import { llegeixCosmos, resumClasse } from '../../../lib/cosmosParser'
 import BotoDrive from '../../BotoDrive'
-import {
-  momentId, momentLabel, entradesHistoric, distribucioPerNivell, agrupaPerProva,
-} from '../../../lib/historicInnovamat'
+import { momentId, momentLabel, entradesHistoric } from '../../../lib/historicInnovamat'
 
 /**
  * Avaluació referencial de matemàtiques.
@@ -19,8 +17,19 @@ import {
  * El que se'n desa és el resultat per alumne, que després pot alimentar
  * l'informe individual i el quadre de comandament.
  */
-export default function Matematiques() {
-  const [cursEscolarId, setCursEscolarId] = useState(cursEscolarActual())
+/**
+ * Càrrega d'informes d'Innovamat (ConMat i COSMOS).
+ *
+ * Es fa servir a dos llocs amb comportament lleugerament diferent:
+ *   · A "Entrada de dades → Matemàtiques", sense props: sempre el curs
+ *     en marxa, amb la taula del que ja hi ha desat.
+ *   · A "Històric → Innovamat", amb `cursEscolarFixat`: el curs el mana
+ *     la pestanya de l'històric, per poder recuperar cursos passats.
+ */
+export default function Matematiques({ cursEscolarFixat = null, nomesCarrega = false, onDesat = null }) {
+  const [cursEscolarPropi, setCursEscolarPropi] = useState(cursEscolarActual())
+  const cursEscolarId = cursEscolarFixat ?? cursEscolarPropi
+  const setCursEscolarId = setCursEscolarPropi
   const [alumnes, setAlumnes] = useState([])
   const [llegint, setLlegint] = useState(false)
   const [desant, setDesant] = useState(false)
@@ -28,8 +37,6 @@ export default function Matematiques() {
   const [conmat, setConmat] = useState(null)   // { classe, moment, casats, sensCasar, avisos }
   const [cosmos, setCosmos] = useState(null)   // { alumnes, dimensions, avisos }
   const [desats, setDesats] = useState([])
-  const [totsRegistres, setTotsRegistres] = useState([]) // tots els cursos, per a l'històric
-  const [veureHistoric, setVeureHistoric] = useState(false)
 
   useEffect(() => {
     carrega()
@@ -44,9 +51,6 @@ export default function Matematiques() {
       ])
       setAlumnes(snapAlumnes.docs.map((d) => ({ id: d.id, ...d.data() })))
       setDesats(snapDesats.docs.map((d) => ({ id: d.id, ...d.data() })))
-      // L'històric va a part: recorre TOTS els cursos, no només el triat.
-      const snapTot = await getDocs(collection(db, 'matematiques'))
-      setTotsRegistres(snapTot.docs.map((d) => ({ id: d.id, ...d.data() })))
     } catch (err) {
       setMissatge({ type: 'error', text: `No s'han pogut carregar les dades: ${err.message}` })
     }
@@ -79,11 +83,14 @@ export default function Matematiques() {
     setCosmos(null)
     try {
       const resultat = llegeixCosmos(await fitxer.text())
-      const { casats, sensCasar } = casaAmbAlumnes(
-        resultat.alumnes.map((a) => ({ ...a, clau: clauDe(a.nomComplet) })),
+      // El CSV del COSMOS porta el nom a `nomComplet`; el casament el
+      // busca a `nom`, així que cal donar-l'hi perquè pugui aplicar també
+      // la tolerància de noms incomplets.
+      const { casats, sensCasar, dubtosos } = casaAmbAlumnes(
+        resultat.alumnes.map((a) => ({ ...a, nom: a.nomComplet, clau: clauDe(a.nomComplet) })),
         alumnes
       )
-      setCosmos({ ...resultat, casats, sensCasar, fitxer: fitxer.name })
+      setCosmos({ ...resultat, casats, sensCasar, dubtosos, fitxer: fitxer.name })
     } catch (err) {
       setMissatge({ type: 'error', text: err.message })
     } finally {
@@ -171,6 +178,7 @@ export default function Matematiques() {
       })
       setConmat(null)
       carrega()
+      onDesat?.()
     } catch (err) {
       setMissatge({ type: 'error', text: `No s'ha pogut desar: ${err.message}` })
     } finally {
@@ -179,7 +187,7 @@ export default function Matematiques() {
   }
 
   async function desaCosmos() {
-    if (!cosmos?.casats.length) return
+    if (!cosmos || (!cosmos.casats.length && !cosmos.sensCasar?.length)) return
     setDesant(true)
     try {
       for (const a of cosmos.casats) {
@@ -197,9 +205,33 @@ export default function Matematiques() {
           actualitzatPer: auth.currentUser?.email ?? null,
         }, { merge: true })
       }
-      setMissatge({ type: 'ok', text: `${cosmos.casats.length} resultats de COSMOS desats.` })
+      // Igual que al ConMat: els que no consten com a alumnes actius del
+      // centre també es desen, amb el nom tal com surt al CSV.
+      for (const a of (cosmos.sensCasar ?? [])) {
+        const clau = clauOrdenadaDeNom(a.nom ?? a.nomComplet) || clauDe(a.nomComplet)
+        await setDoc(doc(db, 'matematiques', `${cursEscolarId}__pdf__${clau}`), {
+          cursEscolar: cursEscolarId,
+          alumneId: null,
+          nom: a.nom ?? a.nomComplet,
+          sensCasar: true,
+          cosmos: {
+            intervencio: a.intervencio ?? null,
+            sessionsSetmanals: a.sessionsSetmanals ?? null,
+            moments: a.moments,
+          },
+          actualitzatEl: serverTimestamp(),
+          actualitzatPer: auth.currentUser?.email ?? null,
+        }, { merge: true })
+      }
+      const nSenseCosmos = cosmos.sensCasar?.length ?? 0
+      setMissatge({
+        type: 'ok',
+        text: `${cosmos.casats.length + nSenseCosmos} resultats de COSMOS desats`
+          + (nSenseCosmos > 0 ? `, dels quals ${nSenseCosmos} amb el nom del CSV perquè no consten com a alumnes actius.` : '.'),
+      })
       setCosmos(null)
       carrega()
+      onDesat?.()
     } catch (err) {
       setMissatge({ type: 'error', text: `No s'ha pogut desar: ${err.message}` })
     } finally {
@@ -226,15 +258,17 @@ export default function Matematiques() {
       </p>
 
       <div style={{ display: 'flex', gap: 16, marginTop: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-        <label className="field" style={{ maxWidth: 140 }}>
-          <span>Curs escolar</span>
-          <input
-            type="text"
-            value={cursEscolarId}
-            onChange={(e) => setCursEscolarId(e.target.value)}
-            style={{ border: '1px solid var(--line)', borderRadius: 8, padding: '8px 10px', fontWeight: 600 }}
-          />
-        </label>
+        {!cursEscolarFixat && (
+          <label className="field" style={{ maxWidth: 140 }}>
+            <span>Curs escolar</span>
+            <input
+              type="text"
+              value={cursEscolarId}
+              onChange={(e) => setCursEscolarId(e.target.value)}
+              style={{ border: '1px solid var(--line)', borderRadius: 8, padding: '8px 10px', fontWeight: 600 }}
+            />
+          </label>
+        )}
         {(llegint || desant) && (
           <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
             {llegint ? 'Llegint el fitxer…' : 'Desant…'}
@@ -259,7 +293,7 @@ export default function Matematiques() {
         <div style={{ display: 'flex', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
           <BotoDrive
             onFitxer={pujaConmat}
-            tipus="documents"
+            tipus="pdf"
             etiqueta="Tria l'informe del Drive"
             onError={(t) => setMissatge({ type: 'error', text: t })}
             disabled={llegint}
@@ -369,7 +403,7 @@ export default function Matematiques() {
               className="btn-primary"
               style={{ marginTop: 12, maxWidth: 280 }}
             >
-              Desa els {conmat.casats.length} resultats
+              Desa els {conmat.casats.length + (conmat.sensCasar?.length ?? 0)} resultats
             </button>
           </div>
         )}
@@ -434,13 +468,14 @@ export default function Matematiques() {
               className="btn-primary"
               style={{ marginTop: 12, maxWidth: 280 }}
             >
-              Desa els {cosmos.casats.length} resultats
+              Desa els {cosmos.casats.length + (cosmos.sensCasar?.length ?? 0)} resultats
             </button>
           </div>
         )}
       </div>
 
       {/* ── Què hi ha desat ──────────────────────────────────────────── */}
+      {!nomesCarrega && (
       <div style={{ marginTop: 22 }}>
         <strong style={{ fontSize: 14 }}>Resultats desats del curs {cursEscolarId}</strong>
         {desats.length === 0 ? (
@@ -482,87 +517,8 @@ export default function Matematiques() {
           </div>
         )}
 
-        {/* ── Històric d'Innovamat ─────────────────────────────────── */}
-        <div className="placeholder-box" style={{ borderStyle: 'solid', marginTop: 28 }}>
-          <strong>Històric d'Innovamat</strong>
-          <p style={{ marginTop: 6, fontSize: 13 }}>
-            Cada informe que puges queda desat per curs i moment de la prova, sense esborrar els
-            anteriors. Per recuperar cursos passats, tria el curs a dalt i puja'n els PDFs del Drive.
-          </p>
-          <button type="button" className="btn-ghost" style={{ marginTop: 10 }} onClick={() => setVeureHistoric((v) => !v)}>
-            {veureHistoric ? 'Amaga l\'històric' : `Mostra l'històric (${entradesHistoric(totsRegistres).length} resultats)`}
-          </button>
-
-          {veureHistoric && (
-            <div style={{ marginTop: 14 }}>
-              <strong style={{ fontSize: 13 }}>Informes carregats</strong>
-              {totsRegistres.filter((r) => r.tipus === 'informe').length === 0 ? (
-                <p style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
-                  Encara no consta cap informe carregat. Els que hagis pujat abans d'aquesta millora no
-                  hi surten, però els resultats dels alumnes sí que hi són a l'històric de sota.
-                </p>
-              ) : (
-                <table style={{ borderCollapse: 'collapse', fontSize: 12, marginTop: 6 }}>
-                  <thead>
-                    <tr style={{ textAlign: 'left', borderBottom: '2px solid var(--line)' }}>
-                      <th style={{ padding: '4px 12px 4px 0' }}>Curs</th>
-                      <th style={{ padding: '4px 12px' }}>Classe</th>
-                      <th style={{ padding: '4px 12px' }}>Moment</th>
-                      <th style={{ padding: '4px 12px' }}>Alumnes</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {totsRegistres.filter((r) => r.tipus === 'informe')
-                      .sort((a, b) => String(b.cursEscolar).localeCompare(String(a.cursEscolar)))
-                      .map((r) => (
-                        <tr key={r.id} style={{ borderBottom: '1px solid var(--line)' }}>
-                          <td style={{ padding: '4px 12px 4px 0' }}>{r.cursEscolar}</td>
-                          <td style={{ padding: '4px 12px' }}>{r.classe}</td>
-                          <td style={{ padding: '4px 12px' }}>{momentLabel(r.moment)}</td>
-                          <td style={{ padding: '4px 12px' }}>
-                            {r.alumnesCasats}
-                            {r.alumnesSenseCasar > 0 && (
-                              <span style={{ color: 'var(--red, #b03030)' }}> (+{r.alumnesSenseCasar} sense casar)</span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                  </tbody>
-                </table>
-              )}
-
-              <strong style={{ fontSize: 13, display: 'block', marginTop: 16 }}>Resultats per prova</strong>
-              {agrupaPerProva(entradesHistoric(totsRegistres)).map((grup) => {
-                const dist = distribucioPerNivell(grup.entrades)
-                return (
-                  <div key={`${grup.cursEscolar}-${grup.moment}`} style={{ marginTop: 12 }}>
-                    <p style={{ fontSize: 12, fontWeight: 600, margin: '0 0 4px' }}>
-                      {grup.cursEscolar} · {momentLabel(grup.moment)}
-                      <span style={{ fontWeight: 400, color: 'var(--ink-soft)' }}>
-                        {' '}— {dist.total} alumnes
-                        {grup.entrades.filter((e) => e.sensCasar).length > 0 && (
-                          `, ${grup.entrades.filter((e) => e.sensCasar).length} amb el nom del PDF (ja no són al centre)`
-                        )}
-                      </span>
-                    </p>
-                    <table style={{ borderCollapse: 'collapse', fontSize: 12 }}>
-                      <tbody>
-                        {dist.files.map((f) => (
-                          <tr key={f.nivell}>
-                            <td style={{ padding: '2px 12px 2px 0' }}>{f.nivell}</td>
-                            <td style={{ padding: '2px 12px', textAlign: 'right' }}>{f.alumnes}</td>
-                            <td style={{ padding: '2px 12px', textAlign: 'right', color: 'var(--ink-soft)' }}>{f.percentatge}%</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
       </div>
+      )}
     </div>
   )
 }
