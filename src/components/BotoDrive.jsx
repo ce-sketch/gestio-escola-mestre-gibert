@@ -14,7 +14,7 @@ import { triaDocumentDelDrive } from '../lib/drivePicker'
  * @param {(event: {target: {files: File[], value: string}}) => void} onFitxer
  * @param {(missatge: string) => void} [onError]
  * @param {boolean} [disabled]
- * @param {'fulls'|'documents'} [tipus]  què es pot triar al selector
+ * @param {'fulls'|'documents'|'csv'|'pdf'} [tipus]  què es pot triar al selector
  * @param {string} [etiqueta]
  */
 export default function BotoDrive({
