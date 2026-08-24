@@ -64,7 +64,7 @@ export default function Matematiques({ cursEscolarFixat = null, nomesCarrega = f
     setMissatge(null)
     setConmat(null)
     try {
-      const resultat = await llegeixConmat(await fitxer.arrayBuffer())
+      const resultat = await llegeixConmat(await fitxer.arrayBuffer(), fitxer.name)
       const { casats, sensCasar, dubtosos } = casaAmbAlumnes(resultat.alumnes, alumnes)
       setConmat({ ...resultat, casats, sensCasar, dubtosos, fitxer: fitxer.name })
     } catch (err) {
@@ -315,7 +315,7 @@ export default function Matematiques({ cursEscolarFixat = null, nomesCarrega = f
         {conmat && (
           <div style={{ marginTop: 14 }}>
             <strong style={{ fontSize: 13 }}>
-              {conmat.classe ?? 'Classe desconeguda'} — {conmat.moment ?? 'moment desconegut'}
+              Curs {cursEscolarId} · {conmat.classe ?? 'classe desconeguda'} — {conmat.moment ?? 'moment desconegut'}
               {' '}· {conmat.alumnes.length} alumnes
             </strong>
 
@@ -346,6 +346,39 @@ export default function Matematiques({ cursEscolarFixat = null, nomesCarrega = f
                 </tbody>
               </table>
             </div>
+
+            {(conmat.comparativa?.length ?? 0) > 0 && (
+              <details style={{ marginTop: 10 }}>
+                <summary style={{ fontSize: 12, cursor: 'pointer', color: 'var(--ink-soft)' }}>
+                  Comparativa amb la mitjana d'Innovamat, pregunta per pregunta ({conmat.comparativa.length})
+                </summary>
+                <table style={{ borderCollapse: 'collapse', fontSize: 11, marginTop: 8 }}>
+                  <thead>
+                    <tr style={{ textAlign: 'left', borderBottom: '2px solid var(--line)' }}>
+                      <th style={{ padding: '3px 10px 3px 0' }}>Contingut</th>
+                      <th style={{ padding: '3px 10px', textAlign: 'right' }}>Classe</th>
+                      <th style={{ padding: '3px 10px', textAlign: 'right' }}>Innovamat</th>
+                      <th style={{ padding: '3px 10px', textAlign: 'right' }}>Dif.</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {conmat.comparativa.map((c, i) => (
+                      <tr key={i} style={{ borderBottom: '1px solid var(--line)' }}>
+                        <td style={{ padding: '3px 10px 3px 0' }}>{c.contingut}</td>
+                        <td style={{ padding: '3px 10px', textAlign: 'right' }}>{c.classe}%</td>
+                        <td style={{ padding: '3px 10px', textAlign: 'right', color: 'var(--ink-soft)' }}>{c.global}%</td>
+                        <td style={{
+                          padding: '3px 10px', textAlign: 'right', fontWeight: 600,
+                          color: c.diferencia >= 0 ? 'var(--green, #2d6a4f)' : 'var(--red, #b03030)',
+                        }}>
+                          {c.diferencia > 0 ? '+' : ''}{c.diferencia}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </details>
+            )}
 
             {conmat.casats.some((a) => a.casatPerAproximacio) && (
               <div className="caixa-discreta" style={{ marginTop: 10 }}>
