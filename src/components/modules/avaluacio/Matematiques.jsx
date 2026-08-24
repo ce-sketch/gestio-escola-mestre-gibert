@@ -152,10 +152,24 @@ export default function Matematiques({ cursEscolarFixat = null, nomesCarrega = f
    * o s'escriuen totes o cap, així no queden càrregues a mitges.
    */
   async function escriuEnLots(operacions) {
+    // Un lot no pot escriure dues vegades al mateix document: si el mateix
+    // identificador surt més d'un cop (dos informes de la mateixa classe,
+    // o un alumne sense casar que apareix a inici i a final), es fusionen
+    // en una sola operació. Sense això, desar diversos informes alhora
+    // peta amb un error de Firestore.
+    const perId = new Map()
+    for (const op of operacions) {
+      const previ = perId.get(op.id)
+      perId.set(op.id, previ
+        ? { id: op.id, dades: { ...previ.dades, ...op.dades, conmat: { ...previ.dades.conmat, ...op.dades.conmat } } }
+        : op)
+    }
+    const unics = [...perId.values()]
+
     const MAX = 450 // el límit real és 500; es deixa marge
-    for (let i = 0; i < operacions.length; i += MAX) {
+    for (let i = 0; i < unics.length; i += MAX) {
       const lot = writeBatch(db)
-      for (const op of operacions.slice(i, i + MAX)) {
+      for (const op of unics.slice(i, i + MAX)) {
         lot.set(doc(db, 'matematiques', op.id), op.dades, { merge: true })
       }
       await lot.commit()
