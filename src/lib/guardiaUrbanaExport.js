@@ -15,6 +15,7 @@
 // costat com a referència.
 
 import { activitatsDelCicle } from './activitatsComplementariesParser'
+import { normalitza as sensAccents } from './text'
 
 export const CICLES = ['Educació Infantil', 'Cicle Inicial', 'Cicle Mitjà', 'Cicle Superior']
 
@@ -28,9 +29,7 @@ export const DIRECTOR_DEFECTE = 'Àlvaro Molero Mateos'
 
 export const MESOS_CURS = ['Setembre', 'Octubre', 'Novembre', 'Desembre', 'Gener', 'Febrer', 'Març', 'Abril', 'Maig', 'Juny']
 
-function sensAccents(text) {
-  return (text ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
-}
+
 
 function vaAmbAutocar(activitat) {
   return sensAccents(activitat.transport).includes('autocar')

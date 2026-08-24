@@ -1,3 +1,4 @@
+import { senseAccents } from './text'
 // Valoracions de cicle/comissió/equip, fidels a l'estructura real dels
 // fulls de càlcul "Valoració ..." del centre: Responsable, Membres, una
 // llista d'Objectius (cada un amb Gener/Juny en %), i opcionalment — pels
@@ -252,9 +253,8 @@ const PARAULES_BUIDES = ['de', 'del', 'dels', 'd', 'la', 'el', 'els', 'les', 'l'
 /** Deixa un nom en la seva forma comparable: sense accents, sense
  *  apòstrofs, sense signes i sense articles ni preposicions. */
 export function nomCanonic(nom) {
-  return (nom ?? '')
+  return senseAccents(nom)
     .toLowerCase()
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9\s]/g, ' ')
     .split(/\s+/)
     .filter((p) => p && !PARAULES_BUIDES.includes(p))

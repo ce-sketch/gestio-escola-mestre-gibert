@@ -1,3 +1,4 @@
+import { senseAccents } from './text'
 // Lector dels CSV de resultats del COSMOS (Innovamat).
 //
 // Cada curs, l'Innovamat envia un CSV per classe amb els resultats de la
@@ -41,10 +42,8 @@ const neteja = (t) => String(t ?? '').replace(/[’']/g, "'").replace(/\s+/g, ' 
 /** "fluïdesa aritmètica" → "fluidesa_aritmetica". Sense treure els accents
  *  abans, quedaria "flu_desa_arit_tica" i seria il·legible. */
 function aIdentificador(text) {
-  return String(text)
+  return senseAccents(text)
     .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]+/g, '_')
     .replace(/^_|_$/g, '')
 }

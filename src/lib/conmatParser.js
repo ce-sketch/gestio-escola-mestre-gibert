@@ -25,6 +25,7 @@
 
 
 import { carregaPdfjs } from './carregaLlibreries'
+import { clauDeText, paraulesDe } from './text'
 /** Els quatre nivells del ConMat, amb el seu equivalent en percentatge per
  *  poder-los barrejar amb la resta d'indicadors de l'app. */
 export const NIVELLS_CONMAT = [
@@ -48,11 +49,7 @@ export function nivellAPercentatge(text) {
  * les dues formes coincideixen.
  */
 export function claueDeNom(text) {
-  return String(text ?? '')
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]/g, '')
+  return clauDeText(text)
 }
 
 /** Text pla de cada pàgina del PDF. */
@@ -171,14 +168,7 @@ export async function llegeixConmat(buffer, nomFitxer = '') {
 /** Les paraules d'un nom, normalitzades i ordenades. Serveix per casar
  *  noms escrits en ordre diferent o amb parts de menys. */
 export function paraulesDeNom(text) {
-  return String(text ?? '')
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9\s]/g, ' ')
-    .split(/\s+/)
-    .filter(Boolean)
-    .sort()
+  return paraulesDe(text).sort()
 }
 
 /** Clau independent de l'ordre de les paraules: "Pol Pérez" i "Pérez Pol"

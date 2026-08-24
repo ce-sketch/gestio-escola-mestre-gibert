@@ -1,3 +1,4 @@
+import { senseAccents } from './text'
 // Índex de coses que es poden buscar des de l'Inici.
 //
 // Els mòduls surten sols del menú, però dins de cada mòdul hi ha pestanyes
@@ -70,11 +71,7 @@ export const DESTINACIONS = [
 
 /** Treu accents i majúscules per poder comparar sense manies. */
 function normalitza(text) {
-  return String(text ?? '')
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .trim()
+  return senseAccents(text).toLowerCase().trim()
 }
 
 /**
