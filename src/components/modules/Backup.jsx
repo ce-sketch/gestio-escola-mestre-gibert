@@ -7,6 +7,7 @@ import { aCsv, formataData } from '../../lib/csv'
 import { comptaDiesLectius } from '../../lib/calendar'
 import { calculaIndexos } from '../../lib/absentisme'
 import { cursEscolarActual } from '../../lib/cursEscolar'
+import { slug } from '../../lib/slug'
 
 const DIES_AVIS = 30
 
@@ -653,15 +654,8 @@ function agrupaPer(llista, claver) {
   return grups
 }
 
-function netejaNom(text) {
-  return text
-    .toString()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)/g, '')
-}
+// És exactament el mateix que slug(): noms de fitxer sense accents.
+const netejaNom = slug
 
 function substituteixTimestamps(key, value) {
   if (value && typeof value === 'object' && typeof value.toDate === 'function') {
