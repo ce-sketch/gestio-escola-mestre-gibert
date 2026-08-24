@@ -525,17 +525,34 @@ export default function Matematiques({ cursEscolarFixat = null, nomesCarrega = f
               </div>
             )}
 
-            {conmat.sensCasar.length > 0 && (
+            {conmat.sensCasar.length > 0 && (() => {
+              // Si NO ha casat ningú de tot l'informe, no és que els noms
+              // estiguin escrits diferent: és una promoció que ja ha
+              // marxat (típicament el 6è d'un curs anterior). En aquest
+              // cas la llista de desplegables no serveix de res, i val
+              // més dir-ho clar i deixar-la plegada.
+              const capCasat = conmat.casats.length === 0
+              return (
               <div className="caixa-discreta" style={{ marginTop: 10 }}>
                 <strong style={{ fontSize: 12 }}>
-                  {conmat.sensCasar.length} alumnes de l'informe no s'han pogut relacionar amb cap fitxa
+                  {capCasat
+                    ? `Cap dels ${conmat.sensCasar.length} alumnes d'aquest informe consta al centre`
+                    : `${conmat.sensCasar.length} alumnes de l'informe no s'han pogut relacionar amb cap fitxa`}
                 </strong>
                 <p className="nota">
-                  Poden ser alumnes que ja no són al centre, o bé que a l'informe tinguin el nom
-                  escrit diferent del de la seva fitxa. Si reconeixes algú, assigna'l amb el
-                  desplegable; si no, es desarà igualment amb el nom del PDF.
+                  {capCasat
+                    ? "Sembla una promoció que ja ha deixat l'escola (per exemple, el 6è d'un curs anterior). Els resultats es desaran igualment a l'històric amb el nom de l'informe, i comptaran als percentatges del centre."
+                    : "Poden ser alumnes que ja no són al centre, o bé que a l'informe tinguin el nom escrit diferent del de la seva fitxa. Si reconeixes algú, assigna'l amb el desplegable; si no, es desarà igualment amb el nom del PDF."}
                 </p>
-                <ul style={{ fontSize: 12, color: 'var(--ink-soft)', paddingLeft: 18, marginTop: 4 }}>
+                {capCasat && (
+                  <details style={{ marginTop: 6 }}>
+                    <summary style={{ fontSize: 12, cursor: 'pointer', color: 'var(--ink-soft)' }}>
+                      Veure'ls igualment i assignar-ne algun
+                    </summary>
+                    <p className="nota">Només cal si algun d'aquests alumnes encara és al centre.</p>
+                  </details>
+                )}
+                <ul style={{ fontSize: 12, color: 'var(--ink-soft)', paddingLeft: 18, marginTop: 4, display: capCasat ? 'none' : undefined }}>
                   {conmat.sensCasar.map((a, i) => {
                     // Els del centre que més s'assemblen, per si el nom
                     // està escrit diferent a l'informe i no ha casat sol.
@@ -562,7 +579,8 @@ export default function Matematiques({ cursEscolarFixat = null, nomesCarrega = f
                   })}
                 </ul>
               </div>
-            )}
+              )
+            })()}
 
             {/* El botó desa TOTS els informes llegits, no només el que
                 s'està mirant: per això mira el total, i no si l'informe
