@@ -6,6 +6,7 @@ import { llegeixConmat, casaAmbAlumnes, distribucio, NIVELLS_CONMAT, clauOrdenad
 import { llegeixCosmos, resumClasse } from '../../../lib/cosmosParser'
 import BotoDrive from '../../BotoDrive'
 import { momentId, momentLabel, entradesHistoric } from '../../../lib/historicInnovamat'
+import { clauDeText } from '../../../lib/text'
 
 /**
  * Avaluació referencial de matemàtiques.
@@ -113,8 +114,7 @@ export default function Matematiques({ cursEscolarFixat = null, nomesCarrega = f
     }
   }
 
-  const clauDe = (t) => String(t ?? '').toLowerCase().normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '')
+  const clauDe = clauDeText
 
   /** Quantes paraules comparteixen dos noms — per suggerir, a cada
    *  alumne sense casar, quins del centre s'hi assemblen més. */
