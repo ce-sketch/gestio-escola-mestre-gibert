@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { collection, getDocs, doc, setDoc, serverTimestamp } from 'firebase/firestore'
+import { collection, getDocs, doc, setDoc, deleteDoc, updateDoc, deleteField, serverTimestamp } from 'firebase/firestore'
 import { db, auth } from '../../../firebase'
 import { cursEscolarActual } from '../../../lib/cursEscolar'
 import {
@@ -28,6 +28,7 @@ export default function HistoricInnovamat() {
   const [refs, setRefs] = useState({})
   const [refForm, setRefForm] = useState({ curs: cursEscolarActual(), moment: 'final', nivell: '', ambit: 'catalunya', Baix: '', 'Mitjà-baix': '', 'Mitjà-alt': '', Alt: '' })
   const [desantRef, setDesantRef] = useState(false)
+  const [esborrant, setEsborrant] = useState(false)
 
   useEffect(() => { carrega() }, [])
 
@@ -70,6 +71,66 @@ export default function HistoricInnovamat() {
       setError(err.message)
     } finally {
       setDesantRef(false)
+    }
+  }
+
+  /**
+   * Desfà la càrrega d'un informe (una classe i un moment concrets).
+   *
+   * Compte: un mateix document d'alumne pot contenir el ConMat d'inici I
+   * el de final, i a més les dades de COSMOS. Per això només s'esborra el
+   * moment que toca; el document sencer només desapareix si no hi queda
+   * res més a dins.
+   */
+  async function esborraInforme(cursEscolar, classe, moment) {
+    const afectats = registres.filter((r) =>
+      r.tipus !== 'informe' && r.tipus !== 'referencia'
+      && r.cursEscolar === cursEscolar
+      && r.conmat?.[moment]?.classe === classe)
+
+    if (!window.confirm(
+      `Esborrar el ConMat de ${classe} (${momentLabel(moment)}, curs ${cursEscolar})?\n\n`
+      + `Afecta ${afectats.length} alumnes. La resta de dades (l'altre moment i el COSMOS) es mantenen.`
+    )) return
+
+    setEsborrant(true)
+    try {
+      for (const r of afectats) {
+        const restaConmat = Object.keys(r.conmat ?? {}).filter((m) => m !== moment)
+        const teCosmos = !!r.cosmos
+        if (restaConmat.length === 0 && !teCosmos) {
+          await deleteDoc(doc(db, 'matematiques', r.id))
+        } else {
+          await updateDoc(doc(db, 'matematiques', r.id), { [`conmat.${moment}`]: deleteField() })
+        }
+      }
+      await deleteDoc(doc(db, 'matematiques', `informe__${cursEscolar}__${classe}__${moment}`)).catch(() => {})
+      await carrega()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setEsborrant(false)
+    }
+  }
+
+  /** Esborra tots els resultats d'Innovamat d'un curs escolar sencer.
+   *  Les referències introduïdes a mà es mantenen. */
+  async function esborraCurs(cursEscolar) {
+    const afectats = registres.filter((r) => r.cursEscolar === cursEscolar && r.tipus !== 'referencia')
+    if (!window.confirm(
+      `Esborrar TOTS els resultats d'Innovamat del curs ${cursEscolar}?\n\n`
+      + `S'esborraran ${afectats.length} registres (ConMat i COSMOS). Les referències d'Innovamat es mantenen.\n\n`
+      + 'Aquesta acció no es pot desfer.'
+    )) return
+
+    setEsborrant(true)
+    try {
+      for (const r of afectats) await deleteDoc(doc(db, 'matematiques', r.id))
+      await carrega()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setEsborrant(false)
     }
   }
 
@@ -174,6 +235,23 @@ export default function HistoricInnovamat() {
             {cursos.length > 0 && ` (${cursos.join(', ')})`}.
           </p>
 
+          {cursos.length > 0 && (
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 12 }}>
+              <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}>Esborra tot un curs:</span>
+              {cursos.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => esborraCurs(c)}
+                  disabled={esborrant}
+                  style={{ background: 'none', border: '1px solid var(--red, #b03030)', color: 'var(--red, #b03030)', borderRadius: 6, padding: '3px 10px', fontSize: 11, cursor: 'pointer' }}
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* ── Informes carregats ─────────────────────────────────── */}
           <h3 style={{ fontSize: 15, marginTop: 24 }}>Informes carregats</h3>
           {informes.length === 0 ? (
@@ -189,6 +267,7 @@ export default function HistoricInnovamat() {
                   <th style={{ padding: '4px 14px' }}>Classe</th>
                   <th style={{ padding: '4px 14px' }}>Moment</th>
                   <th style={{ padding: '4px 14px' }}>Alumnes</th>
+                  <th style={{ padding: '4px 14px' }}></th>
                 </tr>
               </thead>
               <tbody>
@@ -204,6 +283,16 @@ export default function HistoricInnovamat() {
                         {r.alumnesSenseCasar > 0 && (
                           <span style={{ color: 'var(--ink-soft)' }}> (+{r.alumnesSenseCasar} amb nom de l'informe)</span>
                         )}
+                      </td>
+                      <td style={{ padding: '4px 14px' }}>
+                        <button
+                          type="button"
+                          onClick={() => esborraInforme(r.cursEscolar, r.classe, r.moment)}
+                          disabled={esborrant}
+                          style={{ background: 'none', border: '1px solid var(--red, #b03030)', color: 'var(--red, #b03030)', borderRadius: 6, padding: '2px 8px', fontSize: 11, cursor: 'pointer' }}
+                        >
+                          Desfés
+                        </button>
                       </td>
                     </tr>
                   ))}
