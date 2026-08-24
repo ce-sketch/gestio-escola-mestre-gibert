@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { collection, doc, getDocs, query, setDoc, where, serverTimestamp } from 'firebase/firestore'
 import { db, auth } from '../../../firebase'
 import { cursEscolarActual } from '../../../lib/cursEscolar'
-import { llegeixConmat, casaAmbAlumnes, distribucio, NIVELLS_CONMAT, clauOrdenadaDeNom } from '../../../lib/conmatParser'
+import { llegeixConmat, casaAmbAlumnes, distribucio, NIVELLS_CONMAT, clauOrdenadaDeNom, paraulesDeNom } from '../../../lib/conmatParser'
 import { llegeixCosmos, resumClasse } from '../../../lib/cosmosParser'
 import BotoDrive from '../../BotoDrive'
 import { momentId, momentLabel, entradesHistoric } from '../../../lib/historicInnovamat'
@@ -115,6 +115,33 @@ export default function Matematiques({ cursEscolarFixat = null, nomesCarrega = f
 
   const clauDe = (t) => String(t ?? '').toLowerCase().normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '')
+
+  /** Quantes paraules comparteixen dos noms — per suggerir, a cada
+   *  alumne sense casar, quins del centre s'hi assemblen més. */
+  function semblanca(nomA, nomB) {
+    const a = new Set(paraulesDeNom(nomA))
+    const b = paraulesDeNom(nomB)
+    return b.filter((p) => a.has(p)).length
+  }
+
+  /** Assigna a mà un alumne del PDF a una fitxa del centre, quan el
+   *  casament automàtic no ho ha pogut resoldre (noms escrits diferent,
+   *  errades a l'informe...). */
+  function assignaManualment(indexSensCasar, alumneId) {
+    if (!alumneId) return
+    const alumne = alumnes.find((x) => x.id === alumneId)
+    if (!alumne) return
+    setConmat((prev) => {
+      const delPdf = prev.sensCasar[indexSensCasar]
+      const nou = {
+        ...prev,
+        casats: [...prev.casats, { ...delPdf, alumneId: alumne.id, nom: alumne.nom, nomPdf: delPdf.nom, assignatAMa: true }],
+        sensCasar: prev.sensCasar.filter((_, i) => i !== indexSensCasar),
+      }
+      setConmats((llista) => llista.map((c) => (c.fitxer === prev.fitxer ? nou : c)))
+      return nou
+    })
+  }
 
   async function desaConmat() {
     const informes = conmats.length > 0 ? conmats : (conmat ? [conmat] : [])
@@ -460,11 +487,35 @@ export default function Matematiques({ cursEscolarFixat = null, nomesCarrega = f
                   {conmat.sensCasar.length} alumnes de l'informe no s'han pogut relacionar amb cap fitxa
                 </strong>
                 <p className="nota">
-                  Segurament són alumnes que ja no consten com a actius al centre. Els seus
-                  resultats SÍ que es desaran a l'històric, amb el nom tal com surt al PDF.
+                  Poden ser alumnes que ja no són al centre, o bé que a l'informe tinguin el nom
+                  escrit diferent del de la seva fitxa. Si reconeixes algú, assigna'l amb el
+                  desplegable; si no, es desarà igualment amb el nom del PDF.
                 </p>
                 <ul style={{ fontSize: 12, color: 'var(--ink-soft)', paddingLeft: 18, marginTop: 4 }}>
-                  {conmat.sensCasar.map((a, i) => <li key={i}>{a.nomPdf} — {a.nivell}</li>)}
+                  {conmat.sensCasar.map((a, i) => {
+                    // Els del centre que més s'assemblen, per si el nom
+                    // està escrit diferent a l'informe i no ha casat sol.
+                    const suggerits = alumnes
+                      .map((al) => ({ al, punts: semblanca(a.nom, al.nom) }))
+                      .sort((x, y) => y.punts - x.punts || x.al.nom.localeCompare(y.al.nom))
+                    return (
+                      <li key={i} style={{ marginBottom: 6 }}>
+                        {a.nom} — {a.nivell}
+                        <select
+                          defaultValue=""
+                          onChange={(e) => assignaManualment(i, e.target.value)}
+                          style={{ marginLeft: 8, border: '1px solid var(--line)', borderRadius: 6, padding: '2px 6px', fontSize: 11, maxWidth: 260 }}
+                        >
+                          <option value="">— assigna'l a un alumne —</option>
+                          {suggerits.map(({ al, punts }) => (
+                            <option key={al.id} value={al.id}>
+                              {al.nom}{punts > 0 ? ` (${punts} coincidències)` : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </li>
+                    )
+                  })}
                 </ul>
               </div>
             )}
