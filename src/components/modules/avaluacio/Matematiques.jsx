@@ -34,7 +34,8 @@ export default function Matematiques({ cursEscolarFixat = null, nomesCarrega = f
   const [llegint, setLlegint] = useState(false)
   const [desant, setDesant] = useState(false)
   const [missatge, setMissatge] = useState(null)
-  const [conmat, setConmat] = useState(null)   // { classe, moment, casats, sensCasar, avisos }
+  const [conmat, setConmat] = useState(null)
+  const [conmats, setConmats] = useState([]) // tots els informes llegits de cop   // { classe, moment, casats, sensCasar, avisos }
   const [cosmos, setCosmos] = useState(null)   // { alumnes, dimensions, avisos }
   const [desats, setDesats] = useState([])
 
@@ -57,21 +58,35 @@ export default function Matematiques({ cursEscolarFixat = null, nomesCarrega = f
   }
 
   // ── ConMat (PDF) ────────────────────────────────────────────────────
+  /**
+   * Llegeix un o diversos informes de ConMat. Es poden pujar de cop tots
+   * els d'una mateixa avaluació (inici o final), que és com arriben de
+   * l'Innovamat: un PDF per classe. Cada informe es llegeix per separat i
+   * es desa amb la seva classe, però es revisen tots junts abans de desar.
+   */
   async function pujaConmat(e) {
-    const fitxer = e.target.files?.[0]
-    if (!fitxer) return
+    const fitxers = [...(e.target.files ?? [])]
+    if (fitxers.length === 0) return
     setLlegint(true)
     setMissatge(null)
     setConmat(null)
-    try {
-      const resultat = await llegeixConmat(await fitxer.arrayBuffer(), fitxer.name)
-      const { casats, sensCasar, dubtosos } = casaAmbAlumnes(resultat.alumnes, alumnes)
-      setConmat({ ...resultat, casats, sensCasar, dubtosos, fitxer: fitxer.name })
-    } catch (err) {
-      setMissatge({ type: 'error', text: err.message })
-    } finally {
-      setLlegint(false)
+    const llegits = []
+    const errors = []
+    for (const fitxer of fitxers) {
+      try {
+        const resultat = await llegeixConmat(await fitxer.arrayBuffer(), fitxer.name)
+        const { casats, sensCasar, dubtosos } = casaAmbAlumnes(resultat.alumnes, alumnes)
+        llegits.push({ ...resultat, casats, sensCasar, dubtosos, fitxer: fitxer.name })
+      } catch (err) {
+        errors.push(`${fitxer.name}: ${err.message}`)
+      }
     }
+    if (errors.length > 0) {
+      setMissatge({ type: 'error', text: `No s'han pogut llegir ${errors.length} informes — ${errors.join(' · ')}` })
+    }
+    setConmats(llegits)
+    setConmat(llegits[0] ?? null)
+    setLlegint(false)
   }
 
   // ── COSMOS (CSV) ────────────────────────────────────────────────────
@@ -102,9 +117,12 @@ export default function Matematiques({ cursEscolarFixat = null, nomesCarrega = f
     .replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '')
 
   async function desaConmat() {
-    if (!conmat?.casats.length) return
+    const informes = conmats.length > 0 ? conmats : (conmat ? [conmat] : [])
+    if (informes.length === 0) return
     setDesant(true)
     try {
+      let totalDesats = 0
+      for (const conmat of informes) {
       // El resultat es desa DINS del moment de la prova ("inici"/"final"),
       // no directament a `conmat`. Així, pujar l'informe de final de curs
       // ja no esborra el d'inici del mateix alumne, i queda històric.
@@ -170,12 +188,13 @@ export default function Matematiques({ cursEscolarFixat = null, nomesCarrega = f
         actualitzatEl: serverTimestamp(),
         actualitzatPer: auth.currentUser?.email ?? null,
       }, { merge: true })
-      const nSense = conmat.sensCasar?.length ?? 0
+      totalDesats += conmat.casats.length + (conmat.sensCasar?.length ?? 0)
+      }
       setMissatge({
         type: 'ok',
-        text: `${conmat.casats.length + nSense} resultats de ConMat desats (${conmat.classe} · ${momentLabel(idMoment)})`
-          + (nSense > 0 ? `, dels quals ${nSense} amb el nom del PDF perquè no consten com a alumnes actius.` : '.'),
+        text: `${totalDesats} resultats de ConMat desats de ${informes.length} informe${informes.length === 1 ? '' : 's'}.`,
       })
+      setConmats([])
       setConmat(null)
       carrega()
       onDesat?.()
@@ -286,7 +305,7 @@ export default function Matematiques({ cursEscolarFixat = null, nomesCarrega = f
       <div className="caixa" style={{ marginTop: 20 }}>
         <strong style={{ fontSize: 14 }}>ConMat</strong>
         <p className="nota" style={{ maxWidth: '100%' }}>
-          L'informe en PDF, un per classe i moment. Se n'obté el <strong>nivell global</strong> de
+          L'informe en PDF, un per classe i moment. Pots pujar de cop tots els d'una mateixa avaluació. Se n'obté el <strong>nivell global</strong> de
           cada alumne i les preguntes respostes. Els resultats per bloc (Numeració, Espai i
           forma…) hi són com a gràfics i no es poden llegir.
         </p>
@@ -294,13 +313,14 @@ export default function Matematiques({ cursEscolarFixat = null, nomesCarrega = f
           <BotoDrive
             onFitxer={pujaConmat}
             tipus="pdf"
-            etiqueta="Tria l'informe del Drive"
+            etiqueta="Tria els informes del Drive"
+            multiple
             onError={(t) => setMissatge({ type: 'error', text: t })}
             disabled={llegint}
           />
           <label className="btn-ghost" style={{ color: 'var(--navy)', borderColor: 'var(--navy)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center' }}>
             📤 Puja el PDF del ConMat
-            <input type="file" accept=".pdf" style={{ display: 'none' }}
+            <input type="file" accept=".pdf" multiple style={{ display: 'none' }}
               onChange={(e) => { pujaConmat(e); e.target.value = '' }} />
           </label>
           {/* El lector del CSV encara no hi és: cal una mostra real del fitxer
@@ -346,6 +366,26 @@ export default function Matematiques({ cursEscolarFixat = null, nomesCarrega = f
                 </tbody>
               </table>
             </div>
+
+            {conmats.length > 1 && (
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', margin: '10px 0' }}>
+                {conmats.map((c) => (
+                  <button
+                    key={c.fitxer}
+                    type="button"
+                    onClick={() => setConmat(c)}
+                    style={{
+                      border: '1px solid var(--line)', borderRadius: 6, padding: '4px 10px', fontSize: 12,
+                      cursor: 'pointer',
+                      background: c.fitxer === conmat.fitxer ? 'var(--ink)' : 'transparent',
+                      color: c.fitxer === conmat.fitxer ? '#fff' : 'var(--ink)',
+                    }}
+                  >
+                    {c.classe ?? c.fitxer}
+                  </button>
+                ))}
+              </div>
+            )}
 
             {(conmat.comparativa?.length ?? 0) > 0 && (
               <details style={{ marginTop: 10 }}>
@@ -436,7 +476,7 @@ export default function Matematiques({ cursEscolarFixat = null, nomesCarrega = f
               className="btn-primary"
               style={{ marginTop: 12, maxWidth: 280 }}
             >
-              Desa els {conmat.casats.length + (conmat.sensCasar?.length ?? 0)} resultats
+              Desa els {(conmats.length > 0 ? conmats : [conmat]).reduce((t, c) => t + c.casats.length + (c.sensCasar?.length ?? 0), 0)} resultats{conmats.length > 1 ? ` de ${conmats.length} informes` : ''}
             </button>
           </div>
         )}
