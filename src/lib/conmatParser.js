@@ -104,10 +104,22 @@ export async function llegeixConmat(buffer, nomFitxer = '') {
   const curs = portada.find((l) => /^\d+$/.test(l)) ?? null
 
   // ── Participació: quants alumnes hauria d'haver-hi ──────────────────
+  // La taula de participació dona DOS números: els alumnes avaluats a
+  // l'inici de curs i els del final ("27 24"). Es tria el del final,
+  // perquè és la llista que l'informe fa servir per a tot.
+  //
+  // Compte: abans es buscava sobre el text amb els espais tallats, i
+  // llavors "27 24" es llegia com un sol número, 2724.
   let esperats = null
   for (const pagina of pagines.slice(0, 6)) {
-    const m = pagina.replace(/\s/g, '').match(/Alumnesambprouinformacióperser(\d+)(\d+)?/i)
-    if (m) { esperats = Number(m[2] ?? m[1]); break }
+    if (!/Alumnes amb prou informaci[óo] per ser/i.test(pagina)) continue
+    // Els dos números van sols en una línia; el número de pàgina també
+    // va sol, però és un de sol i no dos.
+    for (const linia of pagina.split('\n')) {
+      const m = linia.trim().match(/^(\d{1,3})\s+(\d{1,3})$/)
+      if (m) { esperats = Number(m[2]); break }
+    }
+    if (esperats !== null) break
   }
 
   // ── Una pàgina per alumne ───────────────────────────────────────────
@@ -213,7 +225,7 @@ export function casaAmbAlumnes(delPdf, delCentre) {
       continue
     }
 
-    const delPdfParaules = paraulesDeNom(a.nom)
+    const delPdfParaules = paraulesDeNom(a.nomPdf ?? a.nom)
     // L'ambigüitat es mira contra TOT l'alumnat del centre, no només
     // contra els que encara no s'han casat. Si no, un nom incomplet com
     // "Ruiz Lozano" (dues germanes) s'acabaria assignant a la germana que
@@ -226,11 +238,11 @@ export function casaAmbAlumnes(delPdf, delCentre) {
 
     if (candidats.length === 1 && !jaCasats.has(candidats[0].alumne.id)) {
       const { alumne } = candidats[0]
-      casats.push({ ...a, alumneId: alumne.id, nom: alumne.nom, nomPdf: a.nom, casatPerAproximacio: true })
+      casats.push({ ...a, alumneId: alumne.id, nom: alumne.nom, casatPerAproximacio: true })
       jaCasats.add(alumne.id)
     } else {
       if (candidats.length > 1) {
-        dubtosos.push({ nom: a.nom, candidats: candidats.map((c) => c.alumne.nom) })
+        dubtosos.push({ nom: a.nomPdf ?? a.nom, candidats: candidats.map((c) => c.alumne.nom) })
       }
       sensCasar.push(a)
     }

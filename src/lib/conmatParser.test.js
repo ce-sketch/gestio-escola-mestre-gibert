@@ -7,9 +7,11 @@ vi.mock('./carregaLlibreries', () => ({ carregaPdfjs: () => {} }))
 
 const { casaAmbAlumnes, claueDeNom, paraulesDeNom, clauOrdenadaDeNom } = await import('./conmatParser')
 
-/** Prepara els alumnes tal com surten del PDF (amb la clau ja calculada). */
+/** Prepara els alumnes tal com surten del PDF. El parser desa el nom a
+ *  `nomPdf` (no a `nom`): confondre-ho va fer que el casament tolerant no
+ *  funcionés i que el desat petés amb el nom buit. */
 function delPdf(...noms) {
-  return noms.map((nom) => ({ nom, clau: claueDeNom(nom), nivell: 'Alt' }))
+  return noms.map((nomPdf) => ({ nomPdf, clau: claueDeNom(nomPdf), nivell: 'Alt' }))
 }
 
 describe('claueDeNom', () => {
@@ -67,6 +69,13 @@ describe('casaAmbAlumnes', () => {
     // no ha d'acabar assignat a la Irati per descart.
     const { dubtosos } = casaAmbAlumnes(delPdf('Ruiz Lozano Laia-Ixela', 'Ruiz Lozano'), centre)
     expect(dubtosos).toHaveLength(1)
+  })
+
+  it('els no casats conserven el nom de l\'informe', () => {
+    // Sense això, el desat mirava un camp inexistent i Firestore
+    // rebutjava el document sencer per tenir el nom indefinit.
+    const { sensCasar } = casaAmbAlumnes(delPdf('Desconegut Pere'), centre)
+    expect(sensCasar[0].nomPdf).toBe('Desconegut Pere')
   })
 
   it('deixa sense casar els que no són al centre', () => {
