@@ -564,15 +564,36 @@ export default function Matematiques({ cursEscolarFixat = null, nomesCarrega = f
               </div>
             )}
 
-            <button
-              type="button"
-              onClick={desaConmat}
-              disabled={desant || conmat.casats.length === 0}
-              className="btn-primary"
-              style={{ marginTop: 12, maxWidth: 280 }}
-            >
-              Desa els {(conmats.length > 0 ? conmats : [conmat]).reduce((t, c) => t + c.casats.length + (c.sensCasar?.length ?? 0), 0)} resultats{conmats.length > 1 ? ` de ${conmats.length} informes` : ''}
-            </button>
+            {/* El botó desa TOTS els informes llegits, no només el que
+                s'està mirant: per això mira el total, i no si l'informe
+                visible té alumnes casats. Abans, obrir una classe on no
+                n'hi hagués cap el deixava bloquejat sense explicació. */}
+            {(() => {
+              const totsElsInformes = conmats.length > 0 ? conmats : [conmat]
+              const total = totsElsInformes.reduce((t, c) => t + c.casats.length + (c.sensCasar?.length ?? 0), 0)
+              return (
+                <>
+                  <button
+                    type="button"
+                    onClick={desaConmat}
+                    disabled={desant || total === 0}
+                    className="btn-primary"
+                    style={{ marginTop: 12, maxWidth: 280 }}
+                  >
+                    {desant
+                      ? 'Desant…'
+                      : `Desa els ${total} resultats${conmats.length > 1 ? ` de ${conmats.length} informes` : ''}`}
+                  </button>
+                  {/* El missatge també aquí: a dalt del mòdul queda fora de
+                      pantalla i sembla que el botó no hagi respost. */}
+                  {missatge && (
+                    <p className={missatge.type === 'error' ? 'nota nota-error' : 'nota'} style={{ marginTop: 8 }}>
+                      {missatge.text}
+                    </p>
+                  )}
+                </>
+              )
+            })()}
           </div>
         )}
       </div>
@@ -632,7 +653,7 @@ export default function Matematiques({ cursEscolarFixat = null, nomesCarrega = f
             <button
               type="button"
               onClick={desaCosmos}
-              disabled={desant || cosmos.casats.length === 0}
+              disabled={desant || (cosmos.casats.length + (cosmos.sensCasar?.length ?? 0)) === 0}
               className="btn-primary"
               style={{ marginTop: 12, maxWidth: 280 }}
             >
