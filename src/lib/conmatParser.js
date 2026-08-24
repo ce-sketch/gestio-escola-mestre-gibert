@@ -157,7 +157,9 @@ export async function llegeixConmat(buffer, nomFitxer = '') {
     '(Numeració, Espai i forma…) hi són com a gràfics i no es poden llegir.'
   )
 
-  return { classe, moment, curs, esperats, alumnes, avisos }
+  const comparativa = comparativaPerPregunta(pagines)
+
+  return { classe, moment, curs, esperats, alumnes, avisos, comparativa }
 }
 
 /**
@@ -264,4 +266,29 @@ export function distribucio(alumnes) {
       Object.entries(recompte).map(([k, n]) => [k, total ? Math.round((n / total) * 1000) / 10 : 0])
     ),
   }
+}
+
+/**
+ * La taula de comparativa per pregunta (pàgines finals de l'informe):
+ * per a cada contingut avaluat, el % d'encerts de la classe i el % mitjà
+ * de tots els centres d'Innovamat.
+ *
+ * ⚠️ Aquesta és l'ÚNICA comparativa amb Innovamat que es pot llegir del
+ * PDF. La de la pàgina 4 (distribució per nivells de la regió i del
+ * total) està dins d'un gràfic, com a imatge, i no en surt cap número en
+ * extreure el text — aquella s'ha d'introduir a mà.
+ */
+export function comparativaPerPregunta(pagines) {
+  const pla = pagines.join(' ').replace(/\s+/g, ' ')
+  const re = /([A-Za-zÀ-ÿ][^0-9]{8,90}?)\s(\d{1,3}\.\d)\s(\d{1,3}\.\d)/g
+  const files = []
+  let m
+  while ((m = re.exec(pla))) {
+    const classe = Number(m[2])
+    const global = Number(m[3])
+    // Els percentatges han d'estar dins de rang; si no, és soroll.
+    if (classe > 100 || global > 100) continue
+    files.push({ contingut: m[1].trim(), classe, global, diferencia: Math.round((classe - global) * 10) / 10 })
+  }
+  return files
 }
