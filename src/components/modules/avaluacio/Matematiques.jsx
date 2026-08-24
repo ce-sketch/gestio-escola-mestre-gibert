@@ -135,7 +135,7 @@ export default function Matematiques({ cursEscolarFixat = null, nomesCarrega = f
       const delPdf = prev.sensCasar[indexSensCasar]
       const nou = {
         ...prev,
-        casats: [...prev.casats, { ...delPdf, alumneId: alumne.id, nom: alumne.nom, nomPdf: delPdf.nom, assignatAMa: true }],
+        casats: [...prev.casats, { ...delPdf, alumneId: alumne.id, nom: alumne.nom, assignatAMa: true }],
         sensCasar: prev.sensCasar.filter((_, i) => i !== indexSensCasar),
       }
       setConmats((llista) => llista.map((c) => (c.fitxer === prev.fitxer ? nou : c)))
@@ -218,13 +218,18 @@ export default function Matematiques({ cursEscolarFixat = null, nomesCarrega = f
         // identificador derivat d'aquest nom, de manera que tornar a pujar
         // el mateix informe els actualitza en comptes de duplicar-los.
         for (const a of (conmat.sensCasar ?? [])) {
-          const clau = clauOrdenadaDeNom(a.nom) || clauDe(a.nom)
+          const nomInforme = a.nomPdf ?? a.nom
+          const clau = clauOrdenadaDeNom(nomInforme) || clauDe(nomInforme)
+          // Sense nom no es pot construir un identificador estable, i
+          // Firestore rebutjaria el lot sencer. Val més saltar-se aquest
+          // resultat que perdre tota la càrrega.
+          if (!clau) continue
           ops.push({
             id: `${cursEscolarId}__pdf__${clau}`,
             dades: {
               cursEscolar: cursEscolarId,
               alumneId: null,
-              nom: a.nom,
+              nom: nomInforme,
               sensCasar: true,
               conmat: { [idMoment]: resultat(a) },
               actualitzatEl: serverTimestamp(),
@@ -535,11 +540,11 @@ export default function Matematiques({ cursEscolarFixat = null, nomesCarrega = f
                     // Els del centre que més s'assemblen, per si el nom
                     // està escrit diferent a l'informe i no ha casat sol.
                     const suggerits = alumnes
-                      .map((al) => ({ al, punts: semblanca(a.nom, al.nom) }))
+                      .map((al) => ({ al, punts: semblanca(a.nomPdf ?? a.nom, al.nom) }))
                       .sort((x, y) => y.punts - x.punts || x.al.nom.localeCompare(y.al.nom))
                     return (
                       <li key={i} style={{ marginBottom: 6 }}>
-                        {a.nom} — {a.nivell}
+                        {a.nomPdf ?? a.nom} — {a.nivell}
                         <select
                           defaultValue=""
                           onChange={(e) => assignaManualment(i, e.target.value)}
