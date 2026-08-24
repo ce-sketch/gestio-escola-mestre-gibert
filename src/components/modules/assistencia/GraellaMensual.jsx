@@ -223,7 +223,7 @@ export default function GraellaMensual({ cursEscolarId, calendari, alumnesTots }
             type="text"
             value={cursEscolarSel}
             onChange={(e) => setCursEscolarSel(e.target.value)}
-            style={{ border: '1px solid var(--line)', borderRadius: 8, padding: '8px 10px', fontWeight: 600 }}
+            className="camp camp-destacat"
           />
           {cursEscolarSel.trim() !== '' && cursEscolarSel.trim() !== cursEscolarNorm && (
             <span style={{ fontSize: 10, color: 'var(--ink-soft)' }}>
@@ -233,13 +233,13 @@ export default function GraellaMensual({ cursEscolarId, calendari, alumnesTots }
         </label>
         <label className="field" style={{ maxWidth: 140 }}>
           <span>Classe</span>
-          <select value={curs} onChange={(e) => setCurs(e.target.value)} disabled={carregantClasses} style={{ border: '1px solid var(--line)', borderRadius: 8, padding: '8px 10px' }}>
+          <select value={curs} onChange={(e) => setCurs(e.target.value)} disabled={carregantClasses} className="camp">
             {cursos.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
         </label>
         <label className="field" style={{ maxWidth: 160 }}>
           <span>Mes</span>
-          <select value={mesNum} onChange={(e) => setMesNum(Number(e.target.value))} style={{ border: '1px solid var(--line)', borderRadius: 8, padding: '8px 10px' }}>
+          <select value={mesNum} onChange={(e) => setMesNum(Number(e.target.value))} className="camp">
             {MESOS_CURS.map((m) => <option key={m.num} value={m.num}>{m.label} {anyDelMes(m.num, cursEscolarNorm)}</option>)}
           </select>
         </label>
@@ -265,6 +265,9 @@ export default function GraellaMensual({ cursEscolarId, calendari, alumnesTots }
       {!carregant && dies.length > 0 && (
         <>
           <div style={{ overflowX: 'auto' }}>
+            {/* Aquesta graella NO fa servir .taula-dades a posta: té una
+                jerarquia pròpia de línies (3px setmana · 2px dia · 1px
+                matí/tarda) que la classe genèrica trepitjaria. */}
             <table style={{ borderCollapse: 'collapse', fontSize: 11, border: '3px solid var(--ink-soft)' }}>
               <thead>
                 <tr>
@@ -408,7 +411,7 @@ export default function GraellaMensual({ cursEscolarId, calendari, alumnesTots }
                   type="text"
                   value={motiu}
                   onChange={(e) => setMotiu(e.target.value)}
-                  style={{ border: '1px solid var(--line)', borderRadius: 6, padding: '6px 8px', fontSize: 12, width: '100%', boxSizing: 'border-box' }}
+                  className="camp camp-petit" style={{ width: '100%', boxSizing: 'border-box' }}
                 />
               </label>
               <button type="button" className="btn-ghost" style={{ marginTop: 8 }} onClick={() => desaCorreccio(estatTriat, motiu)}>
