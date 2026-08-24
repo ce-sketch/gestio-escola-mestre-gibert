@@ -524,3 +524,67 @@ label.btn-ghost:focus-within {
 
 .nota-avis { color: var(--amber-dark); }
 .nota-error { color: var(--red); }
+
+/* ── Taules de dades ─────────────────────────────────────────────────
+   Fins ara cada taula es dibuixava amb estils escrits a mà al component,
+   i per això calia anar arreglant l'estètica lloc per lloc. Aquestes
+   classes recullen la jerarquia de vores que ja fem servir als PDF: la
+   de fora tanca la taula, la capçalera se'n separa fort, les columnes
+   marquen mitjà i les files fluix. */
+.taula-dades {
+  border-collapse: collapse;
+  font-size: 12px;
+  border: 2px solid var(--ink-soft);
+}
+
+.taula-dades th,
+.taula-dades td {
+  padding: 5px 10px;
+  text-align: left;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.taula-dades th:last-child,
+.taula-dades td:last-child { border-right: none; }
+.taula-dades tbody tr:last-child td { border-bottom: none; }
+
+.taula-dades thead th {
+  background: #EDEFF2;
+  font-weight: 700;
+  border-bottom: 2px solid var(--ink-soft);
+}
+
+.taula-dades tbody tr:nth-child(even) { background: rgba(0, 0, 0, 0.015); }
+
+/* Números alineats a la dreta i amb amplada fixa, perquè les xifres
+   quedin en columna encara que canviïn de valor. */
+.taula-dades .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Separadors forts dins d'una taula (per exemple, entre la columna de
+   noms i les dades, o abans del bloc de totals). */
+.taula-dades .talla-dreta { border-right: 2px solid var(--ink-soft); }
+.taula-dades .talla-esquerra { border-left: 2px solid var(--ink-soft); }
+
+/* Variant compacta, per a graelles amb moltes columnes. */
+.taula-dades.compacta th,
+.taula-dades.compacta td { padding: 3px 5px; font-size: 11px; }
+
+/* ── Camps de formulari ──────────────────────────────────────────────
+   La mateixa caixa de text repetida per tota l'app. */
+.camp {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-family: inherit;
+  font-size: 14px;
+  background: var(--paper-raised);
+  color: var(--ink);
+}
+
+.camp:focus { outline: 2px solid var(--navy); outline-offset: -1px; }
+.camp-petit { padding: 5px 8px; font-size: 12px; border-radius: 6px; }
+.camp-destacat { font-weight: 600; }
