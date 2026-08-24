@@ -50,7 +50,10 @@ export function momentsConmat(registre) {
   if (!c) return []
   // Format antic: un únic objecte amb el nivell directament a dins.
   if (c.nivell !== undefined || c.percentatge !== undefined) {
-    return [{ moment: momentId(c.moment), ...c }]
+    // Compte amb l'ordre: el `moment` del registre antic és text lliure
+    // ("Avaluació final"), i ha d'anar DESPRÉS de l'expansió perquè no
+    // sobreescrigui l'id calculat.
+    return [{ ...c, moment: momentId(c.moment) }]
   }
   // Format nou: un mapa { inici: {...}, final: {...} }
   return MOMENTS
