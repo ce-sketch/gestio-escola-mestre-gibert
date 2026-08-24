@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { triaDocumentDelDrive } from '../lib/drivePicker'
+import { triaDocumentDelDrive, triaDocumentsDelDrive } from '../lib/drivePicker'
 
 /**
  * Botó per agafar un document del Drive sense haver de baixar-lo i
@@ -19,17 +19,21 @@ import { triaDocumentDelDrive } from '../lib/drivePicker'
  */
 export default function BotoDrive({
   onFitxer, onError, disabled = false, tipus = 'fulls',
-  etiqueta = 'Tria un document del Drive',
+  etiqueta = 'Tria un document del Drive', multiple = false,
 }) {
   const [obrint, setObrint] = useState(false)
 
   async function obre() {
     setObrint(true)
     try {
-      const tria = await triaDocumentDelDrive(tipus)
-      if (!tria) return // ha tancat el selector sense triar res
-      const fitxer = new File([tria.buffer], tria.nom, { type: tria.mime })
-      await onFitxer({ target: { files: [fitxer], value: '' } })
+      // Amb `multiple`, el selector deixa marcar diversos fitxers alhora
+      // (per exemple, tots els informes d'una mateixa avaluació).
+      const tries = multiple
+        ? await triaDocumentsDelDrive(tipus, true)
+        : [await triaDocumentDelDrive(tipus)].filter(Boolean)
+      if (!tries || tries.length === 0) return // ha tancat sense triar res
+      const fitxers = tries.map((t) => new File([t.buffer], t.nom, { type: t.mime }))
+      await onFitxer({ target: { files: fitxers, value: '' } })
     } catch (err) {
       if (onError) onError(err.message)
       else console.error(err)
