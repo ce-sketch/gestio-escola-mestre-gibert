@@ -168,7 +168,7 @@ export default function HistoricInnovamat() {
             type="text"
             value={cursCarrega}
             onChange={(e) => setCursCarrega(e.target.value)}
-            style={{ border: '1px solid var(--line)', borderRadius: 8, padding: '8px 10px', fontWeight: 600 }}
+            className="camp camp-destacat"
           />
         </label>
         <Matematiques cursEscolarFixat={cursCarrega} nomesCarrega onDesat={carrega} />
@@ -186,12 +186,12 @@ export default function HistoricInnovamat() {
           <label className="field" style={{ maxWidth: 110 }}>
             <span>Curs</span>
             <input type="text" value={refForm.curs} onChange={(e) => setRefForm({ ...refForm, curs: e.target.value })}
-              style={{ border: '1px solid var(--line)', borderRadius: 8, padding: '6px 8px', fontSize: 12 }} />
+              className="camp camp-petit" />
           </label>
           <label className="field" style={{ maxWidth: 130 }}>
             <span>Moment</span>
             <select value={refForm.moment} onChange={(e) => setRefForm({ ...refForm, moment: e.target.value })}
-              style={{ border: '1px solid var(--line)', borderRadius: 8, padding: '6px 8px', fontSize: 12 }}>
+              className="camp camp-petit">
               <option value="inici">Inici de curs</option>
               <option value="final">Final de curs</option>
             </select>
@@ -199,12 +199,12 @@ export default function HistoricInnovamat() {
           <label className="field" style={{ maxWidth: 90 }}>
             <span>Nivell</span>
             <input type="text" placeholder="3r" value={refForm.nivell} onChange={(e) => setRefForm({ ...refForm, nivell: e.target.value })}
-              style={{ border: '1px solid var(--line)', borderRadius: 8, padding: '6px 8px', fontSize: 12 }} />
+              className="camp camp-petit" />
           </label>
           <label className="field" style={{ maxWidth: 130 }}>
             <span>Àmbit</span>
             <select value={refForm.ambit} onChange={(e) => setRefForm({ ...refForm, ambit: e.target.value })}
-              style={{ border: '1px solid var(--line)', borderRadius: 8, padding: '6px 8px', fontSize: 12 }}>
+              className="camp camp-petit">
               <option value="catalunya">Catalunya</option>
               <option value="total">Total centres</option>
             </select>
@@ -213,7 +213,7 @@ export default function HistoricInnovamat() {
             <label key={n} className="field" style={{ maxWidth: 85 }}>
               <span>{n} %</span>
               <input type="number" value={refForm[n]} onChange={(e) => setRefForm({ ...refForm, [n]: e.target.value })}
-                style={{ border: '1px solid var(--line)', borderRadius: 8, padding: '6px 8px', fontSize: 12, width: 70 }} />
+                className="camp camp-petit" style={{ width: 70 }} />
             </label>
           ))}
           <button type="button" className="btn-ghost" onClick={desaReferencia} disabled={desantRef}>
@@ -268,14 +268,14 @@ export default function HistoricInnovamat() {
               hi són a l'històric de sota.
             </p>
           ) : (
-            <table style={{ borderCollapse: 'collapse', fontSize: 12, marginTop: 8 }}>
+            <table className="taula-dades" style={{ marginTop: 8 }}>
               <thead>
-                <tr style={{ textAlign: 'left', borderBottom: '2px solid var(--line)' }}>
-                  <th style={{ padding: '4px 14px 4px 0' }}>Curs</th>
-                  <th style={{ padding: '4px 14px' }}>Classe</th>
-                  <th style={{ padding: '4px 14px' }}>Moment</th>
-                  <th style={{ padding: '4px 14px' }}>Alumnes</th>
-                  <th style={{ padding: '4px 14px' }}></th>
+                <tr>
+                  <th>Curs</th>
+                  <th>Classe</th>
+                  <th>Moment</th>
+                  <th>Alumnes</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
@@ -283,16 +283,16 @@ export default function HistoricInnovamat() {
                   .sort((a, b) => String(b.cursEscolar).localeCompare(String(a.cursEscolar)))
                   .map((r) => (
                     <tr key={r.id} style={{ borderBottom: '1px solid var(--line)' }}>
-                      <td style={{ padding: '4px 14px 4px 0' }}>{r.cursEscolar}</td>
-                      <td style={{ padding: '4px 14px' }}>{r.classe}</td>
-                      <td style={{ padding: '4px 14px' }}>{momentLabel(r.moment)}</td>
-                      <td style={{ padding: '4px 14px' }}>
+                      <td>{r.cursEscolar}</td>
+                      <td>{r.classe}</td>
+                      <td>{momentLabel(r.moment)}</td>
+                      <td>
                         {r.alumnesCasats}
                         {r.alumnesSenseCasar > 0 && (
                           <span style={{ color: 'var(--ink-soft)' }}> (+{r.alumnesSenseCasar} amb nom de l'informe)</span>
                         )}
                       </td>
-                      <td style={{ padding: '4px 14px' }}>
+                      <td>
                         <button
                           type="button"
                           onClick={() => esborraInforme(r.cursEscolar, r.classe, r.moment)}
@@ -322,14 +322,14 @@ export default function HistoricInnovamat() {
                     {nSense > 0 && `, ${nSense} amb el nom de l'informe (ja no són al centre)`}
                   </span>
                 </p>
-                <table style={{ borderCollapse: 'collapse', fontSize: 12 }}>
+                <table className="taula-dades">
                   <thead>
                     <tr style={{ color: 'var(--ink-soft)', textAlign: 'right' }}>
-                      <th style={{ padding: '2px 14px 2px 0', textAlign: 'left' }}>Nivell</th>
-                      <th style={{ padding: '2px 14px' }}>Alumnes</th>
-                      <th style={{ padding: '2px 14px' }}>Centre</th>
-                      <th style={{ padding: '2px 14px' }}>Catalunya</th>
-                      <th style={{ padding: '2px 14px' }}>Total</th>
+                      <th>Nivell</th>
+                      <th>Alumnes</th>
+                      <th>Centre</th>
+                      <th>Catalunya</th>
+                      <th>Total</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -341,13 +341,13 @@ export default function HistoricInnovamat() {
                       const tot = refs[`${grup.cursEscolar}__${grup.moment}__${nivellCurs}__total`]?.[f.nivell]
                       return (
                         <tr key={f.nivell}>
-                          <td style={{ padding: '2px 14px 2px 0' }}>{f.nivell}</td>
-                          <td style={{ padding: '2px 14px', textAlign: 'right' }}>{f.alumnes}</td>
-                          <td style={{ padding: '2px 14px', textAlign: 'right', fontWeight: 600 }}>{f.percentatge}%</td>
-                          <td style={{ padding: '2px 14px', textAlign: 'right', color: 'var(--ink-soft)' }}>
+                          <td>{f.nivell}</td>
+                          <td className="num">{f.alumnes}</td>
+                          <td className="num">{f.percentatge}%</td>
+                          <td className="num">
                             {cat != null ? `${cat}%` : '—'}
                           </td>
-                          <td style={{ padding: '2px 14px', textAlign: 'right', color: 'var(--ink-soft)' }}>
+                          <td className="num">
                             {tot != null ? `${tot}%` : '—'}
                           </td>
                         </tr>
