@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { collection, getDocs, doc, setDoc, deleteDoc, updateDoc, deleteField, serverTimestamp } from 'firebase/firestore'
+import { collection, getDocs, doc, setDoc, deleteDoc, deleteField, serverTimestamp, writeBatch } from 'firebase/firestore'
 import { db, auth } from '../../../firebase'
 import { cursEscolarActual } from '../../../lib/cursEscolar'
 import {
@@ -95,15 +95,18 @@ export default function HistoricInnovamat() {
 
     setEsborrant(true)
     try {
+      // En lots: amb 25 alumnes per informe, fer-ho un per un és lent i
+      // podria quedar-se a mitges si es talla la connexió.
+      const lot = writeBatch(db)
       for (const r of afectats) {
         const restaConmat = Object.keys(r.conmat ?? {}).filter((m) => m !== moment)
-        const teCosmos = !!r.cosmos
-        if (restaConmat.length === 0 && !teCosmos) {
-          await deleteDoc(doc(db, 'matematiques', r.id))
+        if (restaConmat.length === 0 && !r.cosmos) {
+          lot.delete(doc(db, 'matematiques', r.id))
         } else {
-          await updateDoc(doc(db, 'matematiques', r.id), { [`conmat.${moment}`]: deleteField() })
+          lot.update(doc(db, 'matematiques', r.id), { [`conmat.${moment}`]: deleteField() })
         }
       }
+      await lot.commit()
       await deleteDoc(doc(db, 'matematiques', `informe__${cursEscolar}__${classe}__${moment}`)).catch(() => {})
       await carrega()
     } catch (err) {
@@ -125,7 +128,12 @@ export default function HistoricInnovamat() {
 
     setEsborrant(true)
     try {
-      for (const r of afectats) await deleteDoc(doc(db, 'matematiques', r.id))
+      const MAX = 450
+      for (let i = 0; i < afectats.length; i += MAX) {
+        const lot = writeBatch(db)
+        for (const r of afectats.slice(i, i + MAX)) lot.delete(doc(db, 'matematiques', r.id))
+        await lot.commit()
+      }
       await carrega()
     } catch (err) {
       setError(err.message)

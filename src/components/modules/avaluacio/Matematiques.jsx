@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { collection, doc, getDocs, query, setDoc, where, serverTimestamp } from 'firebase/firestore'
+import { collection, doc, getDocs, query, where, serverTimestamp, writeBatch } from 'firebase/firestore'
 import { db, auth } from '../../../firebase'
 import { cursEscolarActual } from '../../../lib/cursEscolar'
 import { llegeixConmat, casaAmbAlumnes, distribucio, NIVELLS_CONMAT, clauOrdenadaDeNom, paraulesDeNom } from '../../../lib/conmatParser'
@@ -143,80 +143,104 @@ export default function Matematiques({ cursEscolarFixat = null, nomesCarrega = f
     })
   }
 
+  /**
+   * Desa moltes escriptures de cop, en lots.
+   *
+   * Abans es feia un `setDoc` per alumne dins d'un bucle: amb 8 informes
+   * de 25 alumnes això són 200 crides seguides, lentes i que consumeixen
+   * quota. Un lot en fa fins a 500 en una sola crida i, a més, és atòmic:
+   * o s'escriuen totes o cap, així no queden càrregues a mitges.
+   */
+  async function escriuEnLots(operacions) {
+    const MAX = 450 // el límit real és 500; es deixa marge
+    for (let i = 0; i < operacions.length; i += MAX) {
+      const lot = writeBatch(db)
+      for (const op of operacions.slice(i, i + MAX)) {
+        lot.set(doc(db, 'matematiques', op.id), op.dades, { merge: true })
+      }
+      await lot.commit()
+    }
+  }
+
   async function desaConmat() {
     const informes = conmats.length > 0 ? conmats : (conmat ? [conmat] : [])
     if (informes.length === 0) return
     setDesant(true)
     try {
       let totalDesats = 0
+      const ops = []
       for (const conmat of informes) {
-      // El resultat es desa DINS del moment de la prova ("inici"/"final"),
-      // no directament a `conmat`. Així, pujar l'informe de final de curs
-      // ja no esborra el d'inici del mateix alumne, i queda històric.
-      const idMoment = momentId(conmat.moment)
-      for (const a of conmat.casats) {
-        const id = `${cursEscolarId}__${a.alumneId}`
-        await setDoc(doc(db, 'matematiques', id), {
-          cursEscolar: cursEscolarId,
-          alumneId: a.alumneId,
-          nom: a.nom,
-          conmat: {
-            [idMoment]: {
-              classe: conmat.classe,
-              moment: conmat.moment,
-              nivell: a.nivell,
-              percentatge: a.percentatge,
-              respostes: a.respostes,
-              preguntes: a.preguntes,
+        // El resultat es desa DINS del moment de la prova ("inici"/"final"),
+        // no directament a `conmat`. Així, pujar l'informe de final de curs
+        // ja no esborra el d'inici del mateix alumne, i queda històric.
+        const idMoment = momentId(conmat.moment)
+        const resultat = (a) => ({
+          classe: conmat.classe,
+          moment: conmat.moment,
+          nivell: a.nivell,
+          percentatge: a.percentatge,
+          respostes: a.respostes,
+          preguntes: a.preguntes,
+        })
+
+        for (const a of conmat.casats) {
+          ops.push({
+            id: `${cursEscolarId}__${a.alumneId}`,
+            dades: {
+              cursEscolar: cursEscolarId,
+              alumneId: a.alumneId,
+              nom: a.nom,
+              conmat: { [idMoment]: resultat(a) },
+              actualitzatEl: serverTimestamp(),
+              actualitzatPer: auth.currentUser?.email ?? null,
             },
-          },
-          actualitzatEl: serverTimestamp(),
-          actualitzatPer: auth.currentUser?.email ?? null,
-        }, { merge: true })
-      }
-      // Els alumnes que NO casen amb cap alumne actiu del centre (típicament
-      // els de cursos passats que ja han marxat) també es desen: si no, cada
-      // any que passa l'històric perdria una part de l'alumnat. Es guarden
-      // amb el nom tal com surt al PDF i un identificador derivat d'aquest
-      // nom, de manera que tornar a pujar el mateix informe els actualitza
-      // en comptes de duplicar-los.
-      for (const a of (conmat.sensCasar ?? [])) {
-        const clau = clauOrdenadaDeNom(a.nom) || clauDe(a.nom)
-        await setDoc(doc(db, 'matematiques', `${cursEscolarId}__pdf__${clau}`), {
-          cursEscolar: cursEscolarId,
-          alumneId: null,
-          nom: a.nom,
-          sensCasar: true,
-          conmat: {
-            [idMoment]: {
-              classe: conmat.classe,
-              moment: conmat.moment,
-              nivell: a.nivell,
-              percentatge: a.percentatge,
-              respostes: a.respostes,
-              preguntes: a.preguntes,
+          })
+        }
+
+        // Els alumnes que NO casen amb cap alumne actiu del centre
+        // (típicament els de cursos passats que ja han marxat) també es
+        // desen: si no, cada any que passa l'històric perdria una part de
+        // l'alumnat. Es guarden amb el nom tal com surt al PDF i un
+        // identificador derivat d'aquest nom, de manera que tornar a pujar
+        // el mateix informe els actualitza en comptes de duplicar-los.
+        for (const a of (conmat.sensCasar ?? [])) {
+          const clau = clauOrdenadaDeNom(a.nom) || clauDe(a.nom)
+          ops.push({
+            id: `${cursEscolarId}__pdf__${clau}`,
+            dades: {
+              cursEscolar: cursEscolarId,
+              alumneId: null,
+              nom: a.nom,
+              sensCasar: true,
+              conmat: { [idMoment]: resultat(a) },
+              actualitzatEl: serverTimestamp(),
+              actualitzatPer: auth.currentUser?.email ?? null,
             },
+          })
+        }
+
+        // Registre de l'informe carregat, per poder consultar després què
+        // s'ha pujat, quan i qui ho va fer. Va a la mateixa col·lecció amb
+        // un `tipus` que el distingeix dels registres d'alumne.
+        ops.push({
+          id: `informe__${cursEscolarId}__${conmat.classe}__${idMoment}`,
+          dades: {
+            tipus: 'informe',
+            cursEscolar: cursEscolarId,
+            classe: conmat.classe,
+            moment: idMoment,
+            momentText: conmat.moment ?? null,
+            alumnesCasats: conmat.casats.length,
+            alumnesSenseCasar: conmat.sensCasar?.length ?? 0,
+            actualitzatEl: serverTimestamp(),
+            actualitzatPer: auth.currentUser?.email ?? null,
           },
-          actualitzatEl: serverTimestamp(),
-          actualitzatPer: auth.currentUser?.email ?? null,
-        }, { merge: true })
+        })
+
+        totalDesats += conmat.casats.length + (conmat.sensCasar?.length ?? 0)
       }
-      // Registre de l'informe carregat, per poder consultar després què
-      // s'ha pujat, quan i qui ho va fer. Va a la mateixa col·lecció amb
-      // un `tipus` que el distingeix dels registres d'alumne.
-      await setDoc(doc(db, 'matematiques', `informe__${cursEscolarId}__${conmat.classe}__${idMoment}`), {
-        tipus: 'informe',
-        cursEscolar: cursEscolarId,
-        classe: conmat.classe,
-        moment: idMoment,
-        momentText: conmat.moment ?? null,
-        alumnesCasats: conmat.casats.length,
-        alumnesSenseCasar: conmat.sensCasar?.length ?? 0,
-        actualitzatEl: serverTimestamp(),
-        actualitzatPer: auth.currentUser?.email ?? null,
-      }, { merge: true })
-      totalDesats += conmat.casats.length + (conmat.sensCasar?.length ?? 0)
-      }
+
+      await escriuEnLots(ops)
       setMissatge({
         type: 'ok',
         text: `${totalDesats} resultats de ConMat desats de ${informes.length} informe${informes.length === 1 ? '' : 's'}.`,
@@ -236,39 +260,40 @@ export default function Matematiques({ cursEscolarFixat = null, nomesCarrega = f
     if (!cosmos || (!cosmos.casats.length && !cosmos.sensCasar?.length)) return
     setDesant(true)
     try {
-      for (const a of cosmos.casats) {
-        const id = `${cursEscolarId}__${a.alumneId}`
-        await setDoc(doc(db, 'matematiques', id), {
+      const dadesCosmos = (a) => ({
+        intervencio: a.intervencio ?? null,
+        sessionsSetmanals: a.sessionsSetmanals ?? null,
+        moments: a.moments,
+      })
+      const ops = cosmos.casats.map((a) => ({
+        id: `${cursEscolarId}__${a.alumneId}`,
+        dades: {
           cursEscolar: cursEscolarId,
           alumneId: a.alumneId,
           nom: a.nom,
-          cosmos: {
-            intervencio: a.intervencio ?? null,
-            sessionsSetmanals: a.sessionsSetmanals ?? null,
-            moments: a.moments,
-          },
+          cosmos: dadesCosmos(a),
           actualitzatEl: serverTimestamp(),
           actualitzatPer: auth.currentUser?.email ?? null,
-        }, { merge: true })
-      }
+        },
+      }))
       // Igual que al ConMat: els que no consten com a alumnes actius del
       // centre també es desen, amb el nom tal com surt al CSV.
       for (const a of (cosmos.sensCasar ?? [])) {
         const clau = clauOrdenadaDeNom(a.nom ?? a.nomComplet) || clauDe(a.nomComplet)
-        await setDoc(doc(db, 'matematiques', `${cursEscolarId}__pdf__${clau}`), {
-          cursEscolar: cursEscolarId,
-          alumneId: null,
-          nom: a.nom ?? a.nomComplet,
-          sensCasar: true,
-          cosmos: {
-            intervencio: a.intervencio ?? null,
-            sessionsSetmanals: a.sessionsSetmanals ?? null,
-            moments: a.moments,
+        ops.push({
+          id: `${cursEscolarId}__pdf__${clau}`,
+          dades: {
+            cursEscolar: cursEscolarId,
+            alumneId: null,
+            nom: a.nom ?? a.nomComplet,
+            sensCasar: true,
+            cosmos: dadesCosmos(a),
+            actualitzatEl: serverTimestamp(),
+            actualitzatPer: auth.currentUser?.email ?? null,
           },
-          actualitzatEl: serverTimestamp(),
-          actualitzatPer: auth.currentUser?.email ?? null,
-        }, { merge: true })
+        })
       }
+      await escriuEnLots(ops)
       const nSenseCosmos = cosmos.sensCasar?.length ?? 0
       setMissatge({
         type: 'ok',
