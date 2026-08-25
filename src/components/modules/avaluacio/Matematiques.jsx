@@ -219,7 +219,13 @@ export default function Matematiques({ cursEscolarFixat = null, nomesCarrega = f
         // el mateix informe els actualitza en comptes de duplicar-los.
         for (const a of (conmat.sensCasar ?? [])) {
           const nomInforme = a.nomPdf ?? a.nom
-          const clau = clauOrdenadaDeNom(nomInforme) || clauDe(nomInforme)
+          // La classe forma part de l'identificador perquè dos alumnes
+          // de classes diferents poden tenir el mateix nom visible (a les
+          // dades reals hi ha una "López Emma" a 4rtA i una altra a 4rtB).
+          // Sense la classe, la segona sobreescrivia la primera i es
+          // perdia un resultat.
+          const clauNom = clauOrdenadaDeNom(nomInforme) || clauDe(nomInforme)
+          const clau = clauNom ? `${clauDe(conmat.classe ?? '')}__${clauNom}` : ''
           // Sense nom no es pot construir un identificador estable, i
           // Firestore rebutjaria el lot sencer. Val més saltar-se aquest
           // resultat que perdre tota la càrrega.
