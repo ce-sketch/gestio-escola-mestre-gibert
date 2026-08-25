@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   collection, doc, getDocs, query, where, writeBatch, serverTimestamp,
 } from 'firebase/firestore'
@@ -7,6 +7,7 @@ import { slug } from '../../lib/slug'
 import { cursEscolarActual } from '../../lib/cursEscolar'
 import BotoDrive from '../BotoDrive'
 import { carregaXLSX } from '../../lib/carregaLlibreries'
+import { normalitza } from '../../lib/text'
 
 const DEFAULT_CLASSES = ['1r A', '1r B']
 
@@ -35,6 +36,51 @@ export default function Alumnes() {
   const [previsualitzacio, setPrevisualitzacio] = useState(null) // { [curs]: [{nom, numLlista}] }
   const [important, setImportantFitxer] = useState(false)
   const [errorFitxer, setErrorFitxer] = useState(null)
+
+  // Llistat del que hi ha desat de debò. Abans només es veia la
+  // previsualització d'una importació, que desapareix en confirmar-la:
+  // un cop importat no hi havia manera de consultar qui hi ha ni en
+  // quin estat, que és el que cal quan un alumne no apareix en algun
+  // altre mòdul.
+  const [desats, setDesats] = useState([])
+  const [carregantDesats, setCarregantDesats] = useState(true)
+  const [cerca, setCerca] = useState('')
+  const [veureBaixes, setVeureBaixes] = useState(false)
+
+  useEffect(() => { carregaDesats() }, [])
+
+  async function carregaDesats() {
+    setCarregantDesats(true)
+    try {
+      const snap = await getDocs(collection(db, 'alumnes'))
+      setDesats(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+    } catch {
+      setDesats([])
+    } finally {
+      setCarregantDesats(false)
+    }
+  }
+
+  // Els que es mostren: filtrats per la cerca i, si no es demana el
+  // contrari, només els actius.
+  const alumnesFiltrats = useMemo(() => {
+    const q = normalitza(cerca)
+    return desats
+      .filter((a) => (veureBaixes ? true : a.actiu !== false))
+      .filter((a) => !q || normalitza(a.nom ?? '').includes(q) || normalitza(a.curs ?? '').includes(q))
+  }, [desats, cerca, veureBaixes])
+
+  const perClasse = useMemo(() => {
+    const mapa = new Map()
+    for (const a of alumnesFiltrats) {
+      const curs = a.curs || '(sense classe)'
+      if (!mapa.has(curs)) mapa.set(curs, [])
+      mapa.get(curs).push(a)
+    }
+    return [...mapa.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([curs, llista]) => [curs, llista.sort((x, y) => (x.numLlista ?? 999) - (y.numLlista ?? 999))])
+  }, [alumnesFiltrats])
 
   const [confirmaEsborrat, setConfirmaEsborrat] = useState('')
   const [esborrant, setEsborrant] = useState(false)
@@ -219,6 +265,7 @@ export default function Alumnes() {
     } finally {
       setImportantFitxer(false)
       setPrevisualitzacio(null)
+      carregaDesats() // el llistat de sota ha de reflectir el que s'acaba d'importar
     }
   }
 
@@ -529,6 +576,61 @@ export default function Alumnes() {
             {ajutMissatge.text}
           </p>
         )}
+      </div>
+
+
+      {/* ── Qui hi ha desat ─────────────────────────────────────────── */}
+      <div style={{ marginTop: 36 }}>
+        <h3 style={{ fontSize: 16, marginBottom: 4 }}>Alumnes desats</h3>
+        <p className="nota">
+          El que hi ha ara mateix a la base de dades, no el que s'importarà. Serveix per comprovar
+          si un alumne concret hi és i en quin estat, quan no apareix en algun altre mòdul.
+        </p>
+
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginTop: 10 }}>
+          <input
+            type="text"
+            value={cerca}
+            onChange={(e) => setCerca(e.target.value)}
+            placeholder="Busca per nom o classe…"
+            className="camp"
+            style={{ minWidth: 240 }}
+          />
+          <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13 }}>
+            <input type="checkbox" checked={veureBaixes} onChange={() => setVeureBaixes((v) => !v)} />
+            Mostra també les baixes
+          </label>
+          <button type="button" className="btn-ghost" onClick={carregaDesats}>↻ Actualitza</button>
+        </div>
+
+        {carregantDesats && <p className="nota">Carregant…</p>}
+
+        {!carregantDesats && (
+          <p className="nota" style={{ marginTop: 8 }}>
+            {alumnesFiltrats.length} alumnes en {perClasse.length} classes
+            {!veureBaixes && desats.some((a) => a.actiu === false) && (
+              ` · ${desats.filter((a) => a.actiu === false).length} de baixa, amagats`
+            )}
+          </p>
+        )}
+
+        {!carregantDesats && perClasse.map(([curs, llista]) => (
+          <details key={curs} style={{ marginTop: 6 }}>
+            <summary style={{ cursor: 'pointer', fontSize: 14 }}>
+              <strong>{curs}</strong>
+              <span style={{ color: 'var(--ink-soft)', fontWeight: 400 }}> — {llista.length} alumnes</span>
+            </summary>
+            <ol style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 4, paddingLeft: 28 }}>
+              {llista.map((a) => (
+                <li key={a.id} style={{ marginBottom: 2 }}>
+                  {a.nom}
+                  {a.actiu === false && <span style={{ color: 'var(--red)' }}> · de baixa</span>}
+                  {!a.idalu && <span style={{ color: 'var(--amber-dark)' }}> · sense IDALU</span>}
+                </li>
+              ))}
+            </ol>
+          </details>
+        ))}
       </div>
 
       <details style={{ marginTop: 40 }}>
