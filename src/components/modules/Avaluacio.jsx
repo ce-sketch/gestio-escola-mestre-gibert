@@ -22,6 +22,7 @@ import AreesNoSuperades from './avaluacio/AreesNoSuperades.jsx'
 import Descarregues from './avaluacio/Descarregues.jsx'
 import InformeAlumne from './avaluacio/InformeAlumne.jsx'
 import Resum from './avaluacio/Resum.jsx'
+import ResumConmat from './avaluacio/ResumConmat.jsx'
 import Historic from './avaluacio/Historic.jsx'
 import HistoricInnovamat from './avaluacio/HistoricInnovamat.jsx'
 
@@ -47,6 +48,9 @@ const GRUPS = [
       { id: 'informe', label: 'Informe per alumne', component: InformeAlumne },
       { id: 'resum', label: 'Resums de proves (TEE i VL/CL)', component: Resum },
       // Abans era la pestanya "Resum escola" dins de "Notes per àrea".
+      // Les ConMat d'aquest curs, classe per classe. L'evolució al llarg
+      // dels anys va a la pestanya "Històric (Innovamat)".
+      { id: 'resum-conmat', label: 'Resum ConMat', subLabel: '(Innovamat)', component: ResumConmat },
       { id: 'resum-area', label: 'Resum per àrea', component: ResumPerArea },
       // Separat del "Resum per àrea": són dues coses diferents.
       { id: 'arees-no-superades', label: 'Àrees no superades', component: AreesNoSuperades },
