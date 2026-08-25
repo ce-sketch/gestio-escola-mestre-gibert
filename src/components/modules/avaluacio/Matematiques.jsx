@@ -568,11 +568,25 @@ export default function Matematiques({ cursEscolarFixat = null, nomesCarrega = f
                           style={{ marginLeft: 8, border: '1px solid var(--line)', borderRadius: 6, padding: '2px 6px', fontSize: 11, maxWidth: 260 }}
                         >
                           <option value="">— assigna'l a un alumne —</option>
-                          {suggerits.map(({ al, punts }) => (
-                            <option key={al.id} value={al.id}>
-                              {al.nom}{punts > 0 ? ` (${punts} coincidències)` : ''}
-                            </option>
-                          ))}
+                          {/* Els que comparteixen alguna paraula del nom van
+                              en un grup a part: entre 200 alumnes, si no,
+                              el bo es perd encara que estigui el primer. */}
+                          {suggerits.some(({ punts }) => punts > 0) && (
+                            <optgroup label="Els que més s'hi assemblen">
+                              {suggerits.filter(({ punts }) => punts > 0).map(({ al, punts }) => (
+                                <option key={al.id} value={al.id}>
+                                  {al.nom} — {punts} paraula{punts === 1 ? '' : 'es'} en comú
+                                </option>
+                              ))}
+                            </optgroup>
+                          )}
+                          <optgroup label="Tots els alumnes del centre">
+                            {suggerits.filter(({ punts }) => punts === 0)
+                              .sort((x, y) => x.al.nom.localeCompare(y.al.nom))
+                              .map(({ al }) => (
+                                <option key={al.id} value={al.id}>{al.nom}</option>
+                              ))}
+                          </optgroup>
                         </select>
                       </li>
                     )
