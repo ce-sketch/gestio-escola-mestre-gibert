@@ -3,7 +3,7 @@ import { collection, getDocs, doc, setDoc, deleteDoc, deleteField, serverTimesta
 import { db, auth } from '../../../firebase'
 import { cursEscolarActual } from '../../../lib/cursEscolar'
 import {
-  entradesHistoric, distribucioPerNivell, agrupaPerProva, momentLabel,
+  entradesHistoric, distribucioPerNivell, agrupaPerProva, momentLabel, MOMENTS,
 } from '../../../lib/historicInnovamat'
 import Matematiques from './Matematiques'
 
@@ -307,6 +307,62 @@ export default function HistoricInnovamat() {
               </tbody>
             </table>
           )}
+
+          {/* ── Evolució del centre ────────────────────────────────────
+              Una fila per curs, com a l'històric de TEE i VL/CL: és la
+              vista que serveix per veure la tendència d'un cop d'ull. */}
+          <h3 style={{ fontSize: 15, marginTop: 28 }}>Evolució del centre</h3>
+          {MOMENTS.map((m) => {
+            const delMoment = entrades.filter((e) => e.moment === m.id)
+            if (delMoment.length === 0) return null
+            const cursosDelMoment = [...new Set(delMoment.map((e) => e.cursEscolar))].sort().reverse()
+            return (
+              <div key={m.id} style={{ marginTop: 16 }}>
+                <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--navy)', margin: '0 0 6px' }}>
+                  {m.label}
+                </p>
+                <div className="taula-scroll">
+                  <table className="taula-dades">
+                    <thead>
+                      <tr>
+                        <th>Curs</th>
+                        {NIVELLS.map((n) => <th key={n} className="num">{n}</th>)}
+                        <th className="num">Avaluats</th>
+                        <th>Nivells</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {cursosDelMoment.map((c) => {
+                        const delCurs = delMoment.filter((e) => e.cursEscolar === c)
+                        const dist = distribucioPerNivell(delCurs)
+                        // Quins nivells de primària hi ha en aquell curs
+                        // (3-4-5-6 si hi són tots), tret de la lletra de classe.
+                        const nivells = [...new Set(delCurs
+                          .map((e) => String(e.classe ?? '').replace(/[A-D]$/i, '').replace(/[^0-9]/g, ''))
+                          .filter(Boolean))].sort().join('-')
+                        return (
+                          <tr key={c}>
+                            <td>{c}</td>
+                            {NIVELLS.map((n) => {
+                              const f = dist.files.find((x) => x.nivell === n)
+                              return (
+                                <td key={n} className="num">
+                                  <strong>{f?.alumnes ?? 0}</strong>
+                                  <span style={{ color: 'var(--ink-soft)' }}> ({f?.percentatge ?? 0}%)</span>
+                                </td>
+                              )
+                            })}
+                            <td className="num">{dist.total}</td>
+                            <td style={{ color: 'var(--ink-soft)' }}>{nivells || '—'}</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )
+          })}
 
           {/* ── Resultats per prova ────────────────────────────────── */}
           <h3 style={{ fontSize: 15, marginTop: 28 }}>Resultats per prova</h3>
