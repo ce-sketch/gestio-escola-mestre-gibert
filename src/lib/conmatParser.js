@@ -190,6 +190,45 @@ export function clauOrdenadaDeNom(text) {
   return paraulesDeNom(text).join('')
 }
 
+/** Quantes lletres s'han de canviar per convertir un text en l'altre.
+ *  Serveix per detectar errades d'escriptura d'una lletra, que als
+ *  informes de l'Innovamat són freqüents ("Matamoros" per "Matamoro",
+ *  "Padrilla" per "Padilla"). */
+function distanciaEdicio(a, b) {
+  const files = Array.from({ length: b.length + 1 }, (_, i) => [i, ...Array(a.length).fill(0)])
+  for (let j = 1; j <= a.length; j++) files[0][j] = j
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      files[i][j] = b[i - 1] === a[j - 1]
+        ? files[i - 1][j - 1]
+        : 1 + Math.min(files[i - 1][j - 1], files[i][j - 1], files[i - 1][j])
+    }
+  }
+  return files[b.length][a.length]
+}
+
+/**
+ * Dos noms "gairebé iguals": totes les paraules coincideixen tret d'una,
+ * i aquesta només es diferencia per una o dues lletres.
+ *
+ * És el cas real de "Medrano Matamoros Marlon Alexander" (informe) contra
+ * "Medrano Matamoro, Marlon Alexander" (fitxa): 3 paraules idèntiques i
+ * una amb una lletra de més. Exigir que la resta del nom quadri sencera
+ * fa que això sigui segur; amb una sola paraula de coincidència no ho
+ * seria gens.
+ */
+function gairebeIgual(paraulesA, paraulesB) {
+  if (paraulesA.length !== paraulesB.length || paraulesA.length < 2) return false
+  const soltesA = paraulesA.filter((p) => !paraulesB.includes(p))
+  const soltesB = paraulesB.filter((p) => !paraulesA.includes(p))
+  if (soltesA.length !== 1 || soltesB.length !== 1) return false
+  const [a] = soltesA
+  const [b] = soltesB
+  // Dues lletres de marge, però només si la paraula és prou llarga.
+  const marge = Math.min(a.length, b.length) >= 6 ? 2 : 1
+  return distanciaEdicio(a, b) <= marge
+}
+
 /**
  * Casa els alumnes llegits del PDF amb els del centre.
  *
@@ -236,13 +275,17 @@ export function casaAmbAlumnes(delPdf, delCentre) {
       return pdfDinsCentre || centreDinsPdf
     })
 
-    if (candidats.length === 1 && !jaCasats.has(candidats[0].alumne.id)) {
-      const { alumne } = candidats[0]
+    // Tercera passada: noms gairebé iguals (una errada d'escriptura).
+    const quasi = candidats.length > 0 ? [] : ambParaules.filter(({ paraules }) => gairebeIgual(delPdfParaules, paraules))
+    const finals = candidats.length > 0 ? candidats : quasi
+
+    if (finals.length === 1 && !jaCasats.has(finals[0].alumne.id)) {
+      const { alumne } = finals[0]
       casats.push({ ...a, alumneId: alumne.id, nom: alumne.nom, casatPerAproximacio: true })
       jaCasats.add(alumne.id)
     } else {
-      if (candidats.length > 1) {
-        dubtosos.push({ nom: a.nomPdf ?? a.nom, candidats: candidats.map((c) => c.alumne.nom) })
+      if (finals.length > 1) {
+        dubtosos.push({ nom: a.nomPdf ?? a.nom, candidats: finals.map((c) => c.alumne.nom) })
       }
       sensCasar.push(a)
     }

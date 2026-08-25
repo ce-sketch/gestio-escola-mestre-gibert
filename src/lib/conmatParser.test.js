@@ -78,6 +78,27 @@ describe('casaAmbAlumnes', () => {
     expect(sensCasar[0].nomPdf).toBe('Desconegut Pere')
   })
 
+  it('casa noms amb una errada d\'escriptura al cognom', () => {
+    // Casos reals dels informes: "Matamoros" per "Matamoro" i
+    // "Padrilla" per "Padilla". La resta del nom quadra sencera.
+    const ambErrada = [
+      { id: '9', nom: 'Medrano Matamoro, Marlon Alexander' },
+      { id: '10', nom: 'Rosillo Padilla, Pau' },
+    ]
+    const { casats } = casaAmbAlumnes(
+      delPdf('Medrano Matamoros Marlon Alexander', 'Rosillo Padrilla Pau'),
+      ambErrada
+    )
+    expect(casats).toHaveLength(2)
+    expect(casats[0].alumneId).toBe('9')
+  })
+
+  it('una errada NO justifica casar noms de pila diferents', () => {
+    // El risc de la tolerància: assignar la nota al germà equivocat.
+    const { casats } = casaAmbAlumnes(delPdf('Ruiz Lozano Marta'), centre)
+    expect(casats).toHaveLength(0)
+  })
+
   it('deixa sense casar els que no són al centre', () => {
     const { sensCasar } = casaAmbAlumnes(delPdf('Desconegut Pere'), centre)
     expect(sensCasar).toHaveLength(1)
