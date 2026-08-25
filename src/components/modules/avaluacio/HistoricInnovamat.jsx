@@ -322,6 +322,44 @@ export default function HistoricInnovamat() {
                     {nSense > 0 && `, ${nSense} amb el nom de l'informe (ja no són al centre)`}
                   </span>
                 </p>
+                {/* Una fila per classe, com al resum de TEE i VL/CL. Les
+                    classes surten de les dades: si un curs tenia altres
+                    grups, hi apareixen igualment. */}
+                <table className="taula-dades" style={{ marginBottom: 14 }}>
+                  <thead>
+                    <tr>
+                      <th>Classe</th>
+                      {NIVELLS.map((n) => <th key={n} className="num">{n}</th>)}
+                      <th className="num">Total avaluats</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[...new Set(grup.entrades.map((e) => e.classe).filter(Boolean))].sort().map((classe) => {
+                      const dEls = distribucioPerNivell(grup.entrades.filter((e) => e.classe === classe))
+                      return (
+                        <tr key={classe}>
+                          <td>{classe}</td>
+                          {NIVELLS.map((n) => (
+                            <td key={n} className="num">
+                              {dEls.files.find((f) => f.nivell === n)?.alumnes ?? 0}
+                            </td>
+                          ))}
+                          <td className="num"><strong>{dEls.total}</strong></td>
+                        </tr>
+                      )
+                    })}
+                    <tr style={{ fontWeight: 700 }}>
+                      <td>ConMat — TOTAL</td>
+                      {NIVELLS.map((n) => (
+                        <td key={n} className="num">
+                          {dist.files.find((f) => f.nivell === n)?.alumnes ?? 0}
+                        </td>
+                      ))}
+                      <td className="num">{dist.total}</td>
+                    </tr>
+                  </tbody>
+                </table>
+
                 <table className="taula-dades">
                   <thead>
                     <tr style={{ color: 'var(--ink-soft)', textAlign: 'right' }}>
