@@ -6,7 +6,7 @@ import { CRITERIS_TEE, NIVELLS_PER_CICLE, cicleDe } from '../../../lib/rubricaTE
 import { MOMENTS_LECTURA } from '../../../lib/rubricaLectura'
 import { cursEscolarActual } from '../../../lib/cursEscolar'
 import { generaInformeQualitatiu } from '../../../lib/informeQualitatiu'
-import { ultimConmatDe, ultimCosmosDe, momentLabel } from '../../../lib/historicInnovamat'
+import { conmatDelCurs, cosmosDelCurs, innovamatAnterior, momentLabel } from '../../../lib/historicInnovamat'
 
 const TRIMESTRES = ['1r trimestre', '2n trimestre', '3r trimestre']
 
@@ -22,6 +22,38 @@ const TRIMESTRES = ['1r trimestre', '2n trimestre', '3r trimestre']
  * proves de llengua; el nom es va quedar curt quan s'hi van afegir les
  * matemàtiques.
  */
+/**
+ * Els resultats d'Innovamat de cursos anteriors, plegats.
+ *
+ * Van a part i amb el curs ben visible a cada línia: tenen valor per
+ * veure l'evolució, però barrejar-los amb els del curs en marxa és
+ * justament el que feia que un resultat de fa dos anys semblés d'ara.
+ * Plegats per defecte perquè el que es consulta habitualment és el curs
+ * actual.
+ */
+function Anteriors({ llista }) {
+  return (
+    <details style={{ marginTop: 8 }}>
+      <summary style={{ fontSize: 12, cursor: 'pointer', color: 'var(--ink-soft)' }}>
+        Cursos anteriors ({llista.length})
+      </summary>
+      <ul style={{ margin: '6px 0 0', paddingLeft: 18, fontSize: 12, color: 'var(--ink-soft)' }}>
+        {llista.map((e, i) => (
+          <li key={i} style={{ marginBottom: 3 }}>
+            <strong>{e.cursEscolar}</strong> · {e.prova}
+            {e.classe && ` (${e.classe})`} —{' '}
+            {e.noAvaluat
+              ? 'no va fer la prova'
+              : e.prova === 'ConMat'
+                ? `nivell ${e.nivell ?? '—'}${e.moment ? ` (${momentLabel(e.moment)})` : ''}`
+                : `inicial ${e.inicial ?? '—'} · final ${e.final ?? '—'}`}
+          </li>
+        ))}
+      </ul>
+    </details>
+  )
+}
+
 export default function InformeAlumne() {
   const [alumnesTots, setAlumnesTots] = useState([])
   const [matematiques, setMatematiques] = useState([])
@@ -194,10 +226,23 @@ export default function InformeAlumne() {
             Matemàtiques (Innovamat)
           </p>
           {(() => {
-            const mates = ultimConmatDe(matematiques, alumneId)
-            const cosmos = ultimCosmosDe(matematiques, alumneId)
+            // Del CURS SELECCIONAT, no el més recent de tots: la resta de
+            // l'informe (TEE, lectura) ja va filtrada pel curs, i barrejar-hi
+            // resultats d'anys anteriors feia que un alumne de 3r hi veiés
+            // el COSMOS de quan era a 2n com si fos d'enguany.
+            const mates = conmatDelCurs(matematiques, alumneId, cursEscolarId)
+            const cosmos = cosmosDelCurs(matematiques, alumneId, cursEscolarId)
+            const anteriors = innovamatAnterior(matematiques, alumneId, cursEscolarId)
+
             if (!mates && !cosmos) {
-              return <p className="module-note">Encara no hi ha cap resultat d&apos;Innovamat per aquest alumne.</p>
+              return (
+                <>
+                  <p className="module-note">
+                    Encara no hi ha cap resultat d&apos;Innovamat d&apos;aquest curs per aquest alumne.
+                  </p>
+                  {anteriors.length > 0 && <Anteriors llista={anteriors} />}
+                </>
+              )
             }
             return (
               <>
@@ -219,13 +264,21 @@ export default function InformeAlumne() {
                   )
                 )}
                 {cosmos && (
-                  <p className="module-note" style={{ fontStyle: 'normal' }}>
-                    <strong>COSMOS</strong> — inicial{' '}
-                    <strong>{cosmos.moments?.inicial?.rendiment ?? '—'}</strong>
-                    {' · '}final <strong>{cosmos.moments?.final?.rendiment ?? '—'}</strong>
-                    {' · '}{cosmos.cursEscolar}
-                  </p>
+                  cosmos.noAvaluat ? (
+                    <p className="module-note" style={{ fontStyle: 'normal' }}>
+                      <strong>COSMOS</strong> — <strong>no avaluat</strong>, no va fer la prova final
+                      {' · '}{cosmos.cursEscolar}
+                    </p>
+                  ) : (
+                    <p className="module-note" style={{ fontStyle: 'normal' }}>
+                      <strong>COSMOS</strong> — inicial <strong>{cosmos.inicial ?? '—'}</strong>
+                      {' · '}final <strong>{cosmos.final ?? '—'}</strong>
+                      {' · '}{cosmos.cursEscolar}
+                      {cosmos.classe && <span style={{ color: 'var(--ink-soft)' }}> · {cosmos.classe}</span>}
+                    </p>
+                  )
                 )}
+                {anteriors.length > 0 && <Anteriors llista={anteriors} />}
               </>
             )
           })()}
