@@ -194,6 +194,14 @@ export default function InformeAlumne() {
             if (!mates) {
               return <p className="module-note">Encara no hi ha cap resultat de ConMat per aquest alumne.</p>
             }
+            if (mates.noAvaluat) {
+              return (
+                <p className="module-note" style={{ fontStyle: 'normal' }}>
+                  <strong>No avaluat</strong> — no va fer la ConMat
+                  {' · '}{mates.cursEscolar} · {momentLabel(mates.moment)}
+                </p>
+              )
+            }
             return (
               <p className="module-note" style={{ fontStyle: 'normal' }}>
                 Nivell <strong>{mates.nivell ?? '—'}</strong>

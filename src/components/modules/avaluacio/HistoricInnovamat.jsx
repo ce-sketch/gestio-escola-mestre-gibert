@@ -29,6 +29,14 @@ export default function HistoricInnovamat() {
   const [refForm, setRefForm] = useState({ curs: cursEscolarActual(), moment: 'final', nivell: '', ambit: 'catalunya', Baix: '', 'Mitjà-baix': '', 'Mitjà-alt': '', Alt: '' })
   const [desantRef, setDesantRef] = useState(false)
   const [esborrant, setEsborrant] = useState(false)
+  // "Esborra tot un curs" esborra TOTES les classes i TOTS dos moments
+  // d'un cop, sense manera de desfer-ho des de l'app. Un window.confirm()
+  // normal és massa fàcil de prémer sense voler (per exemple, buscant el
+  // "Desfés" d'un informe concret que hi ha just a sota). Per això cal
+  // escriure el curs exacte abans que el botó s'activi — el mateix
+  // patró que ja fa servir "Backup" per restaurar-hi.
+  const [cursPerEsborrar, setCursPerEsborrar] = useState(null)
+  const [confirmaEsborraCurs, setConfirmaEsborraCurs] = useState('')
 
   useEffect(() => { carrega() }, [])
 
@@ -117,15 +125,14 @@ export default function HistoricInnovamat() {
   }
 
   /** Esborra tots els resultats d'Innovamat d'un curs escolar sencer.
-   *  Les referències introduïdes a mà es mantenen. */
+   *  Les referències introduïdes a mà es mantenen.
+   *
+   *  Ja no demana confirmació aquí: la crida només arriba quan qui
+   *  truca (el botó de sota) ha comprovat que l'usuari ha escrit el curs
+   *  exacte. Fer-ho amb un window.confirm() sol era massa fàcil de
+   *  prémer per error. */
   async function esborraCurs(cursEscolar) {
     const afectats = registres.filter((r) => r.cursEscolar === cursEscolar && r.tipus !== 'referencia')
-    if (!window.confirm(
-      `Esborrar TOTS els resultats d'Innovamat del curs ${cursEscolar}?\n\n`
-      + `S'esborraran ${afectats.length} registres (ConMat i COSMOS). Les referències d'Innovamat es mantenen.\n\n`
-      + 'Aquesta acció no es pot desfer.'
-    )) return
-
     setEsborrant(true)
     try {
       const MAX = 450
@@ -134,6 +141,8 @@ export default function HistoricInnovamat() {
         for (const r of afectats.slice(i, i + MAX)) lot.delete(doc(db, 'matematiques', r.id))
         await lot.commit()
       }
+      setCursPerEsborrar(null)
+      setConfirmaEsborraCurs('')
       await carrega()
     } catch (err) {
       setError(err.message)
@@ -244,19 +253,69 @@ export default function HistoricInnovamat() {
           </p>
 
           {cursos.length > 0 && (
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 12 }}>
-              <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}>Esborra tot un curs:</span>
-              {cursos.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => esborraCurs(c)}
-                  disabled={esborrant}
-                  style={{ background: 'none', border: '1px solid var(--red, #b03030)', color: 'var(--red, #b03030)', borderRadius: 6, padding: '3px 10px', fontSize: 11, cursor: 'pointer' }}
-                >
-                  {c}
-                </button>
-              ))}
+            <div style={{ marginTop: 12 }}>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}>Esborra tot un curs:</span>
+                {cursos.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => { setCursPerEsborrar(c); setConfirmaEsborraCurs('') }}
+                    disabled={esborrant}
+                    style={{ background: 'none', border: '1px solid var(--red, #b03030)', color: 'var(--red, #b03030)', borderRadius: 6, padding: '3px 10px', fontSize: 11, cursor: 'pointer' }}
+                  >
+                    {c}
+                  </button>
+                ))}
+              </div>
+              {/* Segon pas obligatori: cal escriure el curs exacte. Esborrar
+                  un curs sencer no es pot desfer des de l'app (a diferència
+                  del "Desfés" d'un informe concret), així que aquí no n'hi
+                  ha prou amb un simple clic de confirmació. */}
+              {cursPerEsborrar && (
+                <div className="caixa-discreta" style={{ marginTop: 8, borderColor: 'var(--red, #b03030)' }}>
+                  <strong style={{ fontSize: 12, color: 'var(--red, #b03030)' }}>
+                    Esborrar TOTS els resultats d'Innovamat del curs {cursPerEsborrar}?
+                  </strong>
+                  <p className="nota">
+                    Afecta totes les classes i tots dos moments (ConMat i COSMOS) —{' '}
+                    {registres.filter((r) => r.cursEscolar === cursPerEsborrar && r.tipus !== 'referencia').length} registres.
+                    Les referències d'Innovamat es mantenen. <strong>Aquesta acció no es pot desfer des de l'app.</strong>
+                    {' '}Escriu <strong>{cursPerEsborrar}</strong> per confirmar-ho.
+                  </p>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 6, flexWrap: 'wrap' }}>
+                    <input
+                      type="text"
+                      value={confirmaEsborraCurs}
+                      onChange={(e) => setConfirmaEsborraCurs(e.target.value)}
+                      placeholder={cursPerEsborrar}
+                      className="camp camp-petit"
+                      style={{ maxWidth: 120 }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => esborraCurs(cursPerEsborrar)}
+                      disabled={esborrant || confirmaEsborraCurs !== cursPerEsborrar}
+                      style={{
+                        background: confirmaEsborraCurs === cursPerEsborrar ? 'var(--red, #b03030)' : 'var(--line)',
+                        color: confirmaEsborraCurs === cursPerEsborrar ? '#fff' : 'var(--ink-soft)',
+                        border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 11,
+                        cursor: confirmaEsborraCurs === cursPerEsborrar ? 'pointer' : 'not-allowed',
+                      }}
+                    >
+                      {esborrant ? 'Esborrant…' : 'Esborra definitivament'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setCursPerEsborrar(null); setConfirmaEsborraCurs('') }}
+                      disabled={esborrant}
+                      style={{ background: 'none', border: '1px solid var(--line)', borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer' }}
+                    >
+                      Cancel·la
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -352,7 +411,12 @@ export default function HistoricInnovamat() {
                                 </td>
                               )
                             })}
-                            <td className="num">{dist.total}</td>
+                            <td className="num">
+                              {dist.total}
+                              {dist.noAvaluats > 0 && (
+                                <span style={{ color: 'var(--ink-soft)' }}> (+{dist.noAvaluats} sense fer la prova)</span>
+                              )}
+                            </td>
                             <td style={{ color: 'var(--ink-soft)' }}>{nivells || '—'}</td>
                           </tr>
                         )
@@ -374,7 +438,8 @@ export default function HistoricInnovamat() {
                 <p style={{ fontSize: 13, fontWeight: 600, margin: '0 0 4px' }}>
                   {grup.cursEscolar} · {momentLabel(grup.moment)}
                   <span style={{ fontWeight: 400, color: 'var(--ink-soft)' }}>
-                    {' '}— {dist.total} alumnes
+                    {' '}— {dist.total} avaluats
+                    {dist.noAvaluats > 0 && `, ${dist.noAvaluats} sense fer la prova`}
                     {nSense > 0 && `, ${nSense} amb el nom de l'informe (ja no són al centre)`}
                   </span>
                 </p>
@@ -400,7 +465,12 @@ export default function HistoricInnovamat() {
                               {dEls.files.find((f) => f.nivell === n)?.alumnes ?? 0}
                             </td>
                           ))}
-                          <td className="num"><strong>{dEls.total}</strong></td>
+                          <td className="num">
+                            <strong>{dEls.total}</strong>
+                            {dEls.noAvaluats > 0 && (
+                              <span style={{ color: 'var(--ink-soft)', fontWeight: 400 }}> (+{dEls.noAvaluats})</span>
+                            )}
+                          </td>
                         </tr>
                       )
                     })}
@@ -411,7 +481,12 @@ export default function HistoricInnovamat() {
                           {dist.files.find((f) => f.nivell === n)?.alumnes ?? 0}
                         </td>
                       ))}
-                      <td className="num">{dist.total}</td>
+                      <td className="num">
+                        {dist.total}
+                        {dist.noAvaluats > 0 && (
+                          <span style={{ fontWeight: 400, color: 'var(--ink-soft)' }}> (+{dist.noAvaluats})</span>
+                        )}
+                      </td>
                     </tr>
                   </tbody>
                 </table>

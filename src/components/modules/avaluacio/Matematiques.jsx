@@ -195,6 +195,10 @@ export default function Matematiques({ cursEscolarFixat = null, nomesCarrega = f
           percentatge: a.percentatge,
           respostes: a.respostes,
           preguntes: a.preguntes,
+          // Alumne que consta a l'informe però no va fer la prova: es desa
+          // igualment (amb nivell buit) perquè els totals quadrin amb
+          // l'Excel, però queda marcat perquè no compti als percentatges.
+          noAvaluat: a.noAvaluat === true,
         })
 
         for (const a of conmat.casats) {
@@ -414,6 +418,11 @@ export default function Matematiques({ cursEscolarFixat = null, nomesCarrega = f
             <strong style={{ fontSize: 13 }}>
               Curs {cursEscolarId} · {conmat.classe ?? 'classe desconeguda'} — {conmat.moment ?? 'moment desconegut'}
               {' '}· {conmat.alumnes.length} alumnes
+              {repartiment.noAvaluats > 0 && (
+                <span style={{ fontWeight: 400, color: 'var(--ink-soft)' }}>
+                  {' '}({repartiment.total} avaluats, {repartiment.noAvaluats} sense fer la prova)
+                </span>
+              )}
             </strong>
 
             {conmat.avisos.map((a, i) => (
@@ -567,7 +576,7 @@ export default function Matematiques({ cursEscolarFixat = null, nomesCarrega = f
                       .sort((x, y) => y.punts - x.punts || x.al.nom.localeCompare(y.al.nom))
                     return (
                       <li key={i} style={{ marginBottom: 6 }}>
-                        {a.nomPdf ?? a.nom} — {a.nivell}
+                        {a.nomPdf ?? a.nom} — {a.noAvaluat ? 'no avaluat' : a.nivell}
                         <select
                           defaultValue=""
                           onChange={(e) => assignaManualment(i, e.target.value)}
@@ -727,7 +736,7 @@ export default function Matematiques({ cursEscolarFixat = null, nomesCarrega = f
                     <tr key={d.id}>
                       <td style={{ padding: '4px 12px 4px 0' }}>{d.nom}</td>
                       <td style={{ padding: '4px 12px', textAlign: 'center' }}>
-                        {ultim?.nivell ?? '—'}
+                        {ultim ? (ultim.noAvaluat ? 'no avaluat' : (ultim.nivell ?? '—')) : '—'}
                         {ultim && <span style={{ color: 'var(--ink-soft)', fontSize: 11 }}> ({momentLabel(ultim.moment)})</span>}
                       </td>
                       <td style={{ padding: '4px 12px', textAlign: 'center' }}>

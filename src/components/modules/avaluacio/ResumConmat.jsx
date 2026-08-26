@@ -88,7 +88,12 @@ export default function ResumConmat() {
                         {dist.files.find((f) => f.nivell === n)?.alumnes ?? 0}
                       </td>
                     ))}
-                    <td className="num"><strong>{dist.total}</strong></td>
+                    <td className="num">
+                      <strong>{dist.total}</strong>
+                      {dist.noAvaluats > 0 && (
+                        <span style={{ color: 'var(--ink-soft)', fontWeight: 400 }}> (+{dist.noAvaluats} sense fer la prova)</span>
+                      )}
+                    </td>
                   </tr>
                 )
               })}
@@ -99,7 +104,12 @@ export default function ResumConmat() {
                     {total.files.find((f) => f.nivell === n)?.alumnes ?? 0}
                   </td>
                 ))}
-                <td className="num">{total.total}</td>
+                <td className="num">
+                  {total.total}
+                  {total.noAvaluats > 0 && (
+                    <span style={{ fontWeight: 400, color: 'var(--ink-soft)' }}> (+{total.noAvaluats})</span>
+                  )}
+                </td>
               </tr>
               {/* Els percentatges, a sota dels recomptes: és el que es
                   mira per comparar amb Catalunya i amb els altres centres. */}
