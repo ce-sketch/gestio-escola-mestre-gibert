@@ -66,7 +66,7 @@ export const DESTINACIONS = [
   { modul: 'sic', nom: 'Indicadors de centre (SIC)', on: 'SIC',
     paraules: ['sic', 'indicadors de centre', 'sistema d\'indicadors', 'escolarització', 'complexitat',
       'mobilitat', 'ràtio', 'nese', 'memòria anual', 'context', 'recursos'] },
-  { modul: 'matriuGeneral', nom: 'Quadre de comandament', on: 'Quadre de comandament',
+  { modul: 'matriu', nom: 'Quadre de comandament', on: 'Quadre de comandament',
     paraules: ['quadre de comandament', 'matriu general', 'visió global', 'plantilles'] },
   { modul: 'backup', nom: 'Còpia de seguretat completa', on: 'Backup',
     paraules: ['backup', 'còpia de seguretat', 'exportar tot', 'zip'] },
