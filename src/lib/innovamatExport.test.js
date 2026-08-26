@@ -5,7 +5,7 @@ vi.mock('./carregaLlibreries', () => ({ carregaPdfjs: () => {}, carregaExcelJS: 
 const {
   fullConmatResum, fullConmatComparativa, fullConmatAlumnes,
   fullCosmosResum, fullCosmosEvolucio, fullCosmosAlumnes,
-  fullsInnovamat, nomFitxerInnovamat,
+  fullsInnovamat, nomFitxerInnovamat, fullResumCurs,
 } = await import('./innovamatExport')
 
 // Registres calcats als de Firestore: el ConMat per moment, el COSMOS
@@ -191,5 +191,61 @@ describe('nomFitxerInnovamat', () => {
 
   it('no peta sense dades', () => {
     expect(nomFitxerInnovamat([], 'tot', 'xlsx')).toBe('innovamat.xlsx')
+  })
+})
+
+describe('fullResumCurs', () => {
+  const NIVELLS_CM = ['Baix', 'Mitjà-baix', 'Mitjà-alt', 'Alt']
+  const entradesCm = [
+    { classe: '3rA', nivell: 'Alt' },
+    { classe: '3rA', nivell: 'Baix' },
+    { classe: '3rA', nivell: null, noAvaluat: true },
+    { classe: '3rB', nivell: 'Alt' },
+  ]
+  const dist = (llista) => {
+    const avaluats = llista.filter((e) => e.nivell != null)
+    return {
+      files: NIVELLS_CM.map((n) => ({
+        nivell: n,
+        alumnes: avaluats.filter((e) => e.nivell === n).length,
+        percentatge: avaluats.length ? Math.round((avaluats.filter((e) => e.nivell === n).length / avaluats.length) * 100) : 0,
+      })),
+      total: avaluats.length,
+      noAvaluats: llista.length - avaluats.length,
+      totalGeneral: llista.length,
+    }
+  }
+
+  const full = () => fullResumCurs(entradesCm, {
+    prova: 'ConMat', nivells: NIVELLS_CM, distribucio: dist,
+    moment: 'Final de curs', curs: '2026-27',
+  })
+
+  it('fa una fila per classe i una de total', () => {
+    const files = full().files.slice(1)
+    expect(files.map((f) => f[0])).toEqual(['3rA', '3rB', 'ConMat — TOTAL'])
+  })
+
+  it('separa avaluats, no avaluats i total general', () => {
+    const fila3rA = full().files.slice(1).find((f) => f[0] === '3rA')
+    expect(fila3rA.slice(-3)).toEqual([2, 1, 3])
+  })
+
+  it('el nom del full cap dins del límit d\'Excel (31 caràcters)', () => {
+    expect(full().nom.length).toBeLessThanOrEqual(31)
+  })
+
+  it('els percentatges són números, per poder-hi fer càlculs', () => {
+    const cap = full().files[0]
+    const fila = full().files[1]
+    expect(typeof fila[cap.indexOf('Alt %')]).toBe('number')
+  })
+
+  it('no peta sense entrades', () => {
+    const buit = fullResumCurs([], {
+      prova: 'COSMOS', nivells: ['Baix', 'Mitjà', 'Alt'], distribucio: dist,
+      moment: 'Final de curs', curs: '2026-27',
+    })
+    expect(buit.files).toHaveLength(2) // capçalera + fila de TOTAL
   })
 })

@@ -230,6 +230,35 @@ export function fullsInnovamat(registres, refs = {}, opcions = {}) {
   return fulls.filter((f) => f.files.length > 1)
 }
 
+/**
+ * Full per al "Resum" d'un sol curs i moment — el que es veu a les
+ * pestanyes "Resum ConMat" i "Resum COSMOS".
+ *
+ * Es construeix a partir de les entrades JA filtrades pel component, no
+ * de tots els registres: així el fitxer que es baixa conté exactament el
+ * que hi ha a la pantalla. Si es calculés aquí un altre cop, un canvi al
+ * filtre de la pantalla i un altre aquí es podrien desincronitzar sense
+ * que ningú se n'adonés.
+ */
+export function fullResumCurs(entrades, { prova, nivells, distribucio, moment, curs }) {
+  const files = [['Classe', ...nivells, ...nivells.map((n) => `${n} %`), 'Avaluats', 'Sense fer la prova', 'Total']]
+  const classes = [...new Set(entrades.map((e) => e.classe).filter(Boolean))].sort()
+
+  const fila = (etiqueta, d) => [
+    etiqueta,
+    ...nivells.map((n) => d.files.find((f) => f.nivell === n)?.alumnes ?? 0),
+    ...nivells.map((n) => pct(d.files.find((f) => f.nivell === n)?.percentatge)),
+    d.total, d.noAvaluats, d.totalGeneral,
+  ]
+
+  for (const classe of classes) {
+    files.push(fila(classe, distribucio(entrades.filter((e) => e.classe === classe))))
+  }
+  files.push(fila(`${prova} — TOTAL`, distribucio(entrades)))
+
+  return { nom: `${prova} ${curs} · ${moment}`.slice(0, 31), files }
+}
+
 /** El nom del fitxer, amb el curs si només n'hi ha un. Sense el curs, un
  *  "innovamat.xlsx" a la carpeta de baixades no diu de què és. */
 export function nomFitxerInnovamat(registres, prova = 'tot', extensio = 'xlsx') {
