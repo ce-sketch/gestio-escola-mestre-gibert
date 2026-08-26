@@ -731,7 +731,7 @@ export default function MatriuGeneral() {
     <div>
       <p className="module-lead">
         Vista de conjunt de totes les valoracions de cicle/comissió/equip que els docents han
-        anat introduint des del mòdul "Documentació". Només lectura des d'aquí.
+        anat introduint des del mòdul "Valoracions". Només lectura des d'aquí.
       </p>
 
       <label className="field" style={{ maxWidth: 160, marginTop: 16 }}>
@@ -837,7 +837,7 @@ export default function MatriuGeneral() {
 
             <TitolSeccio
               titol="Comissions mixtes (amb l'AFA)"
-              ajuda="Les que tenen participació de famílies, de l'AFA o d'una entitat de fora. Tenen pestanya pròpia a &quot;Documentació&quot;."
+              ajuda="Les que tenen participació de famílies, de l'AFA o d'una entitat de fora. Tenen pestanya pròpia a &quot;Valoracions&quot;."
             />
             <Etiquetes
               elements={config.mixtes.map((c) => ({ clau: c.nom, etiqueta: c.nom, activa: c.activa }))}
@@ -872,7 +872,7 @@ export default function MatriuGeneral() {
             />
 
             <p style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 16 }}>
-              Es desa sol. El professorat, des de &quot;Documentació&quot;, només veurà com a opció el que
+              Es desa sol. El professorat, des de &quot;Valoracions&quot;, només veurà com a opció el que
               estigui marcat aquí — desmarcar-ne una no esborra les dades que ja s'hi hagin
               introduït, només l'amaga de la llista. La ✕ sí que esborra.
             </p>
