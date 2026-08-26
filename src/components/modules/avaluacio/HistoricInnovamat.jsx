@@ -2,11 +2,14 @@ import { useEffect, useState } from 'react'
 import { collection, getDocs, doc, setDoc, deleteDoc, deleteField, serverTimestamp, writeBatch } from 'firebase/firestore'
 import { db, auth } from '../../../firebase'
 import { cursEscolarActual, NIVELLS_ESCOLARS } from '../../../lib/cursEscolar'
-import {
-  entradesHistoric, distribucioPerNivell, agrupaPerProva, momentLabel, MOMENTS,
-  entradesCosmos, distribucioCosmos, evolucioCosmos, NIVELLS_COSMOS, MOMENTS_COSMOS,
-} from '../../../lib/historicInnovamat'
+import { entradesHistoric, entradesCosmos, momentLabel, MOMENTS } from '../../../lib/historicInnovamat'
 import Matematiques from './Matematiques'
+import HistoricConmat from './HistoricConmat'
+import HistoricCosmos from './HistoricCosmos'
+
+/** Els quatre nivells del ConMat, l'escala de les referències que es
+ *  copien a mà de la pàgina 4 de l'informe. */
+const NIVELLS = ['Baix', 'Mitjà-baix', 'Mitjà-alt', 'Alt']
 
 /**
  * Històric d'Innovamat: l'evolució del centre a les proves de ConMat i
@@ -16,9 +19,16 @@ import Matematiques from './Matematiques'
  * allà s'hi carreguen només els informes del curs en marxa, mentre que
  * aquí s'hi poden pujar els de qualsevol curs passat per reconstruir
  * l'històric, i consultar-ne els resultats acumulats.
+ *
+ * Aquest fitxer és només el contenidor: hi ha el que comparteixen les
+ * dues proves (la càrrega d'informes i l'esborrat d'un curs sencer, que
+ * afecta totes dues) i les subpestanyes. Els resultats de cadascuna són
+ * a HistoricConmat.jsx i HistoricCosmos.jsx.
+ *
+ * La col·lecció "matematiques" es llegeix UNA vegada aquí i es passa als
+ * fills per props: si cada pestanya la carregués pel seu compte, canviar
+ * de pestanya tornaria a llegir-la sencera.
  */
-const NIVELLS = ['Baix', 'Mitjà-baix', 'Mitjà-alt', 'Alt']
-
 export default function HistoricInnovamat() {
   const [registres, setRegistres] = useState([])
   const [carregant, setCarregant] = useState(true)
@@ -43,6 +53,11 @@ export default function HistoricInnovamat() {
   // patró que ja fa servir "Backup" per restaurar-hi.
   const [cursPerEsborrar, setCursPerEsborrar] = useState(null)
   const [confirmaEsborraCurs, setConfirmaEsborraCurs] = useState('')
+  // Quina de les dues proves s'està mirant. Van separades perquè tenen
+  // escales diferents (quatre nivells el ConMat, tres el COSMOS) i
+  // alumnat diferent (3r-6è contra 1r-2n); en una sola pàgina, per veure
+  // el COSMOS calia passar de llarg tot el ConMat.
+  const [prova, setProva] = useState('conmat')
 
   useEffect(() => { carrega() }, [])
 
@@ -238,31 +253,151 @@ export default function HistoricInnovamat() {
   }
 
   const entrades = entradesHistoric(registres)
-  const informes = registres.filter((r) => r.tipus === 'informe')
-  const cursos = [...new Set(entrades.map((e) => e.cursEscolar))].sort().reverse()
-
-  // ── COSMOS ──────────────────────────────────────────────────────────
-  // El COSMOS és la prova de 1r i 2n i es mesura amb tres nivells, no
-  // amb els quatre del ConMat: per això té les seves pròpies taules en
-  // comptes de barrejar-s'hi. A diferència del ConMat, no es desa cap
-  // document d'"informe": la llista de càrregues es dedueix dels mateixos
-  // resultats, agrupats per curs i classe.
   const entradesCos = entradesCosmos(registres)
-  const cursosCos = [...new Set(entradesCos.map((e) => e.cursEscolar))].sort().reverse()
-  const carreguesCos = []
-  for (const curs of cursosCos) {
-    const delCurs = entradesCos.filter((e) => e.cursEscolar === curs)
-    for (const classe of [...new Set(delCurs.map((e) => e.classe))].sort()) {
-      const dels = delCurs.filter((e) => e.classe === classe)
-      carreguesCos.push({
-        cursEscolar: curs,
-        classe,
-        total: dels.length,
-        sensCasar: dels.filter((e) => e.sensCasar).length,
-        noAvaluats: dels.filter((e) => e.noAvaluat).length,
-      })
-    }
-  }
+  // Els cursos d'on es pot esborrar: de qualsevol de les dues proves, ja
+  // que l'esborrat d'un curs se les emporta totes dues.
+  const totsElsCursos = [...new Set([
+    ...entrades.map((e) => e.cursEscolar),
+    ...entradesCos.map((e) => e.cursEscolar),
+  ])].sort().reverse()
+
+  const PESTANYES = [
+    { id: 'conmat', label: 'ConMat', subLabel: '(3r a 6è)', quants: entrades.length },
+    { id: 'cosmos', label: 'COSMOS', subLabel: '(1r i 2n)', quants: entradesCos.length },
+  ]
+
+  // La caixa de referències va dins de la pestanya de ConMat: els seus
+  // quatre nivells (Baix/Mitjà-baix/Mitjà-alt/Alt) són els del ConMat i
+  // al COSMOS, que en té tres i amb altres noms, no hi encaixen.
+  const caixaReferencies = (
+    <div className="placeholder-box" style={{ borderStyle: 'solid', marginTop: 20 }}>
+      <strong>Referències d'Innovamat</strong>
+      <p style={{ marginTop: 6, fontSize: 13 }}>
+        Els percentatges de Catalunya i del total de centres surten a la pàgina 4 de l'informe,
+        però hi són dins d'un gràfic: no es poden llegir del PDF i cal copiar-los aquí a mà.
+        Un cop desats, surten al costat dels resultats del centre per comparar-los.
+      </p>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end', marginTop: 10 }}>
+        <label className="field" style={{ maxWidth: 110 }}>
+          <span>Curs</span>
+          <input type="text" value={refForm.curs} onChange={(e) => setRefForm({ ...refForm, curs: e.target.value })}
+            className="camp camp-petit" />
+        </label>
+        <label className="field" style={{ maxWidth: 130 }}>
+          <span>Moment</span>
+          <select value={refForm.moment} onChange={(e) => setRefForm({ ...refForm, moment: e.target.value })}
+            className="camp camp-petit">
+            {MOMENTS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+          </select>
+        </label>
+        <label className="field" style={{ maxWidth: 110 }}>
+          <span>Nivell</span>
+          {/* Abans era text lliure amb "3r" com a exemple en gris, i
+              costava veure que el camp era buit: el botó de desar no
+              feia res i no s'entenia per què. Amb un desplegable no es
+              pot deixar a mitges ni escriure'l de dues maneres
+              ("3r" / "3er"), que trencaria l'agrupació per nivell.
+              Les ConMat només es passen de 3r a 6è. */}
+          <select value={refForm.nivell} onChange={(e) => setRefForm({ ...refForm, nivell: e.target.value })}
+            className="camp camp-petit">
+            <option value="">— Tria'l —</option>
+            {NIVELLS_ESCOLARS.filter((n) => Number(n.id) >= 3).map((n) => (
+              <option key={n.id} value={n.label}>{n.label}</option>
+            ))}
+          </select>
+        </label>
+        <label className="field" style={{ maxWidth: 130 }}>
+          <span>Àmbit</span>
+          <select value={refForm.ambit} onChange={(e) => setRefForm({ ...refForm, ambit: e.target.value })}
+            className="camp camp-petit">
+            <option value="catalunya">Catalunya</option>
+            <option value="total">Total centres</option>
+          </select>
+        </label>
+        {NIVELLS.map((n) => (
+          <label key={n} className="field" style={{ maxWidth: 85 }}>
+            <span>{n} %</span>
+            <input type="number" value={refForm[n]} onChange={(e) => setRefForm({ ...refForm, [n]: e.target.value })}
+              className="camp camp-petit" style={{ width: 70 }} />
+          </label>
+        ))}
+        <button type="button" className="btn-ghost" onClick={desaReferencia} disabled={desantRef}>
+          {desantRef ? 'Desant…' : (refEditant ? 'Desa els canvis' : 'Desa la referència')}
+        </button>
+        {refEditant && (
+          <button
+            type="button"
+            className="btn-ghost"
+            onClick={() => { setRefEditant(null); setRefForm((f) => ({ ...f, Baix: '', 'Mitjà-baix': '', 'Mitjà-alt': '', Alt: '' })) }}
+            disabled={desantRef}
+          >
+            Cancel·la
+          </button>
+        )}
+      </div>
+
+      {/* Les referències desades, per curs i nivell. Sense aquesta
+          llista no hi havia manera de saber quines s'havien introduït
+          ni de corregir-ne cap xifra mal copiada del gràfic. */}
+      {llistaRefs.length > 0 && (
+        <div style={{ marginTop: 14 }}>
+          <strong style={{ fontSize: 13 }}>Referències desades</strong>
+          <table className="taula-dades" style={{ fontSize: 12, marginTop: 6 }}>
+            <thead>
+              <tr style={{ color: 'var(--ink-soft)' }}>
+                <th>Curs</th>
+                <th>Moment</th>
+                <th>Nivell</th>
+                <th>Àmbit</th>
+                <th style={{ textAlign: 'right' }}>Baix</th>
+                <th style={{ textAlign: 'right' }}>Mitjà-baix</th>
+                <th style={{ textAlign: 'right' }}>Mitjà-alt</th>
+                <th style={{ textAlign: 'right' }}>Alt</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {llistaRefs.map((r) => (
+                <tr key={r.id} style={{ background: refEditant === r.id ? 'var(--wash)' : undefined }}>
+                  <td>{r.cursEscolar}</td>
+                  <td>{momentLabel(r.moment)}</td>
+                  <td><strong>{r.nivell}</strong></td>
+                  <td style={{ color: 'var(--ink-soft)' }}>
+                    {r.ambit === 'catalunya' ? 'Catalunya' : 'Total de centres'}
+                  </td>
+                  {['Baix', 'Mitjà-baix', 'Mitjà-alt', 'Alt'].map((n) => (
+                    <td key={n} className="num">
+                      {r.valors?.[n] != null ? `${r.valors[n]}%` : '—'}
+                    </td>
+                  ))}
+                  <td style={{ whiteSpace: 'nowrap' }}>
+                    <button
+                      type="button"
+                      onClick={() => editaReferencia(r)}
+                      disabled={desantRef}
+                      style={{ background: 'none', border: '1px solid var(--line)', borderRadius: 6, padding: '2px 8px', fontSize: 11, cursor: 'pointer' }}
+                    >
+                      Edita
+                    </button>
+                    {' '}
+                    <button
+                      type="button"
+                      onClick={() => esborraReferencia(r)}
+                      disabled={desantRef}
+                      title="Esborra aquesta referència"
+                      style={{ background: 'none', border: '1px solid var(--red, #b03030)', color: 'var(--red, #b03030)', borderRadius: 6, padding: '2px 8px', fontSize: 11, cursor: 'pointer' }}
+                    >
+                      ×
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
 
   return (
     <div>
@@ -292,615 +427,126 @@ export default function HistoricInnovamat() {
         <Matematiques cursEscolarFixat={cursCarrega} nomesCarrega onDesat={carrega} />
       </div>
 
-      {/* ── Referències d'Innovamat (a mà) ─────────────────────────── */}
-      <div className="placeholder-box" style={{ borderStyle: 'solid', marginTop: 20 }}>
-        <strong>Referències d'Innovamat</strong>
-        <p style={{ marginTop: 6, fontSize: 13 }}>
-          Els percentatges de Catalunya i del total de centres surten a la pàgina 4 de l'informe,
-          però hi són dins d'un gràfic: no es poden llegir del PDF i cal copiar-los aquí a mà.
-          Un cop desats, surten al costat dels resultats del centre per comparar-los.
-        </p>
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end', marginTop: 10 }}>
-          <label className="field" style={{ maxWidth: 110 }}>
-            <span>Curs</span>
-            <input type="text" value={refForm.curs} onChange={(e) => setRefForm({ ...refForm, curs: e.target.value })}
-              className="camp camp-petit" />
-          </label>
-          <label className="field" style={{ maxWidth: 130 }}>
-            <span>Moment</span>
-            <select value={refForm.moment} onChange={(e) => setRefForm({ ...refForm, moment: e.target.value })}
-              className="camp camp-petit">
-              <option value="inici">Inici de curs</option>
-              <option value="final">Final de curs</option>
-            </select>
-          </label>
-          <label className="field" style={{ maxWidth: 110 }}>
-            <span>Nivell</span>
-            {/* Abans era text lliure amb "3r" com a exemple en gris, i
-                costava veure que el camp era buit: el botó de desar no
-                feia res i no s'entenia per què. Amb un desplegable no es
-                pot deixar a mitges ni escriure'l de dues maneres
-                ("3r" / "3er"), que trencaria l'agrupació per nivell.
-                Les ConMat només es passen de 3r a 6è. */}
-            <select value={refForm.nivell} onChange={(e) => setRefForm({ ...refForm, nivell: e.target.value })}
-              className="camp camp-petit">
-              <option value="">— Tria'l —</option>
-              {NIVELLS_ESCOLARS.filter((n) => Number(n.id) >= 3).map((n) => (
-                <option key={n.id} value={n.label}>{n.label}</option>
-              ))}
-            </select>
-          </label>
-          <label className="field" style={{ maxWidth: 130 }}>
-            <span>Àmbit</span>
-            <select value={refForm.ambit} onChange={(e) => setRefForm({ ...refForm, ambit: e.target.value })}
-              className="camp camp-petit">
-              <option value="catalunya">Catalunya</option>
-              <option value="total">Total centres</option>
-            </select>
-          </label>
-          {NIVELLS.map((n) => (
-            <label key={n} className="field" style={{ maxWidth: 85 }}>
-              <span>{n} %</span>
-              <input type="number" value={refForm[n]} onChange={(e) => setRefForm({ ...refForm, [n]: e.target.value })}
-                className="camp camp-petit" style={{ width: 70 }} />
-            </label>
-          ))}
-          <button type="button" className="btn-ghost" onClick={desaReferencia} disabled={desantRef}>
-            {desantRef ? 'Desant…' : (refEditant ? 'Desa els canvis' : 'Desa la referència')}
-          </button>
-          {refEditant && (
-            <button
-              type="button"
-              className="btn-ghost"
-              onClick={() => { setRefEditant(null); setRefForm((f) => ({ ...f, Baix: '', 'Mitjà-baix': '', 'Mitjà-alt': '', Alt: '' })) }}
-              disabled={desantRef}
-            >
-              Cancel·la
-            </button>
-          )}
-        </div>
 
-        {/* Les referències desades, per curs i nivell. Sense aquesta
-            llista no hi havia manera de saber quines s'havien introduït
-            ni de corregir-ne cap xifra mal copiada del gràfic. */}
-        {llistaRefs.length > 0 && (
-          <div style={{ marginTop: 14 }}>
-            <strong style={{ fontSize: 13 }}>Referències desades</strong>
-            <table className="taula-dades" style={{ fontSize: 12, marginTop: 6 }}>
-              <thead>
-                <tr style={{ color: 'var(--ink-soft)' }}>
-                  <th>Curs</th>
-                  <th>Moment</th>
-                  <th>Nivell</th>
-                  <th>Àmbit</th>
-                  <th style={{ textAlign: 'right' }}>Baix</th>
-                  <th style={{ textAlign: 'right' }}>Mitjà-baix</th>
-                  <th style={{ textAlign: 'right' }}>Mitjà-alt</th>
-                  <th style={{ textAlign: 'right' }}>Alt</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {llistaRefs.map((r) => (
-                  <tr key={r.id} style={{ background: refEditant === r.id ? 'var(--wash)' : undefined }}>
-                    <td>{r.cursEscolar}</td>
-                    <td>{momentLabel(r.moment)}</td>
-                    <td><strong>{r.nivell}</strong></td>
-                    <td style={{ color: 'var(--ink-soft)' }}>
-                      {r.ambit === 'catalunya' ? 'Catalunya' : 'Total de centres'}
-                    </td>
-                    {['Baix', 'Mitjà-baix', 'Mitjà-alt', 'Alt'].map((n) => (
-                      <td key={n} className="num">
-                        {r.valors?.[n] != null ? `${r.valors[n]}%` : '—'}
-                      </td>
-                    ))}
-                    <td style={{ whiteSpace: 'nowrap' }}>
-                      <button
-                        type="button"
-                        onClick={() => editaReferencia(r)}
-                        disabled={desantRef}
-                        style={{ background: 'none', border: '1px solid var(--line)', borderRadius: 6, padding: '2px 8px', fontSize: 11, cursor: 'pointer' }}
-                      >
-                        Edita
-                      </button>
-                      {' '}
-                      <button
-                        type="button"
-                        onClick={() => esborraReferencia(r)}
-                        disabled={desantRef}
-                        title="Esborra aquesta referència"
-                        style={{ background: 'none', border: '1px solid var(--red, #b03030)', color: 'var(--red, #b03030)', borderRadius: 6, padding: '2px 8px', fontSize: 11, cursor: 'pointer' }}
-                      >
-                        ×
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
 
       {error && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 10 }}>{error}</p>}
-      {carregant && <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 14 }}>Carregant l'històric…</p>}
+      {carregant && <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 14 }}>Carregant l&apos;històric…</p>}
 
-      {!carregant && entrades.length === 0 && (
-        <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 20 }}>
-          Encara no hi ha cap resultat d'Innovamat desat.
-        </p>
-      )}
-
-      {!carregant && entrades.length > 0 && (
+      {!carregant && (
         <>
           <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 20 }}>
-            {entrades.length} resultats de ConMat desats, de {cursos.length} curs{cursos.length === 1 ? '' : 'os'}
-            {cursos.length > 0 && ` (${cursos.join(', ')})`}.
+            {entrades.length + entradesCos.length} resultats desats, de{' '}
+            {totsElsCursos.length} curs{totsElsCursos.length === 1 ? '' : 'os'}
+            {totsElsCursos.length > 0 && ` (${totsElsCursos.join(', ')})`}.
           </p>
 
-          {cursos.length > 0 && (
-            <div style={{ marginTop: 12 }}>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}>Esborra tot un curs:</span>
-                {cursos.map((c) => (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => { setCursPerEsborrar(c); setConfirmaEsborraCurs('') }}
-                    disabled={esborrant}
-                    style={{ background: 'none', border: '1px solid var(--red, #b03030)', color: 'var(--red, #b03030)', borderRadius: 6, padding: '3px 10px', fontSize: 11, cursor: 'pointer' }}
-                  >
-                    {c}
-                  </button>
-                ))}
+      {totsElsCursos.length > 0 && (
+        <div style={{ marginTop: 12 }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}>Esborra tot un curs:</span>
+            {totsElsCursos.map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => { setCursPerEsborrar(c); setConfirmaEsborraCurs('') }}
+                disabled={esborrant}
+                style={{ background: 'none', border: '1px solid var(--red, #b03030)', color: 'var(--red, #b03030)', borderRadius: 6, padding: '3px 10px', fontSize: 11, cursor: 'pointer' }}
+              >
+                {c}
+              </button>
+            ))}
+          </div>
+          {/* Segon pas obligatori: cal escriure el curs exacte. Esborrar
+              un curs sencer no es pot desfer des de l'app (a diferència
+              del "Desfés" d'un informe concret), així que aquí no n'hi
+              ha prou amb un simple clic de confirmació. */}
+          {cursPerEsborrar && (
+            <div className="caixa-discreta" style={{ marginTop: 8, borderColor: 'var(--red, #b03030)' }}>
+              <strong style={{ fontSize: 12, color: 'var(--red, #b03030)' }}>
+                Esborrar TOTS els resultats d'Innovamat del curs {cursPerEsborrar}?
+              </strong>
+              <p className="nota">
+                Afecta totes les classes i tots dos moments (ConMat i COSMOS) —{' '}
+                {registres.filter((r) => r.cursEscolar === cursPerEsborrar && r.tipus !== 'referencia').length} registres.
+                Les referències d'Innovamat es mantenen. <strong>Aquesta acció no es pot desfer des de l'app.</strong>
+                {' '}Escriu <strong>{cursPerEsborrar}</strong> per confirmar-ho.
+              </p>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 6, flexWrap: 'wrap' }}>
+                <input
+                  type="text"
+                  value={confirmaEsborraCurs}
+                  onChange={(e) => setConfirmaEsborraCurs(e.target.value)}
+                  placeholder={cursPerEsborrar}
+                  className="camp camp-petit"
+                  style={{ maxWidth: 120 }}
+                />
+                <button
+                  type="button"
+                  onClick={() => esborraCurs(cursPerEsborrar)}
+                  disabled={esborrant || confirmaEsborraCurs !== cursPerEsborrar}
+                  style={{
+                    background: confirmaEsborraCurs === cursPerEsborrar ? 'var(--red, #b03030)' : 'var(--line)',
+                    color: confirmaEsborraCurs === cursPerEsborrar ? '#fff' : 'var(--ink-soft)',
+                    border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 11,
+                    cursor: confirmaEsborraCurs === cursPerEsborrar ? 'pointer' : 'not-allowed',
+                  }}
+                >
+                  {esborrant ? 'Esborrant…' : 'Esborra definitivament'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setCursPerEsborrar(null); setConfirmaEsborraCurs('') }}
+                  disabled={esborrant}
+                  style={{ background: 'none', border: '1px solid var(--line)', borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer' }}
+                >
+                  Cancel·la
+                </button>
               </div>
-              {/* Segon pas obligatori: cal escriure el curs exacte. Esborrar
-                  un curs sencer no es pot desfer des de l'app (a diferència
-                  del "Desfés" d'un informe concret), així que aquí no n'hi
-                  ha prou amb un simple clic de confirmació. */}
-              {cursPerEsborrar && (
-                <div className="caixa-discreta" style={{ marginTop: 8, borderColor: 'var(--red, #b03030)' }}>
-                  <strong style={{ fontSize: 12, color: 'var(--red, #b03030)' }}>
-                    Esborrar TOTS els resultats d'Innovamat del curs {cursPerEsborrar}?
-                  </strong>
-                  <p className="nota">
-                    Afecta totes les classes i tots dos moments (ConMat i COSMOS) —{' '}
-                    {registres.filter((r) => r.cursEscolar === cursPerEsborrar && r.tipus !== 'referencia').length} registres.
-                    Les referències d'Innovamat es mantenen. <strong>Aquesta acció no es pot desfer des de l'app.</strong>
-                    {' '}Escriu <strong>{cursPerEsborrar}</strong> per confirmar-ho.
-                  </p>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 6, flexWrap: 'wrap' }}>
-                    <input
-                      type="text"
-                      value={confirmaEsborraCurs}
-                      onChange={(e) => setConfirmaEsborraCurs(e.target.value)}
-                      placeholder={cursPerEsborrar}
-                      className="camp camp-petit"
-                      style={{ maxWidth: 120 }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => esborraCurs(cursPerEsborrar)}
-                      disabled={esborrant || confirmaEsborraCurs !== cursPerEsborrar}
-                      style={{
-                        background: confirmaEsborraCurs === cursPerEsborrar ? 'var(--red, #b03030)' : 'var(--line)',
-                        color: confirmaEsborraCurs === cursPerEsborrar ? '#fff' : 'var(--ink-soft)',
-                        border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 11,
-                        cursor: confirmaEsborraCurs === cursPerEsborrar ? 'pointer' : 'not-allowed',
-                      }}
-                    >
-                      {esborrant ? 'Esborrant…' : 'Esborra definitivament'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { setCursPerEsborrar(null); setConfirmaEsborraCurs('') }}
-                      disabled={esborrant}
-                      style={{ background: 'none', border: '1px solid var(--line)', borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer' }}
-                    >
-                      Cancel·la
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
           )}
-
-          {/* ── Informes carregats ─────────────────────────────────── */}
-          <h3 style={{ fontSize: 15, marginTop: 24 }}>Informes carregats</h3>
-          {informes.length === 0 ? (
-            <p style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
-              No consta cap informe carregat des que es registren. Els resultats dels alumnes sí que
-              hi són a l'històric de sota.
-            </p>
-          ) : (
-            <table className="taula-dades" style={{ marginTop: 8 }}>
-              <thead>
-                <tr>
-                  <th>Curs</th>
-                  <th>Classe</th>
-                  <th>Moment</th>
-                  <th>Alumnes</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {informes
-                  .sort((a, b) => String(b.cursEscolar).localeCompare(String(a.cursEscolar)))
-                  .map((r) => (
-                    <tr key={r.id} style={{ borderBottom: '1px solid var(--line)' }}>
-                      <td>{r.cursEscolar}</td>
-                      <td>{r.classe}</td>
-                      <td>{momentLabel(r.moment)}</td>
-                      <td>
-                        {r.alumnesCasats}
-                        {r.alumnesSenseCasar > 0 && (
-                          <span style={{ color: 'var(--ink-soft)' }}> (+{r.alumnesSenseCasar} amb nom de l'informe)</span>
-                        )}
-                      </td>
-                      <td>
-                        <button
-                          type="button"
-                          onClick={() => esborraInforme(r.cursEscolar, r.classe, r.moment)}
-                          disabled={esborrant}
-                          style={{ background: 'none', border: '1px solid var(--red, #b03030)', color: 'var(--red, #b03030)', borderRadius: 6, padding: '2px 8px', fontSize: 11, cursor: 'pointer' }}
-                        >
-                          Desfés
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
-          )}
-
-          {/* ── Evolució del centre ────────────────────────────────────
-              Una fila per curs, com a l'històric de TEE i VL/CL: és la
-              vista que serveix per veure la tendència d'un cop d'ull. */}
-          <h3 style={{ fontSize: 15, marginTop: 28 }}>Evolució del centre</h3>
-          {MOMENTS.map((m) => {
-            const delMoment = entrades.filter((e) => e.moment === m.id)
-            if (delMoment.length === 0) return null
-            const cursosDelMoment = [...new Set(delMoment.map((e) => e.cursEscolar))].sort().reverse()
-            return (
-              <div key={m.id} style={{ marginTop: 16 }}>
-                <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--navy)', margin: '0 0 6px' }}>
-                  {m.label}
-                </p>
-                <div className="taula-scroll">
-                  <table className="taula-dades">
-                    <thead>
-                      <tr>
-                        <th>Curs</th>
-                        {NIVELLS.map((n) => <th key={n} className="num">{n}</th>)}
-                        <th className="num">Avaluats</th>
-                        <th>Nivells</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {cursosDelMoment.map((c) => {
-                        const delCurs = delMoment.filter((e) => e.cursEscolar === c)
-                        const dist = distribucioPerNivell(delCurs)
-                        // Quins nivells de primària hi ha en aquell curs
-                        // (3-4-5-6 si hi són tots), tret de la lletra de classe.
-                        const nivells = [...new Set(delCurs
-                          .map((e) => String(e.classe ?? '').replace(/[A-D]$/i, '').replace(/[^0-9]/g, ''))
-                          .filter(Boolean))].sort().join('-')
-                        return (
-                          <tr key={c}>
-                            <td>{c}</td>
-                            {NIVELLS.map((n) => {
-                              const f = dist.files.find((x) => x.nivell === n)
-                              return (
-                                <td key={n} className="num">
-                                  <strong>{f?.alumnes ?? 0}</strong>
-                                  <span style={{ color: 'var(--ink-soft)' }}> ({f?.percentatge ?? 0}%)</span>
-                                </td>
-                              )
-                            })}
-                            <td className="num">
-                              {dist.total}
-                              {dist.noAvaluats > 0 && (
-                                <span style={{ color: 'var(--ink-soft)' }}> (+{dist.noAvaluats} sense fer la prova)</span>
-                              )}
-                            </td>
-                            <td style={{ color: 'var(--ink-soft)' }}>{nivells || '—'}</td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )
-          })}
-
-          {/* ── Resultats per prova ────────────────────────────────── */}
-          <h3 style={{ fontSize: 15, marginTop: 28 }}>Resultats per prova</h3>
-          {agrupaPerProva(entrades).map((grup) => {
-            const dist = distribucioPerNivell(grup.entrades)
-            const nSense = grup.entrades.filter((e) => e.sensCasar).length
-            return (
-              <div key={`${grup.cursEscolar}-${grup.moment}`} style={{ marginTop: 16 }}>
-                <p style={{ fontSize: 13, fontWeight: 600, margin: '0 0 4px' }}>
-                  {grup.cursEscolar} · {momentLabel(grup.moment)}
-                  <span style={{ fontWeight: 400, color: 'var(--ink-soft)' }}>
-                    {' '}— {dist.total} avaluats
-                    {dist.noAvaluats > 0 && `, ${dist.noAvaluats} sense fer la prova`}
-                    {nSense > 0 && `, ${nSense} amb el nom de l'informe (ja no són al centre)`}
-                  </span>
-                </p>
-                {/* Una fila per classe, com al resum de TEE i VL/CL. Les
-                    classes surten de les dades: si un curs tenia altres
-                    grups, hi apareixen igualment. */}
-                <table className="taula-dades" style={{ marginBottom: 14 }}>
-                  <thead>
-                    <tr>
-                      <th>Classe</th>
-                      {NIVELLS.map((n) => <th key={n} className="num">{n}</th>)}
-                      <th className="num">Total avaluats</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {[...new Set(grup.entrades.map((e) => e.classe).filter(Boolean))].sort().map((classe) => {
-                      const dEls = distribucioPerNivell(grup.entrades.filter((e) => e.classe === classe))
-                      return (
-                        <tr key={classe}>
-                          <td>{classe}</td>
-                          {NIVELLS.map((n) => (
-                            <td key={n} className="num">
-                              {dEls.files.find((f) => f.nivell === n)?.alumnes ?? 0}
-                            </td>
-                          ))}
-                          <td className="num">
-                            <strong>{dEls.total}</strong>
-                            {dEls.noAvaluats > 0 && (
-                              <span style={{ color: 'var(--ink-soft)', fontWeight: 400 }}> (+{dEls.noAvaluats})</span>
-                            )}
-                          </td>
-                        </tr>
-                      )
-                    })}
-                    <tr style={{ fontWeight: 700 }}>
-                      <td>ConMat — TOTAL</td>
-                      {NIVELLS.map((n) => (
-                        <td key={n} className="num">
-                          {dist.files.find((f) => f.nivell === n)?.alumnes ?? 0}
-                        </td>
-                      ))}
-                      <td className="num">
-                        {dist.total}
-                        {dist.noAvaluats > 0 && (
-                          <span style={{ fontWeight: 400, color: 'var(--ink-soft)' }}> (+{dist.noAvaluats})</span>
-                        )}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-
-                <table className="taula-dades">
-                  <thead>
-                    <tr style={{ color: 'var(--ink-soft)', textAlign: 'right' }}>
-                      <th>Nivell</th>
-                      <th>Alumnes</th>
-                      <th>Centre</th>
-                      <th>Catalunya</th>
-                      <th>Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {dist.files.map((f) => {
-                      // Les referències es desen per nivell de primària (3r, 4t...),
-                      // no per classe: es busca pel primer tros del nom de la classe.
-                      const nivellCurs = String(grup.entrades[0]?.classe ?? '').replace(/[A-D]$/i, '')
-                      const cat = refs[`${grup.cursEscolar}__${grup.moment}__${nivellCurs}__catalunya`]?.[f.nivell]
-                      const tot = refs[`${grup.cursEscolar}__${grup.moment}__${nivellCurs}__total`]?.[f.nivell]
-                      return (
-                        <tr key={f.nivell}>
-                          <td>{f.nivell}</td>
-                          <td className="num">{f.alumnes}</td>
-                          <td className="num">{f.percentatge}%</td>
-                          <td className="num">
-                            {cat != null ? `${cat}%` : '—'}
-                          </td>
-                          <td className="num">
-                            {tot != null ? `${tot}%` : '—'}
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )
-          })}
-        </>
+        </div>
       )}
 
-      {/* ══ COSMOS (1r i 2n) ═══════════════════════════════════════════
-          Bloc a part i no dins del de ConMat: són proves diferents, amb
-          tres nivells de rendiment en comptes de quatre, i un centre pot
-          tenir COSMOS sense tenir cap ConMat carregat (o al revés). */}
-      {!carregant && entradesCos.length > 0 && (
-        <>
-          <h2 style={{ fontSize: 17, marginTop: 40, paddingTop: 20, borderTop: '2px solid var(--line)' }}>
-            COSMOS <span style={{ fontWeight: 400, fontSize: 13, color: 'var(--ink-soft)' }}>(1r i 2n)</span>
-          </h2>
+          {/* ── Subpestanyes ────────────────────────────────────────── */}
+          <div style={{ display: 'flex', gap: 4, marginTop: 26, borderBottom: '1px solid var(--line)' }}>
+            {PESTANYES.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => setProva(p.id)}
+                style={{
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  padding: '8px 16px', fontSize: 14,
+                  fontWeight: prova === p.id ? 700 : 400,
+                  color: prova === p.id ? 'var(--navy)' : 'var(--ink-soft)',
+                  borderBottom: prova === p.id ? '2px solid var(--navy)' : '2px solid transparent',
+                  marginBottom: -1,
+                }}
+              >
+                {p.label}
+                <span style={{ fontSize: 11, fontWeight: 400, marginLeft: 5 }}>{p.subLabel}</span>
+                {p.quants > 0 && (
+                  <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--ink-soft)' }}> · {p.quants}</span>
+                )}
+              </button>
+            ))}
+          </div>
 
-          {/* ── Informes carregats ─────────────────────────────────── */}
-          <h3 style={{ fontSize: 15, marginTop: 20 }}>Informes carregats</h3>
-          <table className="taula-dades" style={{ fontSize: 12 }}>
-            <thead>
-              <tr style={{ color: 'var(--ink-soft)' }}>
-                <th>Curs</th>
-                <th>Classe</th>
-                <th>Alumnes</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {carreguesCos.map((c) => (
-                <tr key={`${c.cursEscolar}__${c.classe}`}>
-                  <td>{c.cursEscolar}</td>
-                  <td>{c.classe ?? <em style={{ color: 'var(--ink-soft)' }}>sense classe</em>}</td>
-                  <td>
-                    {c.total}
-                    {c.noAvaluats > 0 && (
-                      <span style={{ color: 'var(--ink-soft)' }}> ({c.noAvaluats} sense fer la prova)</span>
-                    )}
-                    {c.sensCasar > 0 && (
-                      <span style={{ color: 'var(--ink-soft)' }}> (+{c.sensCasar} amb nom del CSV)</span>
-                    )}
-                  </td>
-                  <td>
-                    <button
-                      type="button"
-                      onClick={() => esborraCosmos(c.cursEscolar, c.classe)}
-                      disabled={esborrant}
-                      style={{ background: 'none', border: '1px solid var(--red, #b03030)', color: 'var(--red, #b03030)', borderRadius: 6, padding: '2px 8px', fontSize: 11, cursor: 'pointer' }}
-                    >
-                      Desfés
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          {/* ── Evolució del centre ────────────────────────────────── */}
-          <h3 style={{ fontSize: 15, marginTop: 28 }}>Evolució del centre</h3>
-          <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 2 }}>
-            El rendiment de la prova final de cada curs, i quants alumnes canvien de nivell
-            entre la prova inicial i la final del mateix curs.
-          </p>
-          <table className="taula-dades" style={{ fontSize: 12 }}>
-            <thead>
-              <tr style={{ color: 'var(--ink-soft)' }}>
-                <th>Curs</th>
-                {NIVELLS_COSMOS.map((n) => <th key={n} style={{ textAlign: 'right' }}>{n}</th>)}
-                <th style={{ textAlign: 'right' }}>Avaluats</th>
-                <th style={{ textAlign: 'right' }}>Milloren</th>
-                <th style={{ textAlign: 'right' }}>Es mantenen</th>
-                <th style={{ textAlign: 'right' }}>Baixen</th>
-              </tr>
-            </thead>
-            <tbody>
-              {cursosCos.map((curs) => {
-                const delCurs = entradesCos.filter((e) => e.cursEscolar === curs)
-                const dist = distribucioCosmos(delCurs, 'final')
-                const evo = evolucioCosmos(delCurs)
-                return (
-                  <tr key={curs}>
-                    <td><strong>{curs}</strong></td>
-                    {NIVELLS_COSMOS.map((n) => {
-                      const f = dist.files.find((x) => x.nivell === n)
-                      return (
-                        <td key={n} className="num">
-                          {f.alumnes}
-                          <span style={{ color: 'var(--ink-soft)' }}> ({f.percentatge}%)</span>
-                        </td>
-                      )
-                    })}
-                    <td className="num">
-                      {dist.total}
-                      {dist.noAvaluats > 0 && (
-                        <span style={{ color: 'var(--ink-soft)' }}> (+{dist.noAvaluats} sense fer la prova)</span>
-                      )}
-                    </td>
-                    <td className="num">{evo.milloren}</td>
-                    <td className="num">{evo.mantenen}</td>
-                    <td className="num">{evo.baixen}</td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-
-          {/* ── Resultats per prova ────────────────────────────────── */}
-          <h3 style={{ fontSize: 15, marginTop: 28 }}>Resultats per prova</h3>
-          {cursosCos.map((curs) => {
-            const delCurs = entradesCos.filter((e) => e.cursEscolar === curs)
-            const classes = [...new Set(delCurs.map((e) => e.classe))].sort()
-            return MOMENTS_COSMOS.map((moment) => {
-              const dist = distribucioCosmos(delCurs, moment.id)
-              // Un moment sense cap resultat no aporta res: si encara no
-              // s'ha fet la prova final, no cal ensenyar una taula de zeros.
-              if (dist.total === 0) return null
-              return (
-                <div key={`${curs}__${moment.id}`} style={{ marginTop: 18 }}>
-                  <strong style={{ fontSize: 13 }}>
-                    {curs} · {moment.label}
-                    <span style={{ fontWeight: 400, color: 'var(--ink-soft)' }}>
-                      {' '}— {dist.total} avaluats
-                      {dist.noAvaluats > 0 && `, ${dist.noAvaluats} sense fer la prova`}
-                    </span>
-                  </strong>
-                  <table className="taula-dades" style={{ fontSize: 12, marginTop: 6 }}>
-                    <thead>
-                      <tr style={{ color: 'var(--ink-soft)' }}>
-                        <th>Classe</th>
-                        {NIVELLS_COSMOS.map((n) => <th key={n} style={{ textAlign: 'right' }}>{n}</th>)}
-                        <th style={{ textAlign: 'right' }}>Total avaluats</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {classes.map((classe) => {
-                        const d = distribucioCosmos(delCurs.filter((e) => e.classe === classe), moment.id)
-                        return (
-                          <tr key={classe}>
-                            <td>{classe ?? 'sense classe'}</td>
-                            {NIVELLS_COSMOS.map((n) => (
-                              <td key={n} className="num">
-                                {d.files.find((f) => f.nivell === n)?.alumnes ?? 0}
-                              </td>
-                            ))}
-                            <td className="num">
-                              <strong>{d.total}</strong>
-                              {d.noAvaluats > 0 && (
-                                <span style={{ color: 'var(--ink-soft)', fontWeight: 400 }}> (+{d.noAvaluats})</span>
-                              )}
-                            </td>
-                          </tr>
-                        )
-                      })}
-                      <tr style={{ fontWeight: 700 }}>
-                        <td>COSMOS — TOTAL</td>
-                        {NIVELLS_COSMOS.map((n) => (
-                          <td key={n} className="num">
-                            {dist.files.find((f) => f.nivell === n)?.alumnes ?? 0}
-                          </td>
-                        ))}
-                        <td className="num">
-                          {dist.total}
-                          {dist.noAvaluats > 0 && (
-                            <span style={{ fontWeight: 400, color: 'var(--ink-soft)' }}> (+{dist.noAvaluats})</span>
-                          )}
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-
-                  <table className="taula-dades" style={{ fontSize: 12, marginTop: 6, maxWidth: 320 }}>
-                    <thead>
-                      <tr style={{ color: 'var(--ink-soft)' }}>
-                        <th>Rendiment</th>
-                        <th style={{ textAlign: 'right' }}>Alumnes</th>
-                        <th style={{ textAlign: 'right' }}>Centre</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {dist.files.map((f) => (
-                        <tr key={f.nivell}>
-                          <td>{f.nivell}</td>
-                          <td className="num">{f.alumnes}</td>
-                          <td className="num">{f.percentatge}%</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )
-            })
-          })}
+          {prova === 'conmat' ? (
+            <HistoricConmat
+              registres={registres}
+              refs={refs}
+              esborrant={esborrant}
+              onEsborraInforme={esborraInforme}
+              capcalera={caixaReferencies}
+            />
+          ) : (
+            <HistoricCosmos
+              registres={registres}
+              esborrant={esborrant}
+              onEsborraCosmos={esborraCosmos}
+            />
+          )}
         </>
       )}
     </div>
