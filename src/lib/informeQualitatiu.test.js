@@ -254,3 +254,64 @@ describe('no repetir-se', () => {
     expect((text.match(/mentre que/g) ?? []).length).toBe(2)
   })
 })
+
+describe('sense frases repetides', () => {
+  const NOMS_PROVA = ['Alfa, Anna', 'Gomez, Bru', 'Puig, Cesc', 'Roca, Dora']
+  const M = [
+    { id: 'inicial', label: 'primera avaluació', teCL: true },
+    { id: 'mitja', label: 'segona avaluació', teCL: true },
+    { id: 'final', label: 'avaluació final', teCL: true },
+  ]
+
+  /** Les frases que surten dues vegades EXACTAMENT igual dins d'un text. */
+  const repetides = (text) => {
+    const frases = text.split(/(?<=\.)\s+/).map((f) => f.trim()).filter(Boolean)
+    return frases.filter((f, i) => frases.indexOf(f) !== i)
+  }
+
+  it('cap informe no repeteix una frase, sigui quina sigui la combinació', () => {
+    // Barrida per totes les combinacions de nivell global a dos
+    // trimestres. Abans, amb notes iguals sortien tres frases dient el
+    // mateix amb altres paraules.
+    for (const nom of NOMS_PROVA) {
+      for (const g1 of NIVELLS.map((n) => n.id)) {
+        for (const g2 of NIVELLS.map((n) => n.id)) {
+          const text = generaInformeQualitatiu({
+            nom, trimestres: TRIMESTRES, criterisTee: CRITERIS, nivellsCicle: NIVELLS,
+            teePerTrimestre: {
+              '1r trimestre': tee(g1, { coherencia: 'ae', lexic: 'an', ortografia: 'na' }),
+              '2n trimestre': tee(g2, { coherencia: 'ae', lexic: 'an', ortografia: 'na' }),
+            },
+            momentsLectura: M,
+            lecturaPerMoment: {
+              inicial: { vl: 70, nivellVl: 'baix', cl: 5, nivellCl: 'baix' },
+              final: { vl: 95, nivellVl: 'mitjà', cl: 7, nivellCl: 'mitjà' },
+            },
+          })
+          expect(repetides(text), `${nom} ${g1}/${g2}`).toEqual([])
+        }
+      }
+    }
+  })
+
+  it('no repeteix el nivell de lectura quan es manté als tres moments', () => {
+    const igual = { vl: 80, nivellVl: 'mitjà', cl: 7, nivellCl: 'mitjà' }
+    const text = generaInformeQualitatiu({
+      nom: 'Alfa, Anna', trimestres: TRIMESTRES, criterisTee: CRITERIS, nivellsCicle: NIVELLS,
+      teePerTrimestre: {}, momentsLectura: M,
+      lecturaPerMoment: { inicial: igual, mitja: igual, final: igual },
+    })
+    expect((text.match(/La comprensió lectora/g) ?? []).length).toBeLessThanOrEqual(1)
+    expect(repetides(text)).toEqual([])
+  })
+
+  it('no diu el mateix nivell d\'escriptura més de dues vegades', () => {
+    const igual = tee('an', { coherencia: 'ae', lexic: 'an', ortografia: 'na' })
+    const text = generaInformeQualitatiu({
+      nom: 'Alfa, Anna', trimestres: TRIMESTRES, criterisTee: CRITERIS, nivellsCicle: NIVELLS,
+      teePerTrimestre: { '1r trimestre': igual, '2n trimestre': igual, '3r trimestre': igual },
+      momentsLectura: [], lecturaPerMoment: {},
+    })
+    expect((text.match(/Assoliment Notable/g) ?? []).length).toBeLessThanOrEqual(2)
+  })
+})

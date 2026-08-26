@@ -115,12 +115,12 @@ const CONMAT_PER_NIVELL = {
     ambNom: [
       (n) => `A la prova de matemàtiques, ${n} se situa a la franja baixa`,
       (n) => `El resultat de matemàtiques ${deNom(n)} queda a la franja baixa`,
-      (n) => `${n} encara està consolidant els aprenentatges que mesura la prova de matemàtiques`,
+      (n) => `${n} se situa a la franja baixa de la prova de matemàtiques, encara consolidant-ne els aprenentatges`,
     ],
     senseNom: [
       'el resultat de la prova de matemàtiques queda a la franja baixa',
       'a matemàtiques, el resultat se situa a la franja baixa',
-      'els aprenentatges que mesura la prova de matemàtiques encara s\'estan consolidant',
+      'el resultat queda a la franja baixa: els aprenentatges que mesura la prova encara s\'estan consolidant',
     ],
     matis: [
       'Convindrà un acompanyament proper per anar assentant els aprenentatges bàsics.',
@@ -293,10 +293,13 @@ export function paragrafMatematiques({
     } else {
       const banc = CONMAT_PER_NIVELL[conmat.nivell]
       if (banc) {
+        // Sense "(nivell Mitjà-alt)" al darrere: totes les frases ja
+        // anomenen la franja en paraules ("a la franja mitjana-alta"), i
+        // afegir-hi l'etiqueta oficial deia dues vegades el mateix.
         const ambNom = noms.seguent()
         frases.push(ambNom
-          ? `${tria(banc.ambNom, sembra)(ambNom)} (nivell ${conmat.nivell}).`
-          : `${majuscula(tria(banc.senseNom, sembra))} (nivell ${conmat.nivell}).`)
+          ? `${tria(banc.ambNom, sembra)(ambNom)}.`
+          : `${majuscula(tria(banc.senseNom, sembra))}.`)
         frases.push(tria(banc.matis, sembra))
 
         // La comparació amb el curs passat només si tots dos nivells es

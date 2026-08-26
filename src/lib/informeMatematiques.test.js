@@ -55,7 +55,9 @@ describe('paragrafMatematiques — ConMat', () => {
     const text = paragrafMatematiques({ ...base, conmat: { nivell: 'Alt' } })
     expect(text).toContain('Anna')
     expect(text).not.toContain('Alfa')
-    expect(text).toContain('Alt')
+    // La franja s'anomena en paraules: afegir-hi "(nivell Alt)" al darrere
+    // deia dues vegades el mateix.
+    expect(text).toMatch(/franja alta/)
   })
 
   it('reconeix la millora respecte del curs passat', () => {
@@ -193,7 +195,7 @@ describe('paragrafMatematiques — estabilitat del text', () => {
     const noms = comptadorDeNom('Anna', 0)
     const text = paragrafMatematiques({ nom: 'Alfa, Anna', noms, conmat: { nivell: 'Alt' } })
     expect(text).not.toContain('Anna')
-    expect(text).toContain('Alt')
+    expect(text).toMatch(/franja alta/)
   })
 
   it('mai no escriu els cognoms', () => {

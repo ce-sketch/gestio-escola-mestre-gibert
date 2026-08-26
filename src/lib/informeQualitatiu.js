@@ -399,13 +399,41 @@ export function tendenciaCriteris(trimestres, teePerTrimestre, criteris, nivells
 // ── Redacció ────────────────────────────────────────────────────────────
 
 /** Paràgraf d'expressió escrita d'UN trimestre. */
-function paragrafTEE(registre, criteris, nivellsCicle, noms, index, sembra, parellAnterior = null) {
+function paragrafTEE(registre, criteris, nivellsCicle, noms, index, sembra, anterior = {}) {
   if (!registre) return null
   const nivell = (id) => nivellsCicle.find((n) => n.id === id)
   const global = nivell(registre.global)
   if (!global) return null
 
+  const { parell: parellAnterior = null, globalId: globalAnterior = null } = anterior
   const franja = franjaPerPunts(global.punts)
+
+  // Quins criteris destaquen aquest trimestre, per saber si aporta res nou.
+  const puntuatsPrevi = criteris
+    .map((c) => ({ criteri: c, nivellCriteri: nivell(registre.criteris?.[c.id]) }))
+    .filter((x) => x.nivellCriteri)
+  let parell = null
+  if (puntuatsPrevi.length > 0) {
+    const millorP = puntuatsPrevi.reduce((a, b) => (a.nivellCriteri.punts <= b.nivellCriteri.punts ? a : b))
+    const pitjorP = puntuatsPrevi.reduce((a, b) => (a.nivellCriteri.punts >= b.nivellCriteri.punts ? a : b))
+    parell = `${millorP.criteri.id}__${pitjorP.criteri.id}`
+  }
+
+  // Un trimestre en què NI el nivell global NI els criteris destacats han
+  // canviat no té res a dir: repetir-ho amb altres paraules omplia
+  // l'informe de frases que semblaven noves i deien el mateix, i a més
+  // gastava els usos del nom, que estan comptats. Que s'ha mantingut ja
+  // ho diu la frase d'evolució, més avall.
+  if (globalAnterior !== null && global.id === globalAnterior && parell === parellAnterior) {
+    return {
+      text: '',
+      criteriMesFluix: parell ? parell.split('__')[1] : null,
+      global,
+      parell,
+      globalId: global.id,
+    }
+  }
+
   const nom = noms.seguent()
   const frases = []
 
@@ -421,12 +449,10 @@ function paragrafTEE(registre, criteris, nivellsCicle, noms, index, sembra, pare
     .filter((x) => x.nivellCriteri)
 
   let criteriMesFluix = null
-  let parell = null
   if (puntuats.length > 0) {
     const millor = puntuats.reduce((a, b) => (a.nivellCriteri.punts <= b.nivellCriteri.punts ? a : b))
     const pitjor = puntuats.reduce((a, b) => (a.nivellCriteri.punts >= b.nivellCriteri.punts ? a : b))
     const diu = (id, d = 0) => tria(FRASES_CRITERI[id] ?? [id], sembra, index + d)
-    parell = `${millor.criteri.id}__${pitjor.criteri.id}`
 
     // Si el trimestre anterior ja destacava els MATEIXOS dos criteris, no
     // es torna a dir: el banc de frases ho diria amb altres paraules i
@@ -434,7 +460,7 @@ function paragrafTEE(registre, criteris, nivellsCicle, noms, index, sembra, pare
     // s'ha mantingut tot el curs) ja es resumeix més avall.
     if (parell === parellAnterior) {
       criteriMesFluix = pitjor.criteri.id
-      return { text: frases.join(' '), criteriMesFluix, global, parell }
+      return { text: frases.join(' '), criteriMesFluix, global, parell, globalId: global.id }
     }
 
     if (millor.criteri.id !== pitjor.criteri.id && pitjor.nivellCriteri.punts - millor.nivellCriteri.punts >= 2) {
@@ -447,11 +473,11 @@ function paragrafTEE(registre, criteris, nivellsCicle, noms, index, sembra, pare
       criteriMesFluix = pitjor.criteri.id
     }
   }
-  return { text: frases.join(' '), criteriMesFluix, global, parell }
+  return { text: frases.join(' '), criteriMesFluix, global, parell, globalId: global.id }
 }
 
 /** Paràgraf de lectura d'UN moment. */
-function paragrafLectura(registre, moment, noms, index, vlAnterior, clAnterior) {
+function paragrafLectura(registre, moment, noms, index, vlAnterior, clAnterior, mantingut = false) {
   if (!registre) return null
   const frases = []
   let vlBaix = false
@@ -468,8 +494,12 @@ function paragrafLectura(registre, moment, noms, index, vlAnterior, clAnterior) 
       frases.push(`${majuscula(aLa(moment?.label, 'següent avaluació'))} arriba a ${registre.vl} paraules per minut (nivell ${nivell}), ${registre.vl - vlAnterior} més que al principi.`)
     } else if (vlAnterior !== null && registre.vl < vlAnterior) {
       frases.push(`${majuscula(aLa(moment?.label, 'següent avaluació'))} el ritme és de ${registre.vl} paraules per minut (nivell ${nivell}), una mica per sota de la lectura anterior.`)
-    } else {
-      frases.push(`${majuscula(aLa(moment?.label, 'següent avaluació'))} el ritme es manté en ${registre.vl} paraules per minut (nivell ${nivell}).`)
+    } else if (vlAnterior === null || vlAnterior === undefined) {
+      frases.push(`${majuscula(aLa(moment?.label, 'següent avaluació'))} el ritme és de ${registre.vl} paraules per minut (nivell ${nivell}).`)
+    } else if (!mantingut) {
+      // Només es diu que es manté LA PRIMERA vegada: dir-ho a cada moment
+      // era repetir la mateixa frase amb el mateix número.
+      frases.push(`${majuscula(aLa(moment?.label, 'següent avaluació'))} el ritme es manté en ${registre.vl} paraules per minut.`)
     }
     vlBaix = /baix|insuficient|inicial/i.test(String(registre.nivellVl ?? ''))
   }
@@ -478,20 +508,29 @@ function paragrafLectura(registre, moment, noms, index, vlAnterior, clAnterior) 
     const nivell = registre.nivellCl ?? 'sense classificar'
     // La comprensió també evoluciona, i abans no se'n deia res: sortia
     // sempre com una foto fixa, encara que hagués canviat de nivell.
-    if (clAnterior !== null && clAnterior !== undefined && registre.cl > clAnterior) {
+    const teAnterior = clAnterior !== null && clAnterior !== undefined
+    if (teAnterior && registre.cl > clAnterior) {
       frases.push(`La comprensió lectora ha guanyat terreny i se situa en un nivell ${nivell}.`)
-    } else if (clAnterior !== null && clAnterior !== undefined && registre.cl < clAnterior) {
+    } else if (teAnterior && registre.cl < clAnterior) {
       frases.push(`La comprensió lectora queda en un nivell ${nivell}, una mica per sota de la lectura anterior.`)
-    } else {
+    } else if (!teAnterior) {
       frases.push(vlBaix
         ? `La comprensió del que llegeix es troba en un nivell ${nivell}, i és bon senyal que la lectura tingui sentit més enllà del ritme.`
         : `La comprensió lectora es troba en un nivell ${nivell}.`)
     }
+    // Si la comprensió no ha canviat, no es diu res: repetir "es troba en
+    // un nivell mitjà" a cada moment omplia el paràgraf de frases
+    // idèntiques. Que s'ha mantingut ja s'entén de la resta del text.
     clBaix = /baix|insuficient/i.test(String(registre.nivellCl ?? ''))
   }
 
-  return frases.length > 0
-    ? { text: frases.join(' '), vlBaix, clBaix, vl: registre.vl ?? null, cl: registre.cl ?? null }
+  return frases.length > 0 || registre.vl !== null
+    ? {
+        text: frases.join(' '), vlBaix, clBaix,
+        vl: registre.vl ?? null, cl: registre.cl ?? null,
+        // Perquè el bucle sàpiga que ja s'ha dit que el ritme es manté.
+        esManté: vlAnterior !== null && vlAnterior !== undefined && registre.vl === vlAnterior,
+      }
     : null
 }
 
@@ -516,16 +555,19 @@ export function generaInformeQualitatiu({
   let clBaixDarrer = false
 
   const resultatsTee = []
-  let parellAnterior = null
+  let anterior = {}
   for (const [i, t] of trimestres.entries()) {
-    const r = paragrafTEE(teePerTrimestre[t], criterisTee, nivellsCicle, noms, i, sembra, parellAnterior)
+    const r = paragrafTEE(teePerTrimestre[t], criterisTee, nivellsCicle, noms, i, sembra, anterior)
     if (!r) continue
-    if (r.parell) parellAnterior = r.parell
+    anterior = { parell: r.parell ?? anterior.parell, globalId: r.globalId }
     resultatsTee.push(r)
   }
 
   if (resultatsTee.length > 0) {
-    paragrafs.push(resultatsTee.map((r) => r.text).join(' '))
+    // Els trimestres que no aporten res tornen text buit: filtrar-los
+    // evita espais dobles enmig del paràgraf.
+    const textos = resultatsTee.map((r) => r.text).filter(Boolean)
+    if (textos.length > 0) paragrafs.push(textos.join(' '))
 
     if (resultatsTee.length > 1) {
       const primer = resultatsTee[0].global
@@ -557,16 +599,19 @@ export function generaInformeQualitatiu({
   const resultatsLectura = []
   let vlAnterior = null
   let clAnterior = null
+  let jaDitQueEsManté = false
   for (const m of momentsLectura) {
-    const r = paragrafLectura(lecturaPerMoment[m.id], m, noms, resultatsLectura.length, vlAnterior, clAnterior)
+    const r = paragrafLectura(lecturaPerMoment[m.id], m, noms, resultatsLectura.length, vlAnterior, clAnterior, jaDitQueEsManté)
     if (!r) continue
+    if (r.esManté) jaDitQueEsManté = true
     if (r.vl !== null) vlAnterior = r.vl
     if (r.cl !== null && r.cl !== undefined) clAnterior = r.cl
     resultatsLectura.push(r)
   }
 
   if (resultatsLectura.length > 0) {
-    paragrafs.push(resultatsLectura.map((r) => r.text).join(' '))
+    const textosLectura = resultatsLectura.map((r) => r.text).filter(Boolean)
+    if (textosLectura.length > 0) paragrafs.push(textosLectura.join(' '))
     const darrer = resultatsLectura[resultatsLectura.length - 1]
     vlBaixDarrer = darrer.vlBaix
     clBaixDarrer = darrer.clBaix
