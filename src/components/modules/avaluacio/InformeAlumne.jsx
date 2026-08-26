@@ -21,7 +21,11 @@ const NOMS_DIMENSIONS = {
   velocitat_d_execucio: "velocitat d'execució",
   coneixement_numeric: 'coneixement numèric',
   comparacio_magnituds: 'comparació de magnituds',
-  comparacio_magnituds_2: 'comparació de magnituds',
+  // L'Innovamat en dona dues de nom quasi igual. No sabem què les
+  // distingeix, però són mesures diferents i no poden compartir nom: si
+  // ho fessin, l'informe podria dir que la mateixa cosa és alhora el punt
+  // fort i el fluix.
+  comparacio_magnituds_2: 'comparació de magnituds (segon bloc)',
   enumeracio_de_punts: 'enumeració de punts',
   fluidesa_aritmetica: 'fluïdesa aritmètica',
   memoria_de_treball: 'memòria de treball',
