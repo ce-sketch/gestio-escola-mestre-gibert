@@ -148,8 +148,10 @@ export default function InformeAlumne() {
   return (
     <div>
       <p className="module-lead">
-        Resum de llengua catalana d'un alumne: evolució de Text Escrit (TEE) i de Lectura
-        (VL/CL) al llarg del curs, a partir de les notes introduïdes als altres dos apartats.
+        Tot el que consta d&apos;un alumne, en una pàgina: evolució de Text Escrit (TEE) i de
+        Lectura (VL/CL) al llarg del curs, i el darrer resultat de matemàtiques d&apos;Innovamat
+        (ConMat a partir de 3r, COSMOS a 1r i 2n). Es munta amb les dades introduïdes als
+        altres apartats.
       </p>
 
       <div style={{ display: 'flex', gap: 16, marginTop: 20, flexWrap: 'wrap' }}>
