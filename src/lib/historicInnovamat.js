@@ -120,6 +120,25 @@ export function ultimConmatDe(registres, alumneId) {
 }
 
 /**
+ * El resultat de COSMOS més recent d'un alumne concret. A diferència del
+ * ConMat (una avaluació referencial només a partir de 3r), el COSMOS és
+ * la prova d'Innovamat per a 1r i 2n: a aquests cursos el ConMat sempre
+ * sortirà buit i cal mirar aquí — vegeu `ultimConmatDe`.
+ *
+ * Un mateix registre ja porta els dos moments a dins (`moments.inicial` i
+ * `moments.final`), a diferència del ConMat: no cal cap `momentsConmat`
+ * equivalent, només triar el curs escolar més recent que en tingui.
+ */
+export function ultimCosmosDe(registres, alumneId) {
+  if (!alumneId) return null
+  const amb = registres.filter((r) => r.alumneId === alumneId && r.cosmos)
+  if (amb.length === 0) return null
+  amb.sort((a, b) => String(b.cursEscolar).localeCompare(String(a.cursEscolar)))
+  const r = amb[0]
+  return { cursEscolar: r.cursEscolar, ...r.cosmos }
+}
+
+/**
  * Reparteix un conjunt d'entrades pels quatre nivells del ConMat i en
  * calcula els percentatges — el mateix càlcul que es feia a mà al full
  * "ConMath Curs actual" (columnes ALUMNES i CENTRE).

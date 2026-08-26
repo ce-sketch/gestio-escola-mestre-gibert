@@ -3,7 +3,7 @@ import { describe, it, expect, vi } from 'vitest'
 vi.mock('./carregaLlibreries', () => ({ carregaPdfjs: () => {} }))
 
 const {
-  momentId, momentsConmat, entradesHistoric, ultimConmatDe, distribucioPerNivell,
+  momentId, momentsConmat, entradesHistoric, ultimConmatDe, ultimCosmosDe, distribucioPerNivell,
 } = await import('./historicInnovamat')
 
 describe('momentId', () => {
@@ -116,6 +116,31 @@ describe('ultimConmatDe', () => {
   it('no confon un alumne sense fitxa amb un altre', () => {
     const amb = [{ cursEscolar: '2025-26', alumneId: null, nom: 'X', sensCasar: true, conmat: { final: { nivell: 'Baix' } } }]
     expect(ultimConmatDe(amb, 'a')).toBeNull()
+  })
+})
+
+describe('ultimCosmosDe', () => {
+  // A 1r i 2n la prova d'Innovamat és el COSMOS, no el ConMat: aquests
+  // registres no tenen mai `conmat`, només `cosmos`. `ultimConmatDe` hi
+  // torna null (correcte), però l'informe individual ha de poder mostrar
+  // igualment el resultat del COSMOS en comptes de dir que no n'hi ha cap.
+  const registres = [
+    { cursEscolar: '2024-25', alumneId: 'a', nom: 'A', cosmos: { moments: { inicial: { rendiment: 'Baix' }, final: { rendiment: 'Mitjà' } } } },
+    { cursEscolar: '2025-26', alumneId: 'a', nom: 'A', cosmos: { moments: { inicial: { rendiment: 'Alt' }, final: { rendiment: 'Alt' } } } },
+  ]
+
+  it('retorna el resultat del curs més recent', () => {
+    expect(ultimCosmosDe(registres, 'a').cursEscolar).toBe('2025-26')
+    expect(ultimCosmosDe(registres, 'a').moments.final.rendiment).toBe('Alt')
+  })
+
+  it('retorna null si no se li demana cap alumne', () => {
+    expect(ultimCosmosDe(registres, '')).toBeNull()
+  })
+
+  it('retorna null si l\'alumne no té cap COSMOS desat (per exemple, si ja és a un curs amb ConMat)', () => {
+    const amb = [{ cursEscolar: '2025-26', alumneId: 'b', nom: 'B', conmat: { final: { nivell: 'Alt' } } }]
+    expect(ultimCosmosDe(amb, 'b')).toBeNull()
   })
 })
 
