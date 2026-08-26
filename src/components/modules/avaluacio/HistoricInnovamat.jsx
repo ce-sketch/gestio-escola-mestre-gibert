@@ -61,7 +61,13 @@ export default function HistoricInnovamat() {
 
   async function desaReferencia() {
     const { curs, moment, nivell, ambit } = refForm
-    if (!curs.trim() || !nivell.trim()) return
+    // Abans, si faltava el curs o el nivell, la funció sortia en silenci
+    // i el botó semblava no fer res. Ara ho diu.
+    if (!curs.trim() || !nivell.trim()) {
+      setError('Falta omplir el curs o el nivell (el "3r" del camp Nivell és només un exemple, cal escriure\'l).')
+      return
+    }
+    setError(null)
     setDesantRef(true)
     try {
       const valors = {}
