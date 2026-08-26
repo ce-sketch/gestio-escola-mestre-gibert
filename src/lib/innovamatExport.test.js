@@ -144,8 +144,18 @@ describe('fullsInnovamat', () => {
   it('munta els sis fulls quan hi ha les dues proves', () => {
     const noms = fullsInnovamat(registres, refs).map((f) => f.nom)
     expect(noms).toHaveLength(6)
-    expect(noms[0]).toMatch(/ConMat/)
     expect(noms.some((n) => /COSMOS/.test(n))).toBe(true)
+    expect(noms.some((n) => /ConMat/.test(n))).toBe(true)
+  })
+
+  it('posa el COSMOS abans del ConMat, per ordre de nivell', () => {
+    // El mateix ordre que les pestanyes de l'Històric: 1r i 2n abans que
+    // 3r a 6è. Si els fulls sortissin a l'inrevés, l'Excel no coincidiria
+    // amb el que s'ha vist a la pantalla.
+    const noms = fullsInnovamat(registres, refs).map((f) => f.nom)
+    expect(noms[0]).toMatch(/COSMOS/)
+    expect(noms.findIndex((n) => /COSMOS/.test(n)))
+      .toBeLessThan(noms.findIndex((n) => /ConMat/.test(n)))
   })
 
   it('es pot limitar a una sola prova', () => {

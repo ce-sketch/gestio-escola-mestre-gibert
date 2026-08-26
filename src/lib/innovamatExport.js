@@ -213,15 +213,17 @@ export function fullsInnovamat(registres, refs = {}, opcions = {}) {
   const { prova = 'tot', detall = true } = opcions
   const fulls = []
 
-  if (prova !== 'cosmos' && entradesHistoric(registres).length > 0) {
-    fulls.push(fullConmatResum(registres))
-    fulls.push(fullConmatComparativa(registres, refs))
-    if (detall) fulls.push(fullConmatAlumnes(registres))
-  }
+  // Per ordre de nivell, igual que les pestanyes de l'Històric: el COSMOS
+  // és de 1r i 2n, el ConMat de 3r a 6è.
   if (prova !== 'conmat' && entradesCosmos(registres).length > 0) {
     fulls.push(fullCosmosResum(registres))
     fulls.push(fullCosmosEvolucio(registres))
     if (detall) fulls.push(fullCosmosAlumnes(registres))
+  }
+  if (prova !== 'cosmos' && entradesHistoric(registres).length > 0) {
+    fulls.push(fullConmatResum(registres))
+    fulls.push(fullConmatComparativa(registres, refs))
+    if (detall) fulls.push(fullConmatAlumnes(registres))
   }
   // Un full amb només la capçalera no diu res: es descarta abans
   // d'arribar a l'exportador, que si no generaria pestanyes buides.
