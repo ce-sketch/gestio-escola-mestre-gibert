@@ -5,6 +5,7 @@ vi.mock('./carregaLlibreries', () => ({ carregaPdfjs: () => {} }))
 const {
   momentId, momentsConmat, entradesHistoric, ultimConmatDe, ultimCosmosDe, distribucioPerNivell,
   entradesCosmos, distribucioCosmos, evolucioCosmos, nivellCosmos,
+  conmatDelCurs, cosmosDelCurs, innovamatAnterior,
 } = await import('./historicInnovamat')
 
 describe('momentId', () => {
@@ -286,5 +287,88 @@ describe('evolucioCosmos', () => {
       { inicial: null, final: null },
     ])
     expect(r.ambTotesDues).toBe(1)
+  })
+})
+
+// ── Filtrat pel curs (l'informe de l'alumne) ──────────────────────────
+
+describe('conmatDelCurs / cosmosDelCurs', () => {
+  // Cas real: una alumna de 3rA el 2026-27 que el curs passat, a 2n,
+  // havia fet el COSMOS. L'informe li mostrava aquell COSMOS de 2025-26
+  // com si fos del curs en marxa.
+  const registres = [
+    {
+      cursEscolar: '2025-26', alumneId: 'a', nom: 'Arcauz Solis, Antonella',
+      cosmos: { classe: '2nA', moments: { inicial: { rendiment: 'Mitjà' }, final: { rendiment: 'Mitjà' } } },
+    },
+    {
+      cursEscolar: '2026-27', alumneId: 'a', nom: 'Arcauz Solis, Antonella',
+      conmat: { final: { nivell: 'Alt', classe: '3rA' } },
+    },
+  ]
+
+  it('no dona el resultat d\'un altre curs', () => {
+    expect(cosmosDelCurs(registres, 'a', '2026-27')).toBeNull()
+  })
+
+  it('dona el del curs demanat', () => {
+    expect(conmatDelCurs(registres, 'a', '2026-27').nivell).toBe('Alt')
+    expect(cosmosDelCurs(registres, 'a', '2025-26').inicial).toBe('Mitjà')
+  })
+
+  it('torna null si aquell curs encara no en té', () => {
+    // A 3r es fa ConMat, no COSMOS: el curs 2026-27 no n'ha de tenir.
+    expect(conmatDelCurs(registres, 'a', '2025-26')).toBeNull()
+  })
+
+  it('tria el final quan el curs té els dos moments', () => {
+    const dos = [{
+      cursEscolar: '2026-27', alumneId: 'b',
+      conmat: { inici: { nivell: 'Baix' }, final: { nivell: 'Alt' } },
+    }]
+    expect(conmatDelCurs(dos, 'b', '2026-27').moment).toBe('final')
+  })
+
+  it('no peta sense alumne ni sense curs', () => {
+    expect(conmatDelCurs(registres, '', '2026-27')).toBeNull()
+    expect(cosmosDelCurs(registres, 'a', '')).toBeNull()
+  })
+
+  it('no confon dos alumnes', () => {
+    expect(conmatDelCurs(registres, 'z', '2026-27')).toBeNull()
+  })
+})
+
+describe('innovamatAnterior', () => {
+  const registres = [
+    { cursEscolar: '2024-25', alumneId: 'a', cosmos: { classe: '1rA', moments: { inicial: { rendiment: 'Baix' }, final: { rendiment: 'Mitjà' } } } },
+    { cursEscolar: '2025-26', alumneId: 'a', cosmos: { classe: '2nA', moments: { inicial: { rendiment: 'Mitjà' }, final: { rendiment: 'Mitjà' } } } },
+    { cursEscolar: '2026-27', alumneId: 'a', conmat: { final: { nivell: 'Alt', classe: '3rA' } } },
+  ]
+
+  it('només dona els cursos anteriors al que es mira', () => {
+    const anteriors = innovamatAnterior(registres, 'a', '2026-27')
+    expect(anteriors.map((e) => e.cursEscolar)).toEqual(['2025-26', '2024-25'])
+  })
+
+  it('no inclou mai el curs que s\'està mirant', () => {
+    const anteriors = innovamatAnterior(registres, 'a', '2025-26')
+    expect(anteriors.every((e) => e.cursEscolar !== '2025-26')).toBe(true)
+  })
+
+  it('diu de quina prova és cada resultat', () => {
+    const [primer] = innovamatAnterior(registres, 'a', '2026-27')
+    expect(primer.prova).toBe('COSMOS')
+  })
+
+  it('barreja les dues proves quan l\'alumne ha passat de cicle', () => {
+    const proves = innovamatAnterior(registres, 'a', '2027-28').map((e) => e.prova)
+    expect(proves).toContain('ConMat')
+    expect(proves).toContain('COSMOS')
+  })
+
+  it('torna una llista buida si no n\'hi ha cap', () => {
+    expect(innovamatAnterior(registres, 'a', '2024-25')).toEqual([])
+    expect(innovamatAnterior(registres, '', '2026-27')).toEqual([])
   })
 })

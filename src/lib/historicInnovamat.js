@@ -138,7 +138,50 @@ export function ultimCosmosDe(registres, alumneId) {
   return { cursEscolar: r.cursEscolar, ...r.cosmos }
 }
 
-// ── COSMOS a l'històric ───────────────────────────────────────────────
+/**
+ * El ConMat d'un alumne EN UN CURS CONCRET.
+ *
+ * ⚠️ No confondre amb `ultimConmatDe`, que dona el més recent de tots els
+ * cursos. A l'informe de l'alumne cal aquesta: allà s'hi tria un curs
+ * escolar, i la resta d'apartats (TEE, lectura) ja hi estan filtrats. Amb
+ * `ultimConmatDe` hi sortien els resultats de l'any passat com si fossin
+ * d'aquest — i com que a 1r i 2n es fa COSMOS i de 3r en amunt ConMat, un
+ * alumne de 3r hi veia el COSMOS de quan era a 2n.
+ *
+ * Si el curs té els dos moments, torna el de final: és el que tanca el
+ * curs i el que fa servir l'informe com a resultat de referència.
+ */
+export function conmatDelCurs(registres, alumneId, cursEscolar) {
+  if (!alumneId || !cursEscolar) return null
+  return entradesHistoric(registres)
+    .find((e) => e.alumneId === alumneId && e.cursEscolar === cursEscolar) ?? null
+}
+
+/** El COSMOS d'un alumne en un curs concret. Vegeu `conmatDelCurs`. */
+export function cosmosDelCurs(registres, alumneId, cursEscolar) {
+  if (!alumneId || !cursEscolar) return null
+  return entradesCosmos(registres)
+    .find((e) => e.alumneId === alumneId && e.cursEscolar === cursEscolar) ?? null
+}
+
+/**
+ * Els resultats d'Innovamat d'un alumne de CURSOS ANTERIORS al que es
+ * mira, del més recent al més antic.
+ *
+ * Es mostren a part i clarament etiquetats amb el seu curs: tenen valor
+ * per veure l'evolució, però no s'han de barrejar amb els del curs en
+ * marxa — que és exactament l'error que hi havia.
+ */
+export function innovamatAnterior(registres, alumneId, cursEscolar) {
+  if (!alumneId || !cursEscolar) return []
+  const anteriors = (e) => e.alumneId === alumneId && String(e.cursEscolar) < String(cursEscolar)
+  return [
+    ...entradesHistoric(registres).filter(anteriors).map((e) => ({ ...e, prova: 'ConMat' })),
+    ...entradesCosmos(registres).filter(anteriors).map((e) => ({ ...e, prova: 'COSMOS' })),
+  ].sort((a, b) => String(b.cursEscolar).localeCompare(String(a.cursEscolar)))
+}
+
+
 // El COSMOS es mesura amb tres nivells de rendiment, no amb els quatre
 // del ConMat, i cada registre porta els dos moments a dins. Per això té
 // les seves pròpies funcions en comptes de reaprofitar les del ConMat:
