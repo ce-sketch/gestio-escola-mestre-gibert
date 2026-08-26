@@ -4,6 +4,7 @@ vi.mock('./carregaLlibreries', () => ({ carregaPdfjs: () => {} }))
 
 const {
   momentId, momentsConmat, entradesHistoric, ultimConmatDe, ultimCosmosDe, distribucioPerNivell,
+  entradesCosmos, distribucioCosmos, evolucioCosmos, nivellCosmos,
 } = await import('./historicInnovamat')
 
 describe('momentId', () => {
@@ -173,5 +174,117 @@ describe('distribucioPerNivell', () => {
     expect(noAvaluats).toBe(2)
     expect(totalGeneral).toBe(5) // el que ha de quadrar amb l'Excel
     expect(files.find((f) => f.nivell === 'Alt').percentatge).toBeCloseTo(66.67, 1)
+  })
+})
+
+// ── COSMOS ────────────────────────────────────────────────────────────
+
+describe('nivellCosmos', () => {
+  it('normalitza el rendiment tal com ve del CSV', () => {
+    expect(nivellCosmos('Mitjà')).toBe('Mitjà')
+    expect(nivellCosmos('mitja')).toBe('Mitjà') // sense accent
+    expect(nivellCosmos('ALT')).toBe('Alt')
+  })
+
+  it('torna null si no el reconeix, en comptes d\'inventar-se\'l', () => {
+    expect(nivellCosmos('')).toBeNull()
+    expect(nivellCosmos(null)).toBeNull()
+    expect(nivellCosmos('Mitjà-alt')).toBeNull() // això és del ConMat, no del COSMOS
+  })
+})
+
+describe('entradesCosmos', () => {
+  const registres = [
+    {
+      cursEscolar: '2025-26', alumneId: 'a', nom: 'A',
+      cosmos: { classe: '1rA', moments: { inicial: { rendiment: 'Baix', puntuacio: 1 }, final: { rendiment: 'Alt', puntuacio: 2 } } },
+    },
+    {
+      cursEscolar: '2026-27', alumneId: 'a', nom: 'A',
+      cosmos: { classe: '2nA', moments: { inicial: { rendiment: 'Mitjà', puntuacio: 1.5 }, final: { rendiment: 'Mitjà', puntuacio: 1.8 } } },
+    },
+    // Un registre de ConMat pur: no ha de sortir a l'històric de COSMOS.
+    { cursEscolar: '2025-26', alumneId: 'b', nom: 'B', conmat: { final: { nivell: 'Alt' } } },
+  ]
+
+  it('només agafa els registres que tenen COSMOS', () => {
+    expect(entradesCosmos(registres)).toHaveLength(2)
+  })
+
+  it('posa el curs més recent primer', () => {
+    expect(entradesCosmos(registres)[0].cursEscolar).toBe('2026-27')
+  })
+
+  it('desa la classe i els dos rendiments', () => {
+    const e = entradesCosmos(registres).find((x) => x.cursEscolar === '2025-26')
+    expect(e.classe).toBe('1rA')
+    expect(e.inicial).toBe('Baix')
+    expect(e.final).toBe('Alt')
+  })
+
+  it('marca els que no van fer la prova', () => {
+    const amb = [{ cursEscolar: '2025-26', alumneId: 'c', cosmos: { noAvaluat: true, moments: { inicial: {}, final: {} } } }]
+    const [e] = entradesCosmos(amb)
+    expect(e.noAvaluat).toBe(true)
+    expect(e.final).toBeNull()
+  })
+
+  it('no peta amb una llista buida', () => {
+    expect(entradesCosmos([])).toEqual([])
+    expect(entradesCosmos(null)).toEqual([])
+  })
+})
+
+describe('distribucioCosmos', () => {
+  const entrades = [
+    { inicial: 'Baix', final: 'Alt' },
+    { inicial: 'Mitjà', final: 'Alt' },
+    { inicial: 'Mitjà', final: 'Mitjà' },
+    { inicial: null, final: null, noAvaluat: true },
+  ]
+
+  it('reparteix pels tres nivells del moment demanat', () => {
+    const d = distribucioCosmos(entrades, 'final')
+    expect(d.files.find((f) => f.nivell === 'Alt').alumnes).toBe(2)
+    expect(d.files.find((f) => f.nivell === 'Mitjà').alumnes).toBe(1)
+    expect(d.files.find((f) => f.nivell === 'Baix').alumnes).toBe(0)
+  })
+
+  it('els no avaluats no compten al total ni als percentatges', () => {
+    const d = distribucioCosmos(entrades, 'final')
+    expect(d.total).toBe(3)
+    expect(d.noAvaluats).toBe(1)
+    expect(d.totalGeneral).toBe(4) // el que ha de quadrar amb l'Excel
+    expect(d.files.find((f) => f.nivell === 'Alt').percentatge).toBeCloseTo(66.67, 1)
+  })
+
+  it('sap mirar també la prova inicial', () => {
+    const d = distribucioCosmos(entrades, 'inicial')
+    expect(d.files.find((f) => f.nivell === 'Mitjà').alumnes).toBe(2)
+  })
+
+  it('no divideix per zero sense dades', () => {
+    const d = distribucioCosmos([], 'final')
+    expect(d.files.every((f) => f.percentatge === 0)).toBe(true)
+  })
+})
+
+describe('evolucioCosmos', () => {
+  it('compta qui millora, qui es manté i qui baixa de nivell', () => {
+    const r = evolucioCosmos([
+      { inicial: 'Baix', final: 'Alt' },
+      { inicial: 'Mitjà', final: 'Mitjà' },
+      { inicial: 'Alt', final: 'Mitjà' },
+    ])
+    expect(r).toMatchObject({ ambTotesDues: 3, milloren: 1, mantenen: 1, baixen: 1 })
+  })
+
+  it('no compta qui no té les dues proves', () => {
+    const r = evolucioCosmos([
+      { inicial: 'Baix', final: 'Alt' },
+      { inicial: 'Mitjà', final: null },
+      { inicial: null, final: null },
+    ])
+    expect(r.ambTotesDues).toBe(1)
   })
 })

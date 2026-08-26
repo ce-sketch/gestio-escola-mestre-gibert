@@ -138,6 +138,113 @@ export function ultimCosmosDe(registres, alumneId) {
   return { cursEscolar: r.cursEscolar, ...r.cosmos }
 }
 
+// ── COSMOS a l'històric ───────────────────────────────────────────────
+// El COSMOS es mesura amb tres nivells de rendiment, no amb els quatre
+// del ConMat, i cada registre porta els dos moments a dins. Per això té
+// les seves pròpies funcions en comptes de reaprofitar les del ConMat:
+// barrejar-los faria que les taules sumessin coses que no es poden sumar.
+
+/** Els tres nivells de rendiment del COSMOS, de menys a més. */
+export const NIVELLS_COSMOS = ['Baix', 'Mitjà', 'Alt']
+
+/** Els dos moments del COSMOS. Compte: al CSV es diuen "inicial" i
+ *  "final", no "inici" i "final" com al ConMat. */
+export const MOMENTS_COSMOS = [
+  { id: 'inicial', label: 'Inici de curs' },
+  { id: 'final', label: 'Final de curs' },
+]
+
+/** Normalitza el rendiment del CSV ("Mitjà", "mitja", "MITJÀ") a un dels
+ *  tres nivells. Torna null si no el reconeix, per no inventar-se'l. */
+export function nivellCosmos(text) {
+  const t = String(text ?? '').trim().toLowerCase()
+  if (t === 'alt') return 'Alt'
+  if (t === 'mitjà' || t === 'mitja') return 'Mitjà'
+  if (t === 'baix') return 'Baix'
+  return null
+}
+
+/**
+ * Aplana els registres de COSMOS en una llista d'entrades, una per
+ * alumne i curs — l'equivalent de `entradesHistoric()` per al ConMat.
+ *
+ * Ordenades del curs més recent al més antic.
+ */
+export function entradesCosmos(registres) {
+  const entrades = []
+  for (const r of registres ?? []) {
+    if (!r.cosmos) continue
+    const c = r.cosmos
+    entrades.push({
+      cursEscolar: r.cursEscolar,
+      alumneId: r.alumneId ?? null,
+      nom: r.nom ?? null,
+      sensCasar: r.sensCasar === true,
+      // Vegeu el comentari de `noAvaluat` a `entradesHistoric`: qui no va
+      // fer la prova es desa igualment perquè els totals quadrin amb
+      // l'Excel, però no compta als percentatges.
+      noAvaluat: c.noAvaluat === true,
+      classe: c.classe ?? null,
+      intervencio: c.intervencio ?? null,
+      inicial: nivellCosmos(c.moments?.inicial?.rendiment),
+      final: nivellCosmos(c.moments?.final?.rendiment),
+      puntuacioInicial: c.moments?.inicial?.puntuacio ?? null,
+      puntuacioFinal: c.moments?.final?.puntuacio ?? null,
+    })
+  }
+  entrades.sort((a, b) => String(b.cursEscolar).localeCompare(String(a.cursEscolar)))
+  return entrades
+}
+
+/**
+ * Reparteix les entrades de COSMOS pels tres nivells de rendiment d'un
+ * moment concret ('inicial' o 'final').
+ *
+ * Com al ConMat, els alumnes sense rendiment en aquell moment no compten
+ * al total ni als percentatges, però es recompten a part.
+ */
+export function distribucioCosmos(entrades, moment = 'final') {
+  const avaluats = (entrades ?? []).filter((e) => e[moment] != null)
+  const total = avaluats.length
+  const files = NIVELLS_COSMOS.map((nivell) => {
+    const alumnes = avaluats.filter((e) => e[moment] === nivell).length
+    return {
+      nivell,
+      alumnes,
+      percentatge: total > 0 ? Math.round((alumnes / total) * 10000) / 100 : 0,
+    }
+  })
+  return {
+    files,
+    total,
+    noAvaluats: (entrades ?? []).length - total,
+    totalGeneral: (entrades ?? []).length,
+  }
+}
+
+/**
+ * Quants alumnes milloren, es mantenen o baixen de nivell entre la prova
+ * inicial i la final — la lectura que té sentit al COSMOS, on el mateix
+ * alumne fa les dues proves el mateix curs.
+ *
+ * Només compta els qui tenen els dos rendiments: si en falta un, no es
+ * pot dir si ha millorat.
+ */
+export function evolucioCosmos(entrades) {
+  const ambTotesDues = (entrades ?? []).filter((e) => e.inicial != null && e.final != null)
+  let milloren = 0
+  let mantenen = 0
+  let baixen = 0
+  for (const e of ambTotesDues) {
+    const abans = NIVELLS_COSMOS.indexOf(e.inicial)
+    const ara = NIVELLS_COSMOS.indexOf(e.final)
+    if (ara > abans) milloren++
+    else if (ara === abans) mantenen++
+    else baixen++
+  }
+  return { ambTotesDues: ambTotesDues.length, milloren, mantenen, baixen }
+}
+
 /**
  * Reparteix un conjunt d'entrades pels quatre nivells del ConMat i en
  * calcula els percentatges — el mateix càlcul que es feia a mà al full
