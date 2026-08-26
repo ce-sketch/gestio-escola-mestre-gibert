@@ -3,7 +3,7 @@ import { collection, doc, getDocs, query, where, serverTimestamp, writeBatch } f
 import { db, auth } from '../../../firebase'
 import { cursEscolarActual } from '../../../lib/cursEscolar'
 import { llegeixConmat, casaAmbAlumnes, distribucio, NIVELLS_CONMAT, clauOrdenadaDeNom, paraulesDeNom } from '../../../lib/conmatParser'
-import { llegeixCosmos, resumClasse } from '../../../lib/cosmosParser'
+import { llegeixCosmos, resumClasse, classeDeNomFitxer } from '../../../lib/cosmosParser'
 import BotoDrive from '../../BotoDrive'
 import { momentId, momentLabel, entradesHistoric } from '../../../lib/historicInnovamat'
 import { clauDeText } from '../../../lib/text'
@@ -99,6 +99,17 @@ export default function Matematiques({ cursEscolarFixat = null, nomesCarrega = f
     setCosmos(null)
     try {
       const resultat = llegeixCosmos(await fitxer.text())
+      // El CSV no porta la classe enlloc a dins: l'única font és el nom
+      // del fitxer ("...pre_post_1rA.csv"). Sense classe, els resultats
+      // no es poden agrupar després a l'Històric.
+      const classe = classeDeNomFitxer(fitxer.name)
+      if (!classe) {
+        resultat.avisos.unshift(
+          `No he sabut treure la classe del nom del fitxer ("${fitxer.name}"). `
+          + 'Els resultats es desaran sense classe i no sortiran agrupats a l\'Històric. '
+          + 'El nom hauria d\'acabar amb la classe, com ara "..._1rA.csv".'
+        )
+      }
       // El CSV del COSMOS porta el nom a `nomComplet`; el casament el
       // busca a `nom`, així que cal donar-l'hi perquè pugui aplicar també
       // la tolerància de noms incomplets.
@@ -106,7 +117,7 @@ export default function Matematiques({ cursEscolarFixat = null, nomesCarrega = f
         resultat.alumnes.map((a) => ({ ...a, nom: a.nomComplet, clau: clauDe(a.nomComplet) })),
         alumnes
       )
-      setCosmos({ ...resultat, casats, sensCasar, dubtosos, fitxer: fitxer.name })
+      setCosmos({ ...resultat, classe, casats, sensCasar, dubtosos, fitxer: fitxer.name })
     } catch (err) {
       setMissatge({ type: 'error', text: err.message })
     } finally {
@@ -290,8 +301,16 @@ export default function Matematiques({ cursEscolarFixat = null, nomesCarrega = f
     setDesant(true)
     try {
       const dadesCosmos = (a) => ({
+        // La classe surt del nom del fitxer (el CSV no la porta a dins).
+        // Sense això, l'Històric no pot agrupar els resultats per classe.
+        classe: cosmos.classe ?? null,
         intervencio: a.intervencio ?? null,
         sessionsSetmanals: a.sessionsSetmanals ?? null,
+        // Alumne que consta al CSV però no va completar la prova final:
+        // es desa igualment (amb els resultats buits) perquè els totals
+        // quadrin amb l'Excel, però queda marcat perquè no compti als
+        // percentatges de rendiment.
+        noAvaluat: a.noAvaluat === true,
         moments: a.moments,
       })
       const ops = cosmos.casats.map((a) => ({
@@ -676,7 +695,14 @@ export default function Matematiques({ cursEscolarFixat = null, nomesCarrega = f
         {cosmos && (
           <div style={{ marginTop: 14 }}>
             <strong style={{ fontSize: 13 }}>
-              {cosmos.alumnes.length} alumnes · {cosmos.dimensions.length} dimensions
+              Curs {cursEscolarId} · {cosmos.classe ?? 'classe desconeguda'}
+              {' '}· {cosmos.alumnes.length} alumnes
+              {resumCosmos.noAvaluats > 0 && (
+                <span style={{ fontWeight: 400, color: 'var(--ink-soft)' }}>
+                  {' '}({resumCosmos.total} avaluats, {resumCosmos.noAvaluats} sense fer la prova final)
+                </span>
+              )}
+              {' '}· {cosmos.dimensions.length} dimensions
             </strong>
             {cosmos.avisos.map((a, i) => (
               <p key={i} className="nota nota-avis">{a}</p>

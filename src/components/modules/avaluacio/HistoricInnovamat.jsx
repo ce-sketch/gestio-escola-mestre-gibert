@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { collection, getDocs, doc, setDoc, deleteDoc, deleteField, serverTimestamp, writeBatch } from 'firebase/firestore'
 import { db, auth } from '../../../firebase'
-import { cursEscolarActual } from '../../../lib/cursEscolar'
+import { cursEscolarActual, NIVELLS_ESCOLARS } from '../../../lib/cursEscolar'
 import {
   entradesHistoric, distribucioPerNivell, agrupaPerProva, momentLabel, MOMENTS,
 } from '../../../lib/historicInnovamat'
@@ -64,7 +64,7 @@ export default function HistoricInnovamat() {
     // Abans, si faltava el curs o el nivell, la funció sortia en silenci
     // i el botó semblava no fer res. Ara ho diu.
     if (!curs.trim() || !nivell.trim()) {
-      setError('Falta omplir el curs o el nivell (el "3r" del camp Nivell és només un exemple, cal escriure\'l).')
+      setError('Falta el curs escolar o el nivell.')
       return
     }
     setError(null)
@@ -211,10 +211,21 @@ export default function HistoricInnovamat() {
               <option value="final">Final de curs</option>
             </select>
           </label>
-          <label className="field" style={{ maxWidth: 90 }}>
+          <label className="field" style={{ maxWidth: 110 }}>
             <span>Nivell</span>
-            <input type="text" placeholder="3r" value={refForm.nivell} onChange={(e) => setRefForm({ ...refForm, nivell: e.target.value })}
-              className="camp camp-petit" />
+            {/* Abans era text lliure amb "3r" com a exemple en gris, i
+                costava veure que el camp era buit: el botó de desar no
+                feia res i no s'entenia per què. Amb un desplegable no es
+                pot deixar a mitges ni escriure'l de dues maneres
+                ("3r" / "3er"), que trencaria l'agrupació per nivell.
+                Les ConMat només es passen de 3r a 6è. */}
+            <select value={refForm.nivell} onChange={(e) => setRefForm({ ...refForm, nivell: e.target.value })}
+              className="camp camp-petit">
+              <option value="">— Tria'l —</option>
+              {NIVELLS_ESCOLARS.filter((n) => Number(n.id) >= 3).map((n) => (
+                <option key={n.id} value={n.label}>{n.label}</option>
+              ))}
+            </select>
           </label>
           <label className="field" style={{ maxWidth: 130 }}>
             <span>Àmbit</span>
