@@ -101,17 +101,47 @@ export default function InformeAlumne() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [curs])
 
+  /**
+   * Les matemàtiques es carreguen per ALUMNE, no per classe com el TEE i
+   * la lectura.
+   *
+   * El motiu és la forma de la col·lecció: a "matematiques" la classe
+   * viu dins de `conmat.<moment>.classe` i de `cosmos.classe`, no com a
+   * camp de primer nivell, i Firestore no sap filtrar per un camp que
+   * està dins d'un mapa amb clau variable. Abans es resolia llegint la
+   * col·lecció SENCERA (tots els alumnes de tots els cursos) i filtrant
+   * al navegador; per alumne són un grapat de documents en comptes de
+   * milers, i creix amb els anys d'escolarització d'un alumne, no amb
+   * els anys d'història del centre.
+   */
+  useEffect(() => {
+    if (!alumneId) { setMatematiques([]); return }
+    let cancellat = false
+    async function carregaMates() {
+      try {
+        const snap = await getDocs(query(collection(db, 'matematiques'), where('alumneId', '==', alumneId)))
+        // Canviar d'alumne de pressa pot fer que arribi abans la resposta
+        // d'una consulta antiga que la de la nova: sense això, es veurien
+        // els resultats de l'alumne anterior.
+        if (cancellat) return
+        setMatematiques(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+      } catch (err) {
+        if (!cancellat) setMissatge({ type: 'error', text: `No s'han pogut carregar les matemàtiques: ${err.message}` })
+      }
+    }
+    carregaMates()
+    return () => { cancellat = true }
+  }, [alumneId])
+
   async function carregaDades() {
     setCarregantInforme(true)
     try {
-      const [teeSnap, lecturaSnap, matesSnap] = await Promise.all([
+      const [teeSnap, lecturaSnap] = await Promise.all([
         getDocs(query(collection(db, 'avaluacio'), where('curs', '==', curs), where('tipus', '==', 'tee'))),
         getDocs(query(collection(db, 'avaluacio'), where('curs', '==', curs), where('tipus', '==', 'lectura'))),
-        getDocs(collection(db, 'matematiques')),
       ])
       setTeeRegistres(teeSnap.docs.map((d) => ({ id: d.id, ...d.data() })))
       setLecturaRegistres(lecturaSnap.docs.map((d) => ({ id: d.id, ...d.data() })))
-      setMatematiques(matesSnap.docs.map((d) => ({ id: d.id, ...d.data() })))
     } catch (err) {
       setMissatge({ type: 'error', text: `No s'han pogut carregar les dades: ${err.message}` })
     } finally {
