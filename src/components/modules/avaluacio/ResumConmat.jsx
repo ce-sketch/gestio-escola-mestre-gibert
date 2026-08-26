@@ -6,6 +6,8 @@ import {
   entradesHistoric, distribucioPerNivell, momentLabel, MOMENTS,
 } from '../../../lib/historicInnovamat'
 import { NIVELLS_CONMAT } from '../../../lib/conmatParser'
+import { exportaExcel, exportaPDF } from '../../../lib/exportTaula'
+import { fullResumCurs } from '../../../lib/innovamatExport'
 
 const NIVELLS = NIVELLS_CONMAT.map((n) => n.label)
 
@@ -21,6 +23,7 @@ export default function ResumConmat() {
   const [carregant, setCarregant] = useState(true)
   const [error, setError] = useState(null)
   const [moment, setMoment] = useState('final')
+  const [exportant, setExportant] = useState(false)
 
   const curs = cursEscolarActual()
 
@@ -44,6 +47,27 @@ export default function ResumConmat() {
   const classes = [...new Set(entrades.map((e) => e.classe).filter(Boolean))].sort()
   const total = distribucioPerNivell(entrades)
 
+  function descarrega(format) {
+    setExportant(true)
+    setError(null)
+    try {
+      const full = fullResumCurs(entrades, {
+        prova: 'ConMat',
+        nivells: NIVELLS,
+        distribucio: distribucioPerNivell,
+        moment: momentLabel(moment),
+        curs,
+      })
+      const dades = { cursEscolarId: curs, etiqueta: 'ConMat', subtitol: `Resum del ConMat · ${momentLabel(moment)}`, fulls: [full] }
+      if (format === 'excel') exportaExcel(`resum-conmat-${curs}-${moment}.xlsx`, dades)
+      else exportaPDF('Resum del ConMat', dades)
+    } catch (err) {
+      setError(`No s'ha pogut generar la descàrrega: ${err.message}`)
+    } finally {
+      setExportant(false)
+    }
+  }
+
   return (
     <div>
       <p className="module-lead">
@@ -51,12 +75,26 @@ export default function ResumConmat() {
         carreguen des de la pestanya "Matemàtiques" d'entrada de dades.
       </p>
 
-      <label className="field" style={{ maxWidth: 170, marginTop: 14 }}>
-        <span>Moment de la prova</span>
-        <select value={moment} onChange={(e) => setMoment(e.target.value)} className="camp">
-          {MOMENTS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
-        </select>
-      </label>
+      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap', marginTop: 14 }}>
+        <label className="field" style={{ maxWidth: 170 }}>
+          <span>Moment de la prova</span>
+          <select value={moment} onChange={(e) => setMoment(e.target.value)} className="camp">
+            {MOMENTS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+          </select>
+        </label>
+        {entrades.length > 0 && (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', paddingBottom: 6 }}>
+            <button type="button" onClick={() => descarrega('excel')} disabled={exportant}
+              className="btn-ghost" style={{ fontSize: 11, padding: '3px 10px' }}>
+              {exportant ? 'Generant…' : '⬇ Excel'}
+            </button>
+            <button type="button" onClick={() => descarrega('pdf')} disabled={exportant}
+              className="btn-ghost" style={{ fontSize: 11, padding: '3px 10px' }}>
+              ⬇ PDF
+            </button>
+          </div>
+        )}
+      </div>
 
       {error && <p className="nota nota-error">{error}</p>}
       {carregant && <p className="nota">Carregant…</p>}
