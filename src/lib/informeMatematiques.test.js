@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 
-import { paragrafMatematiques, dimensionsDestacades } from './informeMatematiques'
+import { paragrafMatematiques, dimensionsDestacades, nomDimensio } from './informeMatematiques'
 import { comptadorDeNom } from './informeQualitatiu'
 
 const NOMS = {
@@ -199,5 +199,68 @@ describe('paragrafMatematiques — estabilitat del text', () => {
   it('mai no escriu els cognoms', () => {
     const text = paragrafMatematiques({ nom: 'Alfa Beta, Anna', conmat: { nivell: 'Alt' } })
     expect(text).not.toMatch(/Alfa|Beta/)
+  })
+})
+
+describe('robustesa dels noms de dimensió', () => {
+  it('no destaca res si les dues dimensions es diuen igual', () => {
+    // El CSV real porta "comparació magnituds" i "comparació magnituds 2".
+    // Si totes dues acabessin amb el mateix nom llegible, l'informe diria
+    // que la mateixa cosa és alhora el punt fort i el punt fluix.
+    const { forta, fluixa } = dimensionsDestacades({
+      a: { percentil: 95, nom: 'comparació de magnituds' },
+      b: { percentil: 50, nom: 'raonament' },
+      c: { percentil: 10, nom: 'comparació de magnituds' },
+    })
+    expect(forta).toBeNull()
+    expect(fluixa).toBeNull()
+  })
+
+  it('mai no escriu un identificador cru a l\'informe', () => {
+    // Si l'Innovamat afegís una dimensió nova, no seria al mapa de noms.
+    const text = paragrafMatematiques({
+      nom: 'Delta, Dora',
+      nomsDimensions: {},
+      cosmos: {
+        inicial: 'Mitjà', final: 'Mitjà', fiabilitatFinal: 'Resultats fiables',
+        dimensionsFinal: {
+          dimensio_nova_inventada: { percentil: 95 },
+          raonament: { percentil: 50 },
+          memoria_de_treball: { percentil: 10 },
+        },
+      },
+    })
+    expect(text).not.toMatch(/_/)
+    expect(text.toLowerCase()).toContain('dimensio nova inventada')
+  })
+
+  it('nomDimensio prefereix el mapa, després l\'original, i mai l\'id cru', () => {
+    expect(nomDimensio('raonament', { raonament: 'raonament lògic' })).toBe('raonament lògic')
+    expect(nomDimensio('x_y', {}, 'nom original')).toBe('nom original')
+    expect(nomDimensio('memoria_de_treball', {})).toBe('memoria de treball')
+  })
+})
+
+describe('proposta de treball', () => {
+  const dims = {
+    velocitat_d_execucio: { percentil: 92 },
+    raonament: { percentil: 55 },
+    memoria_de_treball: { percentil: 12 },
+  }
+
+  it('proposa alguna cosa quan hi ha un punt fluix', () => {
+    const text = paragrafMatematiques({
+      nom: 'Delta, Dora',
+      cosmos: { inicial: 'Mitjà', final: 'Mitjà', fiabilitatFinal: 'Resultats fiables', dimensionsFinal: dims },
+    })
+    expect(text).toMatch(/proposa|seria bo|passa per/i)
+  })
+
+  it('NO proposa res si la prova no és fiable', () => {
+    const text = paragrafMatematiques({
+      nom: 'Delta, Dora',
+      cosmos: { inicial: 'Mitjà', final: 'Mitjà', fiabilitatFinal: 'Resultats no fiables', dimensionsFinal: dims },
+    })
+    expect(text).not.toMatch(/seria bo|es proposa|passa per/i)
   })
 })

@@ -193,6 +193,52 @@ const COSMOS_NO_AVALUAT = [
 ]
 
 /**
+ * Propostes de treball segons la dimensió més fluixa.
+ *
+ * Es queden deliberadament a peu d'aula: jocs, rutines curtes,
+ * manipulatiu. La prova mesura habilitats cognitives, però l'app NO és
+ * qui per prescriure-hi res —això és feina de l'equip docent i, si cal,
+ * de l'EAP—, i un informe automàtic que sonés a diagnòstic faria més mal
+ * que bé. Per això les propostes són generals i sempre editables.
+ */
+const PROPOSTES_COSMOS = {
+  fluidesa_aritmetica: 'dedicar estones curtes i regulars al càlcul mental, amb jocs i reptes que el facin engrescador',
+  velocitat_d_execucio: 'donar temps sense pressa per resoldre, i anar guanyant agilitat amb la pràctica repetida en context de joc',
+  coneixement_numeric: 'treballar els nombres amb material manipulatiu i en situacions quotidianes, per anar-ne consolidant el sentit',
+  comparacio_magnituds: 'proposar comparacions i estimacions en situacions reals (quantitats, mides, pesos) abans d\'anar al càlcul exacte',
+  comparacio_magnituds_2: 'proposar comparacions i estimacions en situacions reals (quantitats, mides, pesos) abans d\'anar al càlcul exacte',
+  enumeracio_de_punts: 'jugar amb col·leccions d\'objectes per reconèixer quantitats petites d\'un cop d\'ull, sense comptar-les una a una',
+  memoria_de_treball: 'proposar jocs que demanin retenir i fer servir informació (endevinalles, seqüències, jocs de taula)',
+  raonament: 'donar espai per explicar en veu alta com s\'ha arribat a una resposta, més enllà de si és correcta',
+}
+
+const PROPOSTA_GENERICA = [
+  'mantenir el treball habitual de matemàtiques i seguir oferint reptes que engresquin',
+  'continuar per aquest camí, amb propostes que estirin una mica més amunt',
+]
+
+const OBERTURA_MATES = [
+  'A matemàtiques, de cara als propers mesos seria bo',
+  'Com a línia de treball en matemàtiques, es proposa',
+  'En matemàtiques, la proposta passa per',
+]
+
+/**
+ * El nom llegible d'una dimensió.
+ *
+ * Si no és al mapa —perquè l'Innovamat n'hagi afegit una de nova— NO
+ * s'escriu l'identificador cru ("fluidesa_aritmetica"): es desfà el
+ * guionet baix perquè almenys es llegeixi com unes paraules. Que un
+ * document que pot llegir una família mostri un identificador intern és
+ * pitjor que una redacció una mica plana.
+ */
+export function nomDimensio(id, nomsDimensions = {}, nomOriginal = null) {
+  if (nomsDimensions[id]) return nomsDimensions[id]
+  if (nomOriginal) return nomOriginal
+  return String(id ?? '').replace(/_/g, ' ').trim()
+}
+
+/**
  * Quines dimensions destaquen, amunt i avall.
  *
  * Només es diu res quan la diferència és prou clara. El llindar és de 25
@@ -210,6 +256,11 @@ export function dimensionsDestacades(dimensions, llindar = 25) {
   const alta = ordenades[0]
   const baixa = ordenades[ordenades.length - 1]
   if (alta.percentil - baixa.percentil < llindar) return { forta: null, fluixa: null }
+  // Dues dimensions poden acabar amb el MATEIX nom llegible: el CSV porta
+  // "comparació magnituds" i "comparació magnituds 2", i si totes dues es
+  // diguessin igual sortiria "el punt més fort és X, mentre que X és on hi
+  // ha més marge". Val més no dir res que dir un disbarat.
+  if (alta.nom === baixa.nom) return { forta: null, fluixa: null }
   return { forta: alta, fluixa: baixa }
 }
 
@@ -287,14 +338,19 @@ export function paragrafMatematiques({
       } else {
         const dims = Object.fromEntries(
           Object.entries(cosmos.dimensionsFinal ?? {}).map(([id, d]) => [
-            id, { ...d, nom: nomsDimensions[id] ?? d?.nom ?? id },
+            id, { ...d, nom: nomDimensio(id, nomsDimensions, d?.nom) },
           ])
         )
         const { forta, fluixa } = dimensionsDestacades(dims)
         if (forta && fluixa) {
           frases.push(`${tria(COSMOS_FORT, sembra)(forta.nom)}, mentre que ${tria(COSMOS_FLUIX, sembra)(fluixa.nom)}.`)
+          // La proposta tanca el paràgraf, com fa el de llengua: assenyalar
+          // un punt fluix i no dir què fer-hi deixa l'informe a mitges.
+          const proposta = PROPOSTES_COSMOS[fluixa.id] ?? tria(PROPOSTA_GENERICA, sembra)
+          frases.push(`${tria(OBERTURA_MATES, sembra)} ${proposta}.`)
         } else if (Object.keys(dims).length >= 3) {
           frases.push(tria(COSMOS_EQUILIBRAT, sembra))
+          frases.push(`${tria(OBERTURA_MATES, sembra)} ${tria(PROPOSTA_GENERICA, sembra)}.`)
         }
       }
     }
