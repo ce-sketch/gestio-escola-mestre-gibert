@@ -6,7 +6,7 @@ import { CRITERIS_TEE, NIVELLS_PER_CICLE, cicleDe } from '../../../lib/rubricaTE
 import { MOMENTS_LECTURA } from '../../../lib/rubricaLectura'
 import { cursEscolarActual } from '../../../lib/cursEscolar'
 import { generaInformeQualitatiu } from '../../../lib/informeQualitatiu'
-import { ultimConmatDe, momentLabel } from '../../../lib/historicInnovamat'
+import { ultimConmatDe, ultimCosmosDe, momentLabel } from '../../../lib/historicInnovamat'
 
 const TRIMESTRES = ['1r trimestre', '2n trimestre', '3r trimestre']
 
@@ -184,33 +184,47 @@ export default function InformeAlumne() {
         <>
           <h3 style={{ marginTop: 28, fontSize: 18 }}>{alumneActual.nom}</h3>
 
-          {/* Matemàtiques: el resultat de ConMat (Innovamat) més recent
-              que consti a l'històric d'aquest alumne. */}
+          {/* Matemàtiques: el resultat més recent d'Innovamat. El ConMat
+              només existeix a partir de 3r; a 1r i 2n la prova és el
+              COSMOS. Es mostren tots dos si n'hi ha (un alumne pot tenir
+              COSMOS d'un curs i ConMat d'un altre, en canviar de cicle). */}
           <p className="module-note" style={{ marginTop: 20, fontStyle: 'normal', fontWeight: 600, color: 'var(--ink)' }}>
             Matemàtiques (Innovamat)
           </p>
           {(() => {
             const mates = ultimConmatDe(matematiques, alumneId)
-            if (!mates) {
-              return <p className="module-note">Encara no hi ha cap resultat de ConMat per aquest alumne.</p>
-            }
-            if (mates.noAvaluat) {
-              return (
-                <p className="module-note" style={{ fontStyle: 'normal' }}>
-                  <strong>No avaluat</strong> — no va fer la ConMat
-                  {' · '}{mates.cursEscolar} · {momentLabel(mates.moment)}
-                </p>
-              )
+            const cosmos = ultimCosmosDe(matematiques, alumneId)
+            if (!mates && !cosmos) {
+              return <p className="module-note">Encara no hi ha cap resultat d&apos;Innovamat per aquest alumne.</p>
             }
             return (
-              <p className="module-note" style={{ fontStyle: 'normal' }}>
-                Nivell <strong>{mates.nivell ?? '—'}</strong>
-                {mates.percentatge != null && ` (${mates.percentatge}%)`}
-                {' · '}{mates.cursEscolar} · {momentLabel(mates.moment)}
-                {mates.respostes != null && mates.preguntes != null && (
-                  <span style={{ color: 'var(--ink-soft)' }}> · {mates.respostes}/{mates.preguntes} respostes</span>
+              <>
+                {mates && (
+                  mates.noAvaluat ? (
+                    <p className="module-note" style={{ fontStyle: 'normal' }}>
+                      <strong>ConMat</strong> — <strong>no avaluat</strong>, no va fer la prova
+                      {' · '}{mates.cursEscolar} · {momentLabel(mates.moment)}
+                    </p>
+                  ) : (
+                    <p className="module-note" style={{ fontStyle: 'normal' }}>
+                      <strong>ConMat</strong> — nivell <strong>{mates.nivell ?? '—'}</strong>
+                      {mates.percentatge != null && ` (${mates.percentatge}%)`}
+                      {' · '}{mates.cursEscolar} · {momentLabel(mates.moment)}
+                      {mates.respostes != null && mates.preguntes != null && (
+                        <span style={{ color: 'var(--ink-soft)' }}> · {mates.respostes}/{mates.preguntes} respostes</span>
+                      )}
+                    </p>
+                  )
                 )}
-              </p>
+                {cosmos && (
+                  <p className="module-note" style={{ fontStyle: 'normal' }}>
+                    <strong>COSMOS</strong> — inicial{' '}
+                    <strong>{cosmos.moments?.inicial?.rendiment ?? '—'}</strong>
+                    {' · '}final <strong>{cosmos.moments?.final?.rendiment ?? '—'}</strong>
+                    {' · '}{cosmos.cursEscolar}
+                  </p>
+                )}
+              </>
             )
           })()}
 
