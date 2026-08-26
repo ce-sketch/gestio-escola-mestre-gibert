@@ -4,6 +4,7 @@ import { db, auth } from '../../../firebase'
 import { cursEscolarActual, NIVELLS_ESCOLARS } from '../../../lib/cursEscolar'
 import {
   entradesHistoric, distribucioPerNivell, agrupaPerProva, momentLabel, MOMENTS,
+  entradesCosmos, distribucioCosmos, evolucioCosmos, NIVELLS_COSMOS, MOMENTS_COSMOS,
 } from '../../../lib/historicInnovamat'
 import Matematiques from './Matematiques'
 
@@ -28,6 +29,11 @@ export default function HistoricInnovamat() {
   const [refs, setRefs] = useState({})
   const [refForm, setRefForm] = useState({ curs: cursEscolarActual(), moment: 'final', nivell: '', ambit: 'catalunya', Baix: '', 'Mitjà-baix': '', 'Mitjà-alt': '', Alt: '' })
   const [desantRef, setDesantRef] = useState(false)
+  const [llistaRefs, setLlistaRefs] = useState([])
+  // Quina referència s'està editant. Editar-les és imprescindible: es
+  // copien a mà d'un gràfic i una xifra mal transcrita, sense poder-la
+  // tocar, obligaria a refer-la des de zero.
+  const [refEditant, setRefEditant] = useState(null)
   const [esborrant, setEsborrant] = useState(false)
   // "Esborra tot un curs" esborra TOTES les classes i TOTS dos moments
   // d'un cop, sense manera de desfer-ho des de l'app. Un window.confirm()
@@ -48,10 +54,19 @@ export default function HistoricInnovamat() {
       const tots = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
       setRegistres(tots.filter((r) => r.tipus !== 'referencia'))
       const mapa = {}
+      const llista = []
       for (const r of tots.filter((r) => r.tipus === 'referencia')) {
         mapa[`${r.cursEscolar}__${r.moment}__${r.nivell}__${r.ambit}`] = r.valors
+        llista.push(r)
       }
       setRefs(mapa)
+      // La llista sencera, per poder-les repassar i corregir. El mapa de
+      // dalt només serveix per pintar-les a les taules de resultats.
+      llista.sort((a, b) =>
+        String(b.cursEscolar).localeCompare(String(a.cursEscolar))
+        || String(a.nivell).localeCompare(String(b.nivell), 'ca')
+        || String(a.ambit).localeCompare(String(b.ambit)))
+      setLlistaRefs(llista)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -80,11 +95,76 @@ export default function HistoricInnovamat() {
         actualitzatEl: serverTimestamp(),
         actualitzatPer: auth.currentUser?.email ?? null,
       }, { merge: true })
+      // Es buiden només els percentatges: curs, moment i nivell solen
+      // repetir-se en introduir-ne unes quantes seguides.
+      setRefForm((f) => ({ ...f, Baix: '', 'Mitjà-baix': '', 'Mitjà-alt': '', Alt: '' }))
+      setRefEditant(null)
       await carrega()
     } catch (err) {
       setError(err.message)
     } finally {
       setDesantRef(false)
+    }
+  }
+
+  /** Carrega una referència ja desada al formulari per corregir-la. Es
+   *  desa amb la mateixa clau (curs + moment + nivell + àmbit), així que
+   *  tornar a desar-la la substitueix en comptes de duplicar-la. */
+  function editaReferencia(r) {
+    setRefForm({
+      curs: r.cursEscolar ?? '',
+      moment: r.moment ?? 'final',
+      nivell: r.nivell ?? '',
+      ambit: r.ambit ?? 'catalunya',
+      Baix: r.valors?.Baix ?? '',
+      'Mitjà-baix': r.valors?.['Mitjà-baix'] ?? '',
+      'Mitjà-alt': r.valors?.['Mitjà-alt'] ?? '',
+      Alt: r.valors?.Alt ?? '',
+    })
+    setRefEditant(r.id)
+    setError(null)
+  }
+
+  async function esborraReferencia(r) {
+    setDesantRef(true)
+    try {
+      await deleteDoc(doc(db, 'matematiques', r.id))
+      if (refEditant === r.id) setRefEditant(null)
+      await carrega()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setDesantRef(false)
+    }
+  }
+
+  /**
+   * Desfà la càrrega del COSMOS d'una classe i un curs.
+   *
+   * Igual que amb el ConMat: un mateix document d'alumne pot portar el
+   * COSMOS i el ConMat alhora, així que només s'esborra el camp `cosmos`;
+   * el document sencer només desapareix si no hi queda res més.
+   */
+  async function esborraCosmos(cursEscolar, classe) {
+    const afectats = registres.filter((r) =>
+      r.cursEscolar === cursEscolar && r.cosmos && (r.cosmos.classe ?? null) === classe)
+    if (afectats.length === 0) return
+    setEsborrant(true)
+    try {
+      const MAX = 450
+      for (let i = 0; i < afectats.length; i += MAX) {
+        const lot = writeBatch(db)
+        for (const r of afectats.slice(i, i + MAX)) {
+          if (!r.conmat) lot.delete(doc(db, 'matematiques', r.id))
+          else lot.update(doc(db, 'matematiques', r.id), { cosmos: deleteField() })
+        }
+        await lot.commit()
+      }
+      await carrega()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setEsborrant(false)
     }
   }
 
@@ -160,6 +240,29 @@ export default function HistoricInnovamat() {
   const entrades = entradesHistoric(registres)
   const informes = registres.filter((r) => r.tipus === 'informe')
   const cursos = [...new Set(entrades.map((e) => e.cursEscolar))].sort().reverse()
+
+  // ── COSMOS ──────────────────────────────────────────────────────────
+  // El COSMOS és la prova de 1r i 2n i es mesura amb tres nivells, no
+  // amb els quatre del ConMat: per això té les seves pròpies taules en
+  // comptes de barrejar-s'hi. A diferència del ConMat, no es desa cap
+  // document d'"informe": la llista de càrregues es dedueix dels mateixos
+  // resultats, agrupats per curs i classe.
+  const entradesCos = entradesCosmos(registres)
+  const cursosCos = [...new Set(entradesCos.map((e) => e.cursEscolar))].sort().reverse()
+  const carreguesCos = []
+  for (const curs of cursosCos) {
+    const delCurs = entradesCos.filter((e) => e.cursEscolar === curs)
+    for (const classe of [...new Set(delCurs.map((e) => e.classe))].sort()) {
+      const dels = delCurs.filter((e) => e.classe === classe)
+      carreguesCos.push({
+        cursEscolar: curs,
+        classe,
+        total: dels.length,
+        sensCasar: dels.filter((e) => e.sensCasar).length,
+        noAvaluats: dels.filter((e) => e.noAvaluat).length,
+      })
+    }
+  }
 
   return (
     <div>
@@ -243,13 +346,79 @@ export default function HistoricInnovamat() {
             </label>
           ))}
           <button type="button" className="btn-ghost" onClick={desaReferencia} disabled={desantRef}>
-            {desantRef ? 'Desant…' : 'Desa la referència'}
+            {desantRef ? 'Desant…' : (refEditant ? 'Desa els canvis' : 'Desa la referència')}
           </button>
+          {refEditant && (
+            <button
+              type="button"
+              className="btn-ghost"
+              onClick={() => { setRefEditant(null); setRefForm((f) => ({ ...f, Baix: '', 'Mitjà-baix': '', 'Mitjà-alt': '', Alt: '' })) }}
+              disabled={desantRef}
+            >
+              Cancel·la
+            </button>
+          )}
         </div>
-        {Object.keys(refs).length > 0 && (
-          <p style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 8 }}>
-            {Object.keys(refs).length} referències desades.
-          </p>
+
+        {/* Les referències desades, per curs i nivell. Sense aquesta
+            llista no hi havia manera de saber quines s'havien introduït
+            ni de corregir-ne cap xifra mal copiada del gràfic. */}
+        {llistaRefs.length > 0 && (
+          <div style={{ marginTop: 14 }}>
+            <strong style={{ fontSize: 13 }}>Referències desades</strong>
+            <table className="taula-dades" style={{ fontSize: 12, marginTop: 6 }}>
+              <thead>
+                <tr style={{ color: 'var(--ink-soft)' }}>
+                  <th>Curs</th>
+                  <th>Moment</th>
+                  <th>Nivell</th>
+                  <th>Àmbit</th>
+                  <th style={{ textAlign: 'right' }}>Baix</th>
+                  <th style={{ textAlign: 'right' }}>Mitjà-baix</th>
+                  <th style={{ textAlign: 'right' }}>Mitjà-alt</th>
+                  <th style={{ textAlign: 'right' }}>Alt</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {llistaRefs.map((r) => (
+                  <tr key={r.id} style={{ background: refEditant === r.id ? 'var(--wash)' : undefined }}>
+                    <td>{r.cursEscolar}</td>
+                    <td>{momentLabel(r.moment)}</td>
+                    <td><strong>{r.nivell}</strong></td>
+                    <td style={{ color: 'var(--ink-soft)' }}>
+                      {r.ambit === 'catalunya' ? 'Catalunya' : 'Total de centres'}
+                    </td>
+                    {['Baix', 'Mitjà-baix', 'Mitjà-alt', 'Alt'].map((n) => (
+                      <td key={n} className="num">
+                        {r.valors?.[n] != null ? `${r.valors[n]}%` : '—'}
+                      </td>
+                    ))}
+                    <td style={{ whiteSpace: 'nowrap' }}>
+                      <button
+                        type="button"
+                        onClick={() => editaReferencia(r)}
+                        disabled={desantRef}
+                        style={{ background: 'none', border: '1px solid var(--line)', borderRadius: 6, padding: '2px 8px', fontSize: 11, cursor: 'pointer' }}
+                      >
+                        Edita
+                      </button>
+                      {' '}
+                      <button
+                        type="button"
+                        onClick={() => esborraReferencia(r)}
+                        disabled={desantRef}
+                        title="Esborra aquesta referència"
+                        style={{ background: 'none', border: '1px solid var(--red, #b03030)', color: 'var(--red, #b03030)', borderRadius: 6, padding: '2px 8px', fontSize: 11, cursor: 'pointer' }}
+                      >
+                        ×
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
@@ -543,6 +712,194 @@ export default function HistoricInnovamat() {
                 </table>
               </div>
             )
+          })}
+        </>
+      )}
+
+      {/* ══ COSMOS (1r i 2n) ═══════════════════════════════════════════
+          Bloc a part i no dins del de ConMat: són proves diferents, amb
+          tres nivells de rendiment en comptes de quatre, i un centre pot
+          tenir COSMOS sense tenir cap ConMat carregat (o al revés). */}
+      {!carregant && entradesCos.length > 0 && (
+        <>
+          <h2 style={{ fontSize: 17, marginTop: 40, paddingTop: 20, borderTop: '2px solid var(--line)' }}>
+            COSMOS <span style={{ fontWeight: 400, fontSize: 13, color: 'var(--ink-soft)' }}>(1r i 2n)</span>
+          </h2>
+
+          {/* ── Informes carregats ─────────────────────────────────── */}
+          <h3 style={{ fontSize: 15, marginTop: 20 }}>Informes carregats</h3>
+          <table className="taula-dades" style={{ fontSize: 12 }}>
+            <thead>
+              <tr style={{ color: 'var(--ink-soft)' }}>
+                <th>Curs</th>
+                <th>Classe</th>
+                <th>Alumnes</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {carreguesCos.map((c) => (
+                <tr key={`${c.cursEscolar}__${c.classe}`}>
+                  <td>{c.cursEscolar}</td>
+                  <td>{c.classe ?? <em style={{ color: 'var(--ink-soft)' }}>sense classe</em>}</td>
+                  <td>
+                    {c.total}
+                    {c.noAvaluats > 0 && (
+                      <span style={{ color: 'var(--ink-soft)' }}> ({c.noAvaluats} sense fer la prova)</span>
+                    )}
+                    {c.sensCasar > 0 && (
+                      <span style={{ color: 'var(--ink-soft)' }}> (+{c.sensCasar} amb nom del CSV)</span>
+                    )}
+                  </td>
+                  <td>
+                    <button
+                      type="button"
+                      onClick={() => esborraCosmos(c.cursEscolar, c.classe)}
+                      disabled={esborrant}
+                      style={{ background: 'none', border: '1px solid var(--red, #b03030)', color: 'var(--red, #b03030)', borderRadius: 6, padding: '2px 8px', fontSize: 11, cursor: 'pointer' }}
+                    >
+                      Desfés
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {/* ── Evolució del centre ────────────────────────────────── */}
+          <h3 style={{ fontSize: 15, marginTop: 28 }}>Evolució del centre</h3>
+          <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 2 }}>
+            El rendiment de la prova final de cada curs, i quants alumnes canvien de nivell
+            entre la prova inicial i la final del mateix curs.
+          </p>
+          <table className="taula-dades" style={{ fontSize: 12 }}>
+            <thead>
+              <tr style={{ color: 'var(--ink-soft)' }}>
+                <th>Curs</th>
+                {NIVELLS_COSMOS.map((n) => <th key={n} style={{ textAlign: 'right' }}>{n}</th>)}
+                <th style={{ textAlign: 'right' }}>Avaluats</th>
+                <th style={{ textAlign: 'right' }}>Milloren</th>
+                <th style={{ textAlign: 'right' }}>Es mantenen</th>
+                <th style={{ textAlign: 'right' }}>Baixen</th>
+              </tr>
+            </thead>
+            <tbody>
+              {cursosCos.map((curs) => {
+                const delCurs = entradesCos.filter((e) => e.cursEscolar === curs)
+                const dist = distribucioCosmos(delCurs, 'final')
+                const evo = evolucioCosmos(delCurs)
+                return (
+                  <tr key={curs}>
+                    <td><strong>{curs}</strong></td>
+                    {NIVELLS_COSMOS.map((n) => {
+                      const f = dist.files.find((x) => x.nivell === n)
+                      return (
+                        <td key={n} className="num">
+                          {f.alumnes}
+                          <span style={{ color: 'var(--ink-soft)' }}> ({f.percentatge}%)</span>
+                        </td>
+                      )
+                    })}
+                    <td className="num">
+                      {dist.total}
+                      {dist.noAvaluats > 0 && (
+                        <span style={{ color: 'var(--ink-soft)' }}> (+{dist.noAvaluats} sense fer la prova)</span>
+                      )}
+                    </td>
+                    <td className="num">{evo.milloren}</td>
+                    <td className="num">{evo.mantenen}</td>
+                    <td className="num">{evo.baixen}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+
+          {/* ── Resultats per prova ────────────────────────────────── */}
+          <h3 style={{ fontSize: 15, marginTop: 28 }}>Resultats per prova</h3>
+          {cursosCos.map((curs) => {
+            const delCurs = entradesCos.filter((e) => e.cursEscolar === curs)
+            const classes = [...new Set(delCurs.map((e) => e.classe))].sort()
+            return MOMENTS_COSMOS.map((moment) => {
+              const dist = distribucioCosmos(delCurs, moment.id)
+              // Un moment sense cap resultat no aporta res: si encara no
+              // s'ha fet la prova final, no cal ensenyar una taula de zeros.
+              if (dist.total === 0) return null
+              return (
+                <div key={`${curs}__${moment.id}`} style={{ marginTop: 18 }}>
+                  <strong style={{ fontSize: 13 }}>
+                    {curs} · {moment.label}
+                    <span style={{ fontWeight: 400, color: 'var(--ink-soft)' }}>
+                      {' '}— {dist.total} avaluats
+                      {dist.noAvaluats > 0 && `, ${dist.noAvaluats} sense fer la prova`}
+                    </span>
+                  </strong>
+                  <table className="taula-dades" style={{ fontSize: 12, marginTop: 6 }}>
+                    <thead>
+                      <tr style={{ color: 'var(--ink-soft)' }}>
+                        <th>Classe</th>
+                        {NIVELLS_COSMOS.map((n) => <th key={n} style={{ textAlign: 'right' }}>{n}</th>)}
+                        <th style={{ textAlign: 'right' }}>Total avaluats</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {classes.map((classe) => {
+                        const d = distribucioCosmos(delCurs.filter((e) => e.classe === classe), moment.id)
+                        return (
+                          <tr key={classe}>
+                            <td>{classe ?? 'sense classe'}</td>
+                            {NIVELLS_COSMOS.map((n) => (
+                              <td key={n} className="num">
+                                {d.files.find((f) => f.nivell === n)?.alumnes ?? 0}
+                              </td>
+                            ))}
+                            <td className="num">
+                              <strong>{d.total}</strong>
+                              {d.noAvaluats > 0 && (
+                                <span style={{ color: 'var(--ink-soft)', fontWeight: 400 }}> (+{d.noAvaluats})</span>
+                              )}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                      <tr style={{ fontWeight: 700 }}>
+                        <td>COSMOS — TOTAL</td>
+                        {NIVELLS_COSMOS.map((n) => (
+                          <td key={n} className="num">
+                            {dist.files.find((f) => f.nivell === n)?.alumnes ?? 0}
+                          </td>
+                        ))}
+                        <td className="num">
+                          {dist.total}
+                          {dist.noAvaluats > 0 && (
+                            <span style={{ fontWeight: 400, color: 'var(--ink-soft)' }}> (+{dist.noAvaluats})</span>
+                          )}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+
+                  <table className="taula-dades" style={{ fontSize: 12, marginTop: 6, maxWidth: 320 }}>
+                    <thead>
+                      <tr style={{ color: 'var(--ink-soft)' }}>
+                        <th>Rendiment</th>
+                        <th style={{ textAlign: 'right' }}>Alumnes</th>
+                        <th style={{ textAlign: 'right' }}>Centre</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {dist.files.map((f) => (
+                        <tr key={f.nivell}>
+                          <td>{f.nivell}</td>
+                          <td className="num">{f.alumnes}</td>
+                          <td className="num">{f.percentatge}%</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )
+            })
           })}
         </>
       )}

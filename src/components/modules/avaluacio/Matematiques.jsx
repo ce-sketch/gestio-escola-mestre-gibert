@@ -38,6 +38,7 @@ export default function Matematiques({ cursEscolarFixat = null, nomesCarrega = f
   const [conmat, setConmat] = useState(null)
   const [conmats, setConmats] = useState([]) // tots els informes llegits de cop   // { classe, moment, casats, sensCasar, avisos }
   const [cosmos, setCosmos] = useState(null)   // { alumnes, dimensions, avisos }
+  const [cosmosos, setCosmosos] = useState([]) // tots els CSV llegits de cop
   const [desats, setDesats] = useState([])
 
   useEffect(() => {
@@ -91,38 +92,63 @@ export default function Matematiques({ cursEscolarFixat = null, nomesCarrega = f
   }
 
   // ── COSMOS (CSV) ────────────────────────────────────────────────────
+  /**
+   * Llegeix un o diversos CSV de COSMOS. Igual que amb el ConMat, els
+   * informes arriben un per classe i té sentit poder-los pujar tots de
+   * cop, revisar-los un per un i desar-los junts.
+   */
   async function pujaCosmos(e) {
-    const fitxer = e.target.files?.[0]
-    if (!fitxer) return
+    const fitxers = [...(e.target.files ?? [])]
+    if (fitxers.length === 0) return
     setLlegint(true)
     setMissatge(null)
     setCosmos(null)
-    try {
-      const resultat = llegeixCosmos(await fitxer.text())
-      // El CSV no porta la classe enlloc a dins: l'única font és el nom
-      // del fitxer ("...pre_post_1rA.csv"). Sense classe, els resultats
-      // no es poden agrupar després a l'Històric.
-      const classe = classeDeNomFitxer(fitxer.name)
-      if (!classe) {
-        resultat.avisos.unshift(
-          `No he sabut treure la classe del nom del fitxer ("${fitxer.name}"). `
-          + 'Els resultats es desaran sense classe i no sortiran agrupats a l\'Històric. '
-          + 'El nom hauria d\'acabar amb la classe, com ara "..._1rA.csv".'
+    const llegits = []
+    const errors = []
+    for (const fitxer of fitxers) {
+      try {
+        const resultat = llegeixCosmos(await fitxer.text())
+        // El CSV no porta la classe enlloc a dins: l'única font és el nom
+        // del fitxer ("...pre_post_1rA.csv"). Sense classe, els resultats
+        // no es poden agrupar després a l'Històric.
+        const classe = classeDeNomFitxer(fitxer.name)
+        if (!classe) {
+          resultat.avisos.unshift(
+            `No he sabut treure la classe del nom del fitxer ("${fitxer.name}"). `
+            + 'Els resultats es desaran sense classe i no sortiran agrupats a l\'Històric. '
+            + 'El nom hauria d\'acabar amb la classe, com ara "..._1rA.csv".'
+          )
+        }
+        // El CSV del COSMOS porta el nom a `nomComplet`; el casament el
+        // busca a `nom`, així que cal donar-l'hi perquè pugui aplicar també
+        // la tolerància de noms incomplets.
+        const { casats, sensCasar, dubtosos } = casaAmbAlumnes(
+          resultat.alumnes.map((a) => ({ ...a, nom: a.nomComplet, clau: clauDe(a.nomComplet) })),
+          alumnes
         )
+        llegits.push({ ...resultat, classe, casats, sensCasar, dubtosos, fitxer: fitxer.name })
+      } catch (err) {
+        errors.push(`${fitxer.name}: ${err.message}`)
       }
-      // El CSV del COSMOS porta el nom a `nomComplet`; el casament el
-      // busca a `nom`, així que cal donar-l'hi perquè pugui aplicar també
-      // la tolerància de noms incomplets.
-      const { casats, sensCasar, dubtosos } = casaAmbAlumnes(
-        resultat.alumnes.map((a) => ({ ...a, nom: a.nomComplet, clau: clauDe(a.nomComplet) })),
-        alumnes
-      )
-      setCosmos({ ...resultat, classe, casats, sensCasar, dubtosos, fitxer: fitxer.name })
-    } catch (err) {
-      setMissatge({ type: 'error', text: err.message })
-    } finally {
-      setLlegint(false)
     }
+    // Dues classes del mateix nivell poden acabar amb el mateix nom de
+    // fitxer si es baixen del Drive amb el "(1)"; si dos CSV donen la
+    // mateixa classe, val més dir-ho que desar-ne un a sobre de l'altre.
+    const repetides = llegits
+      .map((c) => c.classe)
+      .filter((c, i, tots) => c && tots.indexOf(c) !== i)
+    if (repetides.length > 0) {
+      errors.push(
+        `Hi ha més d'un CSV per a la classe ${[...new Set(repetides)].join(', ')}. `
+        + 'Comprova que no hagis triat dues vegades el mateix fitxer.'
+      )
+    }
+    if (errors.length > 0) {
+      setMissatge({ type: 'error', text: errors.join(' · ') })
+    }
+    setCosmosos(llegits)
+    setCosmos(llegits[0] ?? null)
+    setLlegint(false)
   }
 
   const clauDe = clauDeText
@@ -296,14 +322,18 @@ export default function Matematiques({ cursEscolarFixat = null, nomesCarrega = f
     }
   }
 
+  /** Desa tots els CSV de COSMOS carregats, no només el que s'estigui
+   *  mirant: es revisen un per un amb els botons, però es desen junts. */
   async function desaCosmos() {
-    if (!cosmos || (!cosmos.casats.length && !cosmos.sensCasar?.length)) return
+    const llista = cosmosos.length > 0 ? cosmosos : (cosmos ? [cosmos] : [])
+    const totalResultats = llista.reduce((t, c) => t + c.casats.length + (c.sensCasar?.length ?? 0), 0)
+    if (totalResultats === 0) return
     setDesant(true)
     try {
-      const dadesCosmos = (a) => ({
+      const dadesCosmos = (c, a) => ({
         // La classe surt del nom del fitxer (el CSV no la porta a dins).
         // Sense això, l'Històric no pot agrupar els resultats per classe.
-        classe: cosmos.classe ?? null,
+        classe: c.classe ?? null,
         intervencio: a.intervencio ?? null,
         sessionsSetmanals: a.sessionsSetmanals ?? null,
         // Alumne que consta al CSV però no va completar la prova final:
@@ -313,42 +343,49 @@ export default function Matematiques({ cursEscolarFixat = null, nomesCarrega = f
         noAvaluat: a.noAvaluat === true,
         moments: a.moments,
       })
-      const ops = cosmos.casats.map((a) => ({
-        id: `${cursEscolarId}__${a.alumneId}`,
-        dades: {
-          cursEscolar: cursEscolarId,
-          alumneId: a.alumneId,
-          nom: a.nom,
-          cosmos: dadesCosmos(a),
-          actualitzatEl: serverTimestamp(),
-          actualitzatPer: auth.currentUser?.email ?? null,
-        },
-      }))
-      // Igual que al ConMat: els que no consten com a alumnes actius del
-      // centre també es desen, amb el nom tal com surt al CSV.
-      for (const a of (cosmos.sensCasar ?? [])) {
-        const clau = clauOrdenadaDeNom(a.nom ?? a.nomComplet) || clauDe(a.nomComplet)
-        ops.push({
-          id: `${cursEscolarId}__pdf__${clau}`,
-          dades: {
-            cursEscolar: cursEscolarId,
-            alumneId: null,
-            nom: a.nom ?? a.nomComplet,
-            sensCasar: true,
-            cosmos: dadesCosmos(a),
-            actualitzatEl: serverTimestamp(),
-            actualitzatPer: auth.currentUser?.email ?? null,
-          },
-        })
+      const ops = []
+      let nSenseCosmos = 0
+      for (const c of llista) {
+        for (const a of c.casats) {
+          ops.push({
+            id: `${cursEscolarId}__${a.alumneId}`,
+            dades: {
+              cursEscolar: cursEscolarId,
+              alumneId: a.alumneId,
+              nom: a.nom,
+              cosmos: dadesCosmos(c, a),
+              actualitzatEl: serverTimestamp(),
+              actualitzatPer: auth.currentUser?.email ?? null,
+            },
+          })
+        }
+        // Igual que al ConMat: els que no consten com a alumnes actius del
+        // centre també es desen, amb el nom tal com surt al CSV.
+        for (const a of (c.sensCasar ?? [])) {
+          nSenseCosmos++
+          const clau = clauOrdenadaDeNom(a.nom ?? a.nomComplet) || clauDe(a.nomComplet)
+          ops.push({
+            id: `${cursEscolarId}__pdf__${clau}`,
+            dades: {
+              cursEscolar: cursEscolarId,
+              alumneId: null,
+              nom: a.nom ?? a.nomComplet,
+              sensCasar: true,
+              cosmos: dadesCosmos(c, a),
+              actualitzatEl: serverTimestamp(),
+              actualitzatPer: auth.currentUser?.email ?? null,
+            },
+          })
+        }
       }
       await escriuEnLots(ops)
-      const nSenseCosmos = cosmos.sensCasar?.length ?? 0
       setMissatge({
         type: 'ok',
-        text: `${cosmos.casats.length + nSenseCosmos} resultats de COSMOS desats`
+        text: `${totalResultats} resultats de COSMOS desats de ${llista.length} CSV`
           + (nSenseCosmos > 0 ? `, dels quals ${nSenseCosmos} amb el nom del CSV perquè no consten com a alumnes actius.` : '.'),
       })
       setCosmos(null)
+      setCosmosos([])
       carrega()
       onDesat?.()
     } catch (err) {
@@ -668,20 +705,22 @@ export default function Matematiques({ cursEscolarFixat = null, nomesCarrega = f
       <div className="caixa" style={{ marginTop: 18 }}>
         <strong style={{ fontSize: 14 }}>COSMOS</strong>
         <p className="nota" style={{ maxWidth: '100%' }}>
-          El CSV amb la prova inicial i la final. Se n'obté la puntuació d'habilitats numèriques,
-          el rendiment i el percentil de cada dimensió.
+          El CSV amb la prova inicial i la final, un per classe. Pots pujar de cop tots els d'una
+          mateixa avaluació. Se n'obté la puntuació d'habilitats numèriques, el rendiment i el
+          percentil de cada dimensió.
         </p>
         <div style={{ display: 'flex', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
           <BotoDrive
             onFitxer={pujaCosmos}
             tipus="csv"
-            etiqueta="Tria el CSV del Drive"
+            etiqueta="Tria els CSV del Drive"
+            multiple
             onError={(t) => setMissatge({ type: 'error', text: t })}
             disabled={llegint}
           />
           <label className="btn-ghost" style={{ color: 'var(--navy)', borderColor: 'var(--navy)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center' }}>
-            📤 Puja el CSV del COSMOS
-            <input type="file" accept=".csv" style={{ display: 'none' }}
+            📤 Puja els CSV del COSMOS
+            <input type="file" accept=".csv" multiple style={{ display: 'none' }}
               onChange={(e) => { pujaCosmos(e); e.target.value = '' }} />
           </label>
           {/* Igual que el ConMat en CSV: falta una mostra del PDF per saber
@@ -707,6 +746,28 @@ export default function Matematiques({ cursEscolarFixat = null, nomesCarrega = f
             {cosmos.avisos.map((a, i) => (
               <p key={i} className="nota nota-avis">{a}</p>
             ))}
+
+            {/* Un botó per CSV, igual que al ConMat: es revisen un per un
+                i es desen tots junts amb el botó de sota. */}
+            {cosmosos.length > 1 && (
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', margin: '10px 0' }}>
+                {cosmosos.map((c) => (
+                  <button
+                    key={c.fitxer}
+                    type="button"
+                    onClick={() => setCosmos(c)}
+                    style={{
+                      border: '1px solid var(--line)', borderRadius: 6, padding: '4px 10px', fontSize: 12,
+                      cursor: 'pointer',
+                      background: c.fitxer === cosmos.fitxer ? 'var(--ink)' : 'transparent',
+                      color: c.fitxer === cosmos.fitxer ? '#fff' : 'var(--ink)',
+                    }}
+                  >
+                    {c.classe ?? c.fitxer}
+                  </button>
+                ))}
+              </div>
+            )}
             <p style={{ fontSize: 13, marginTop: 8 }}>
               {resumCosmos.ambTotesDues} alumnes tenen les dues proves, i{' '}
               <strong>{resumCosmos.milloren}</strong> milloren la puntuació
@@ -723,15 +784,26 @@ export default function Matematiques({ cursEscolarFixat = null, nomesCarrega = f
               </p>
             )}
 
-            <button
-              type="button"
-              onClick={desaCosmos}
-              disabled={desant || (cosmos.casats.length + (cosmos.sensCasar?.length ?? 0)) === 0}
-              className="btn-primary"
-              style={{ marginTop: 12, maxWidth: 280 }}
-            >
-              Desa els {cosmos.casats.length + (cosmos.sensCasar?.length ?? 0)} resultats
-            </button>
+            {(() => {
+              // El botó desa TOTS els CSV carregats, no només el que
+              // s'estigui mirant: el total ha de reflectir-ho o sembla que
+              // se'n perdin.
+              const llista = cosmosos.length > 0 ? cosmosos : [cosmos]
+              const total = llista.reduce((t, c) => t + c.casats.length + (c.sensCasar?.length ?? 0), 0)
+              return (
+                <button
+                  type="button"
+                  onClick={desaCosmos}
+                  disabled={desant || total === 0}
+                  className="btn-primary"
+                  style={{ marginTop: 12, maxWidth: 320 }}
+                >
+                  {desant
+                    ? 'Desant…'
+                    : `Desa els ${total} resultats${llista.length > 1 ? ` de ${llista.length} CSV` : ''}`}
+                </button>
+              )
+            })()}
           </div>
         )}
       </div>
