@@ -12,11 +12,11 @@ import { clauDeText } from '../../../lib/text'
  * Avaluació referencial de matemàtiques.
  *
  * Les dades no s'entren a mà: es pugen els informes que envia l'Innovamat.
- *   · ConMat  → PDF, un informe per classe amb el nivell de cada alumne
- *   · COSMOS  → CSV, amb la prova inicial i la final i el detall per dimensió
+ *   · ConMat (3r-6è) → PDF, un informe per classe amb el nivell de cada alumne
+ *   · COSMOS (1r-2n)  → CSV, amb la prova inicial i la final i el detall per dimensió
  *
  * El que se'n desa és el resultat per alumne, que després pot alimentar
- * l'informe individual i el quadre de comandament.
+ * "Informe de l'alumne" i el quadre de comandament.
  */
 /**
  * Càrrega d'informes d'Innovamat (ConMat i COSMOS).
@@ -408,9 +408,9 @@ export default function Matematiques({ cursEscolarFixat = null, nomesCarrega = f
     <div>
       <p className="module-lead">
         Els resultats de matemàtiques no s'entren a mà: es pugen els informes que envia
-        l'Innovamat. El <strong>ConMat</strong> es llegeix en PDF (el CSV encara no) i en surt el
-        nivell de cada alumne; el <strong>COSMOS</strong> es llegeix en CSV (el PDF encara no) i en
-        surt el detall de la prova inicial i la final.
+        l'Innovamat. El <strong>ConMat</strong> (de 3r a 6è) es llegeix en PDF —el CSV encara
+        no— i en surt el nivell de cada alumne; el <strong>COSMOS</strong> (1r i 2n) es llegeix
+        en CSV —el PDF encara no— i en surt el detall de la prova inicial i la final.
       </p>
 
       <div style={{ display: 'flex', gap: 16, marginTop: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>

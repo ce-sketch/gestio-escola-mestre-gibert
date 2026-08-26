@@ -371,9 +371,10 @@ export default function Historic() {
       )}
 
       <p className="nota" style={{ marginTop: 20 }}>
-        Encara no hi ha l&apos;històric d&apos;Innovamat (ConMat i COSMOS): a la carpeta del Drive
-        no hi ha una taula de resultats per curs, sinó els informes originals de cada classe.
-        S&apos;anirà construint a mesura que es pugin des de la pestanya &quot;Matemàtiques&quot;.
+        Els resultats d&apos;Innovamat (ConMat i COSMOS) tenen el seu propi històric, a la
+        pestanya &quot;Històric (Innovamat)&quot;. Van a part perquè no es guarden com aquest:
+        a la carpeta del Drive no hi ha cap taula de resultats per curs, sinó els informes
+        originals de cada classe, que s&apos;han de pujar un per un.
       </p>
     </div>
   )
