@@ -133,13 +133,23 @@ export function llegeixCosmos(text) {
       nomComplet: `${cognoms}, ${nom}`.replace(/^,\s*|,\s*$/g, ''),
       intervencio: valor(/^Resultat de la intervenció$/i),
       sessionsSetmanals: numero(/^Mitjana setmanal de sessions/i),
+      // Igual que al ConMat: qui no ha completat la prova final consta
+      // igualment al CSV, però amb totes les columnes de resultats
+      // buides. Es desa perquè els totals quadrin amb l'Excel del centre,
+      // marcat perquè no compti als percentatges de rendiment — un alumne
+      // sense resultat no es pot classificar en cap nivell.
+      noAvaluat: !moments.final.completat,
       moments,
     })
   }
 
-  const senseCompletar = alumnes.filter((a) => !a.moments.final.completat).length
-  if (senseCompletar > 0) {
-    avisos.push(`${senseCompletar} alumnes no tenen la prova final completada; sortiran sense resultats.`)
+  const noAvaluats = alumnes.filter((a) => a.noAvaluat)
+  if (noAvaluats.length > 0) {
+    avisos.push(
+      `${noAvaluats.length} alumne${noAvaluats.length === 1 ? '' : 's'} no ${noAvaluats.length === 1 ? 'té' : 'tenen'} `
+      + `la prova final completada (${noAvaluats.map((a) => a.nomComplet).join(', ')}). `
+      + "Es desaran igualment perquè els totals quadrin amb l'Excel del centre, però no compten als percentatges de rendiment."
+    )
   }
   const noFiables = alumnes.filter((a) => /no fiables/i.test(a.moments.final.fiabilitat ?? '')).length
   if (noFiables > 0) {
@@ -147,6 +157,23 @@ export function llegeixCosmos(text) {
   }
 
   return { alumnes, dimensions, avisos }
+}
+
+/**
+ * Tregui la classe del nom del fitxer: "resultats_cosmos_pre_post_1rA.csv"
+ * → "1rA".
+ *
+ * Aquí sí que ens hi podem fiar, al contrari del ConMat: l'Innovamat
+ * anomena igual els PDF de dues classes d'un mateix nivell (només els
+ * distingeix el "(1)" del Drive), però als CSV del COSMOS la classe va
+ * escrita al nom. Com que el CSV no la porta a dins enlloc, és l'única
+ * font que en tenim.
+ *
+ * Torna `null` si no la reconeix, per no endevinar-la.
+ */
+export function classeDeNomFitxer(nomFitxer) {
+  const net = String(nomFitxer ?? '').replace(/\.[a-z0-9]+$/i, '').replace(/\s/g, '')
+  return net.match(/(\d+(?:r|n|t|rt|è|e)?[A-D])$/i)?.[1] ?? null
 }
 
 /** L'escala de rendiment que fa servir l'Innovamat, passada a percentatge
@@ -166,11 +193,17 @@ export function rendimentAPercentatge(text) {
 /**
  * Resum d'una classe: quants alumnes hi ha a cada nivell de rendiment, i
  * com ha evolucionat entre la prova inicial i la final.
+ *
+ * Els alumnes que no van fer la prova final (`noAvaluat`) no compten al
+ * `total` ni als recomptes de rendiment, però es recompten a part
+ * (`noAvaluats`). `totalGeneral` és la xifra que ha de quadrar amb
+ * l'Excel del centre: avaluats + no avaluats.
  */
 export function resumClasse(alumnes) {
+  const avaluats = alumnes.filter((a) => !a.noAvaluat)
   const compta = (moment) => {
     const recompte = { alt: 0, mitja: 0, baix: 0, sense: 0 }
-    for (const a of alumnes) {
+    for (const a of avaluats) {
       const r = neteja(a.moments[moment]?.rendiment ?? '').toLowerCase()
       if (r === 'alt') recompte.alt++
       else if (r === 'mitjà' || r === 'mitja') recompte.mitja++
@@ -180,13 +213,15 @@ export function resumClasse(alumnes) {
     return recompte
   }
 
-  const ambTotesDues = alumnes.filter(
+  const ambTotesDues = avaluats.filter(
     (a) => a.moments.inicial?.puntuacio !== null && a.moments.final?.puntuacio !== null
   )
   const milloren = ambTotesDues.filter((a) => a.moments.final.puntuacio > a.moments.inicial.puntuacio).length
 
   return {
-    total: alumnes.length,
+    total: avaluats.length,
+    noAvaluats: alumnes.length - avaluats.length,
+    totalGeneral: alumnes.length,
     inicial: compta('inicial'),
     final: compta('final'),
     ambTotesDues: ambTotesDues.length,
