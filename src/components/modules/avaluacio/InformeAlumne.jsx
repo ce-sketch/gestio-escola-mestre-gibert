@@ -5,10 +5,28 @@ import { redueixVigents } from '../../../lib/avaluacioCatala'
 import { CRITERIS_TEE, NIVELLS_PER_CICLE, cicleDe } from '../../../lib/rubricaTEE'
 import { MOMENTS_LECTURA } from '../../../lib/rubricaLectura'
 import { cursEscolarActual } from '../../../lib/cursEscolar'
-import { generaInformeQualitatiu } from '../../../lib/informeQualitatiu'
+import { generaInformeQualitatiu, comptadorDeNom, primerNom } from '../../../lib/informeQualitatiu'
+import { paragrafMatematiques } from '../../../lib/informeMatematiques'
 import { conmatDelCurs, cosmosDelCurs, innovamatAnterior, momentLabel } from '../../../lib/historicInnovamat'
 
 const TRIMESTRES = ['1r trimestre', '2n trimestre', '3r trimestre']
+
+/**
+ * Els identificadors de dimensió del COSMOS es desen normalitzats
+ * ("velocitat_d_execucio"); aquí es tornen a un nom llegible per escriure'ls
+ * a l'informe. Si l'Innovamat n'hi afegís una de nova, el generador faria
+ * servir l'identificador tal qual en comptes de petar.
+ */
+const NOMS_DIMENSIONS = {
+  velocitat_d_execucio: "velocitat d'execució",
+  coneixement_numeric: 'coneixement numèric',
+  comparacio_magnituds: 'comparació de magnituds',
+  comparacio_magnituds_2: 'comparació de magnituds',
+  enumeracio_de_punts: 'enumeració de punts',
+  fluidesa_aritmetica: 'fluïdesa aritmètica',
+  memoria_de_treball: 'memòria de treball',
+  raonament: 'raonament',
+}
 
 /**
  * Informe individual d'un alumne: recull en una sola pantalla els
@@ -179,10 +197,37 @@ export default function InformeAlumne() {
       const reg = lecturaAlumne.find((r) => r.moment === m.id)
       if (reg) lecturaPerMoment[m.id] = reg
     }
+    // Un sol comptador per a TOT l'informe: el nom hi pot sortir com a
+    // molt dues vegades, i abans cada generador es feia el seu i en
+    // sortien tres. Es crea aquí perquè el consumeixin en el mateix
+    // ordre en què el lector els llegirà: primer matemàtiques.
+    const noms = comptadorDeNom(primerNom(alumneActual.nom))
+
+    const cosmosActual = cosmosDelCurs(matematiques, alumneId, cursEscolarId)
+    const registreCosmos = matematiques.find(
+      (r) => r.alumneId === alumneId && r.cursEscolar === cursEscolarId && r.cosmos)?.cosmos
+    const mates = paragrafMatematiques({
+      nom: alumneActual.nom,
+      noms,
+      conmat: conmatDelCurs(matematiques, alumneId, cursEscolarId),
+      cosmos: cosmosActual && {
+        ...cosmosActual,
+        // Les dimensions i la fiabilitat no viatgen a l'entrada aplanada
+        // de l'històric (allà només calen els rendiments): es prenen del
+        // registre original.
+        fiabilitatFinal: registreCosmos?.moments?.final?.fiabilitat ?? null,
+        dimensionsFinal: registreCosmos?.moments?.final?.dimensions ?? {},
+      },
+      conmatAnterior: innovamatAnterior(matematiques, alumneId, cursEscolarId)
+        .find((e) => e.prova === 'ConMat') ?? null,
+      nomsDimensions: NOMS_DIMENSIONS,
+    })
+
     const text = generaInformeQualitatiu({
       // El generador ja se n'agafa només el nom de fonts: als informes
       // d'infants no hi posem els cognoms.
       nom: alumneActual.nom,
+      noms,
       trimestres: TRIMESTRES,
       teePerTrimestre,
       criterisTee: CRITERIS_TEE,
@@ -190,7 +235,8 @@ export default function InformeAlumne() {
       momentsLectura: MOMENTS_LECTURA,
       lecturaPerMoment,
     })
-    setTextInforme(text)
+
+    setTextInforme(mates ? `${mates}\n\n${text}` : text)
   }
 
   useEffect(() => {
