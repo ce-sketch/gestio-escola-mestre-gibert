@@ -59,7 +59,7 @@ export default function HistoricInnovamat() {
   // escales diferents (quatre nivells el ConMat, tres el COSMOS) i
   // alumnat diferent (3r-6è contra 1r-2n); en una sola pàgina, per veure
   // el COSMOS calia passar de llarg tot el ConMat.
-  const [prova, setProva] = useState('conmat')
+  const [prova, setProva] = useState('cosmos')
   // Si la descàrrega inclou el detall alumne per alumne. Són els fulls
   // més llargs i no sempre calen: per a la memòria del centre n'hi ha
   // prou amb els resums.
@@ -268,9 +268,10 @@ export default function HistoricInnovamat() {
     ...entradesCos.map((e) => e.cursEscolar),
   ])].sort().reverse()
 
+  // Per ordre de nivell: el COSMOS és de 1r i 2n, el ConMat de 3r a 6è.
   const PESTANYES = [
-    { id: 'conmat', label: 'ConMat', subLabel: '(3r a 6è)', quants: entrades.length },
     { id: 'cosmos', label: 'COSMOS', subLabel: '(1r i 2n)', quants: entradesCos.length },
+    { id: 'conmat', label: 'ConMat', subLabel: '(3r a 6è)', quants: entrades.length },
   ]
 
   // La caixa de referències va dins de la pestanya de ConMat: els seus
