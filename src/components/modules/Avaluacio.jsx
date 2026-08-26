@@ -45,7 +45,10 @@ const GRUPS = [
     id: 'resultats',
     titol: 'Resums i informes',
     pestanyes: [
-      { id: 'informe', label: 'Informe per alumne', component: InformeAlumne },
+      // L'id es queda com a 'informe' encara que canviï l'etiqueta: és el
+      // que va a l'URL i a la cerca, i canviar-lo trencaria els enllaços
+      // que algú pugui tenir desats.
+      { id: 'informe', label: "Informe de l'alumne", component: InformeAlumne },
       { id: 'resum', label: 'Resums de proves (TEE i VL/CL)', component: Resum },
       // Abans era la pestanya "Resum escola" dins de "Notes per àrea".
       // Les ConMat d'aquest curs, classe per classe. L'evolució al llarg
