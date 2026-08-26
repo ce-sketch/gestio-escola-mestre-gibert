@@ -39,6 +39,20 @@ export function primerNom(nomComplet) {
   return net.split(/\s+/)[0]
 }
 
+/**
+ * "de" + nom, apostrofat com toca en català: "de Bru" però "d'Anna".
+ *
+ * S'apostrofa davant de vocal i de h muda. La "i" i la "u" àtones amb
+ * consonant al darrere no s'apostrofarien en un article ("la Irene"),
+ * però amb la preposició "de" sí que ho fan ("d'Irene"), així que aquí
+ * n'hi ha prou amb mirar la primera lletra.
+ */
+export function deNom(nom) {
+  const net = String(nom ?? '').trim()
+  if (!net) return 'de'
+  return /^[aeiouàèéíòóúüh]/i.test(net) ? `d'${net}` : `de ${net}`
+}
+
 /** Número estable a partir d'un text: mateix nom, mateixa tria de frases. */
 function llavor(text) {
   let n = 0
@@ -67,7 +81,15 @@ function aLa(etiqueta, perDefecte) {
   return /^[aeiouàèéíòóúh]/.test(text) ? `a l'${text}` : `a la ${text}`
 }
 
-function comptadorDeNom(nom, maxim = 2) {
+/**
+ * Reparteix els usos del nom, amb un màxim per a TOT l'informe.
+ *
+ * S'exporta perquè el paràgraf de matemàtiques (`informeMatematiques.js`)
+ * i el de llengua han de compartir el mateix comptador: si cadascun es
+ * fes el seu, el nom sortiria fins a quatre vegades en un informe que
+ * només n'admet dues, i es notaria molt.
+ */
+export function comptadorDeNom(nom, maxim = 2) {
   let usos = 0
   return {
     seguent() {
@@ -107,7 +129,7 @@ const NIVELLS = {
     ambNom: [
       (n) => `${n} escriu amb un bon domini de la llengua`,
       (n) => `${n} es desenvolupa bé quan ha d'escriure`,
-      (n) => `L'expressió escrita de ${n} es troba en un bon moment`,
+      (n) => `L'expressió escrita ${deNom(n)} es troba en un bon moment`,
       (n) => `${n} resol amb solvència les propostes d'escriptura`,
     ],
     senseNom: [
@@ -227,6 +249,23 @@ const EQUILIBRI = [
   (q) => `El treball és regular en tots els criteris, i ${q} és el que hi destaca.`,
 ]
 
+// Un criteri que ha estat el més fluix TOTS els trimestres no és el
+// mateix que un que ho ha estat un cop: en el primer cas hi ha un patró,
+// i val la pena dir-ho d'una altra manera.
+const FLUIX_PERSISTENT = [
+  (q) => `Al llarg de tot el curs, ${q} ha estat l'aspecte amb més recorregut per endavant.`,
+  (q) => `${majuscula(q)} s'ha mantingut com el terreny amb més marge durant tot el curs.`,
+  (q) => `Els tres trimestres apunten cap al mateix: ${q} és on val la pena concentrar l'esforç.`,
+]
+
+// Reconèixer una millora concreta és el que fa que un informe no sembli
+// una fitxa: no és el mateix "ha millorat" que dir en què.
+const CRITERI_MILLORAT = [
+  (q) => `On més s'ha avançat durant el curs és en ${q}.`,
+  (q) => `${majuscula(q)} és l'aspecte que més ha crescut al llarg del curs.`,
+  (q) => `El progrés més visible del curs s'ha donat en ${q}.`,
+]
+
 const EVOLUCIO_POSITIVA = [
   (a, b) => `Al llarg del curs s'hi aprecia una evolució clara, del nivell ${a} al nivell ${b}. És un progrés que val la pena reconèixer i celebrar, perquè hi ha hagut constància al darrere.`,
   (a, b) => `El curs deixa un recorregut evident: de ${a} a ${b}. Aquests avenços no arriben sols, i convé dir-ho.`,
@@ -300,10 +339,67 @@ const SENSE_PROPOSTA = [
   'continuar per aquest camí, buscant propostes que segueixin estirant una mica més amunt',
 ]
 
+/**
+ * Com s'ha comportat cada criteri al llarg del curs.
+ *
+ * Abans, la proposta de millora sortia només del criteri més fluix de
+ * l'ÚLTIM trimestre. Això vol dir que un mal dia al tercer trimestre
+ * podia decidir tot l'informe, mentre que un criteri fluix tot l'any
+ * quedava igualat amb un de puntual. Mirant els tres trimestres se sap
+ * si hi ha un patró o va ser una excepció.
+ *
+ * Els "punts" van al revés de la intuïció: MENYS punts és MILLOR nivell
+ * (1 = alt). Per això "millorar" vol dir que els punts baixen.
+ *
+ * @returns {{persistent: string|null, millorat: string|null}}
+ *   `persistent`: id del criteri que ha estat el més fluix a tots els
+ *   trimestres (només si n'hi ha dos o més amb dades).
+ *   `millorat`: id del criteri que més ha guanyat, si el guany és d'un
+ *   nivell sencer o més — per sota d'això no és una millora, és soroll.
+ */
+export function tendenciaCriteris(trimestres, teePerTrimestre, criteris, nivellsCicle) {
+  const punts = (id, registre) =>
+    nivellsCicle.find((n) => n.id === registre?.criteris?.[id])?.punts ?? null
+
+  const ambDades = trimestres.filter((t) => teePerTrimestre[t])
+  if (ambDades.length < 2) return { persistent: null, millorat: null }
+
+  let persistent = null
+  let millorat = null
+  let millorGuany = 0
+
+  for (const c of criteris) {
+    const serie = ambDades.map((t) => punts(c.id, teePerTrimestre[t])).filter((p) => p !== null)
+    if (serie.length < 2) continue
+
+    // Guany = quants punts ha baixat del primer al darrer trimestre.
+    const guany = serie[0] - serie[serie.length - 1]
+    if (guany >= 1 && guany > millorGuany) {
+      millorGuany = guany
+      millorat = c.id
+    }
+  }
+
+  // El més fluix de cada trimestre; si sempre és el mateix, hi ha patró.
+  const mesFluixDe = (registre) => {
+    const puntuats = criteris
+      .map((c) => ({ id: c.id, p: punts(c.id, registre) }))
+      .filter((x) => x.p !== null)
+    if (puntuats.length === 0) return null
+    return puntuats.reduce((a, b) => (a.p >= b.p ? a : b)).id
+  }
+  const fluixos = ambDades.map((t) => mesFluixDe(teePerTrimestre[t])).filter(Boolean)
+  if (fluixos.length === ambDades.length && new Set(fluixos).size === 1) {
+    persistent = fluixos[0]
+  }
+
+  return { persistent, millorat }
+}
+
 // ── Redacció ────────────────────────────────────────────────────────────
 
 /** Paràgraf d'expressió escrita d'UN trimestre. */
-function paragrafTEE(registre, criteris, nivellsCicle, noms, index, sembra) {
+function paragrafTEE(registre, criteris, nivellsCicle, noms, index, sembra, parellAnterior = null) {
   if (!registre) return null
   const nivell = (id) => nivellsCicle.find((n) => n.id === id)
   const global = nivell(registre.global)
@@ -325,10 +421,21 @@ function paragrafTEE(registre, criteris, nivellsCicle, noms, index, sembra) {
     .filter((x) => x.nivellCriteri)
 
   let criteriMesFluix = null
+  let parell = null
   if (puntuats.length > 0) {
     const millor = puntuats.reduce((a, b) => (a.nivellCriteri.punts <= b.nivellCriteri.punts ? a : b))
     const pitjor = puntuats.reduce((a, b) => (a.nivellCriteri.punts >= b.nivellCriteri.punts ? a : b))
     const diu = (id, d = 0) => tria(FRASES_CRITERI[id] ?? [id], sembra, index + d)
+    parell = `${millor.criteri.id}__${pitjor.criteri.id}`
+
+    // Si el trimestre anterior ja destacava els MATEIXOS dos criteris, no
+    // es torna a dir: el banc de frases ho diria amb altres paraules i
+    // semblaria informació nova quan no ho és. El que ha canviat (o que
+    // s'ha mantingut tot el curs) ja es resumeix més avall.
+    if (parell === parellAnterior) {
+      criteriMesFluix = pitjor.criteri.id
+      return { text: frases.join(' '), criteriMesFluix, global, parell }
+    }
 
     if (millor.criteri.id !== pitjor.criteri.id && pitjor.nivellCriteri.punts - millor.nivellCriteri.punts >= 2) {
       frases.push(`${tria(PUNT_FORT, sembra, index)(diu(millor.criteri.id))}, mentre que ${tria(PUNT_A_MILLORAR, sembra, index)(diu(pitjor.criteri.id, 1))}.`)
@@ -340,11 +447,11 @@ function paragrafTEE(registre, criteris, nivellsCicle, noms, index, sembra) {
       criteriMesFluix = pitjor.criteri.id
     }
   }
-  return { text: frases.join(' '), criteriMesFluix, global }
+  return { text: frases.join(' '), criteriMesFluix, global, parell }
 }
 
 /** Paràgraf de lectura d'UN moment. */
-function paragrafLectura(registre, moment, noms, index, vlAnterior) {
+function paragrafLectura(registre, moment, noms, index, vlAnterior, clAnterior) {
   if (!registre) return null
   const frases = []
   let vlBaix = false
@@ -369,13 +476,23 @@ function paragrafLectura(registre, moment, noms, index, vlAnterior) {
 
   if (moment?.teCL && registre.cl !== null && registre.cl !== undefined) {
     const nivell = registre.nivellCl ?? 'sense classificar'
-    frases.push(vlBaix
-      ? `La comprensió del que llegeix es troba en un nivell ${nivell}, i és bon senyal que la lectura tingui sentit més enllà del ritme.`
-      : `La comprensió lectora es troba en un nivell ${nivell}.`)
+    // La comprensió també evoluciona, i abans no se'n deia res: sortia
+    // sempre com una foto fixa, encara que hagués canviat de nivell.
+    if (clAnterior !== null && clAnterior !== undefined && registre.cl > clAnterior) {
+      frases.push(`La comprensió lectora ha guanyat terreny i se situa en un nivell ${nivell}.`)
+    } else if (clAnterior !== null && clAnterior !== undefined && registre.cl < clAnterior) {
+      frases.push(`La comprensió lectora queda en un nivell ${nivell}, una mica per sota de la lectura anterior.`)
+    } else {
+      frases.push(vlBaix
+        ? `La comprensió del que llegeix es troba en un nivell ${nivell}, i és bon senyal que la lectura tingui sentit més enllà del ritme.`
+        : `La comprensió lectora es troba en un nivell ${nivell}.`)
+    }
     clBaix = /baix|insuficient/i.test(String(registre.nivellCl ?? ''))
   }
 
-  return frases.length > 0 ? { text: frases.join(' '), vlBaix, clBaix, vl: registre.vl ?? null } : null
+  return frases.length > 0
+    ? { text: frases.join(' '), vlBaix, clBaix, vl: registre.vl ?? null, cl: registre.cl ?? null }
+    : null
 }
 
 /**
@@ -387,18 +504,25 @@ function paragrafLectura(registre, moment, noms, index, vlAnterior) {
  */
 export function generaInformeQualitatiu({
   nom, trimestres, teePerTrimestre, criterisTee, nivellsCicle, momentsLectura, lecturaPerMoment,
+  noms: comptadorExtern = null,
 }) {
   const nomCurt = primerNom(nom)
   const sembra = llavor(nom)
-  const noms = comptadorDeNom(nomCurt)
+  // Si ve de fora, ja porta comptats els usos del paràgraf de matemàtiques.
+  const noms = comptadorExtern ?? comptadorDeNom(nomCurt)
   const paragrafs = []
   let criteriMesFluixDarrer = null
   let vlBaixDarrer = false
   let clBaixDarrer = false
 
-  const resultatsTee = trimestres
-    .map((t, i) => paragrafTEE(teePerTrimestre[t], criterisTee, nivellsCicle, noms, i, sembra))
-    .filter(Boolean)
+  const resultatsTee = []
+  let parellAnterior = null
+  for (const [i, t] of trimestres.entries()) {
+    const r = paragrafTEE(teePerTrimestre[t], criterisTee, nivellsCicle, noms, i, sembra, parellAnterior)
+    if (!r) continue
+    if (r.parell) parellAnterior = r.parell
+    resultatsTee.push(r)
+  }
 
   if (resultatsTee.length > 0) {
     paragrafs.push(resultatsTee.map((r) => r.text).join(' '))
@@ -415,14 +539,29 @@ export function generaInformeQualitatiu({
       }
     }
     criteriMesFluixDarrer = resultatsTee[resultatsTee.length - 1].criteriMesFluix
+
+    // El que ha passat AL LLARG del curs, no només al darrer trimestre.
+    const { persistent, millorat } = tendenciaCriteris(trimestres, teePerTrimestre, criterisTee, nivellsCicle)
+    const diu = (id) => tria(FRASES_CRITERI[id] ?? [id], sembra, 2)
+    const extres = []
+    if (millorat) extres.push(tria(CRITERI_MILLORAT, sembra)(diu(millorat)))
+    if (persistent) {
+      extres.push(tria(FLUIX_PERSISTENT, sembra)(diu(persistent)))
+      // Un criteri fluix tot l'any pesa més que el del darrer trimestre a
+      // l'hora de decidir què es proposa treballar.
+      criteriMesFluixDarrer = persistent
+    }
+    if (extres.length > 0) paragrafs.push(extres.join(' '))
   }
 
   const resultatsLectura = []
   let vlAnterior = null
+  let clAnterior = null
   for (const m of momentsLectura) {
-    const r = paragrafLectura(lecturaPerMoment[m.id], m, noms, resultatsLectura.length, vlAnterior)
+    const r = paragrafLectura(lecturaPerMoment[m.id], m, noms, resultatsLectura.length, vlAnterior, clAnterior)
     if (!r) continue
     if (r.vl !== null) vlAnterior = r.vl
+    if (r.cl !== null && r.cl !== undefined) clAnterior = r.cl
     resultatsLectura.push(r)
   }
 
