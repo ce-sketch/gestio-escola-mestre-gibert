@@ -27,6 +27,7 @@ export const COL·LECCIONS = [
   { id: 'avaluacio', nom: 'Avaluació', sobreescriu: false },
   { id: 'calendari', nom: 'Calendari', sobreescriu: true },
   { id: 'pgac', nom: 'PGAC', sobreescriu: true },
+  { id: 'sic', nom: 'SIC (indicadors de centre)', sobreescriu: true },
   { id: 'valoracions', nom: 'Valoracions', sobreescriu: true },
   { id: 'valoracionsConfig', nom: 'Configuració de valoracions', sobreescriu: true },
   { id: 'festesDetall', nom: 'Festes', sobreescriu: true },
