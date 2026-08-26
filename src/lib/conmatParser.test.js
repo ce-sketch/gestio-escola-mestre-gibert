@@ -5,7 +5,7 @@ import { describe, it, expect, vi } from 'vitest'
 // una versió falsa.
 vi.mock('./carregaLlibreries', () => ({ carregaPdfjs: () => {} }))
 
-const { casaAmbAlumnes, claueDeNom, paraulesDeNom, clauOrdenadaDeNom } = await import('./conmatParser')
+const { casaAmbAlumnes, claueDeNom, paraulesDeNom, clauOrdenadaDeNom, distribucio } = await import('./conmatParser')
 
 /** Prepara els alumnes tal com surten del PDF. El parser desa el nom a
  *  `nomPdf` (no a `nom`): confondre-ho va fer que el casament tolerant no
@@ -107,5 +107,39 @@ describe('casaAmbAlumnes', () => {
   it('no casa amb només una paraula, encara que coincideixi', () => {
     const { casats } = casaAmbAlumnes(delPdf('Emma'), centre)
     expect(casats).toHaveLength(0)
+  })
+})
+
+describe('distribucio', () => {
+  // Alumnes que consten a l'informe però no van fer la prova ("Aquest
+  // alumne no ha fet la ConMat..."): es desen igualment (perquè els totals
+  // quadrin amb l'Excel del centre) però no poden entrar en cap nivell.
+  const classe = [
+    { nivell: 'Alt' }, { nivell: 'Alt' }, { nivell: 'Baix' },
+    { nivell: null, noAvaluat: true }, { nivell: null, noAvaluat: true },
+  ]
+
+  it('no compta els no avaluats al total ni als percentatges', () => {
+    const d = distribucio(classe)
+    expect(d.total).toBe(3)
+    expect(d.recompte.alt).toBe(2)
+    expect(d.percentatges.alt).toBeCloseTo(66.7, 1)
+  })
+
+  it('recompta els no avaluats a part', () => {
+    const d = distribucio(classe)
+    expect(d.noAvaluats).toBe(2)
+  })
+
+  it('totalGeneral inclou avaluats i no avaluats — el que ha de quadrar amb l\'Excel', () => {
+    const d = distribucio(classe)
+    expect(d.totalGeneral).toBe(5)
+  })
+
+  it('sense cap no avaluat, es comporta com abans', () => {
+    const d = distribucio([{ nivell: 'Alt' }, { nivell: 'Baix' }])
+    expect(d.total).toBe(2)
+    expect(d.noAvaluats).toBe(0)
+    expect(d.totalGeneral).toBe(2)
   })
 })

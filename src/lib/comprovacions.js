@@ -1246,6 +1246,19 @@ function grupConmat() {
   ))
 
   proves.push(comprova(
+    "Els alumnes que no van fer la prova no compten al percentatge, però sí al total general",
+    { total: 3, noAvaluats: 2, totalGeneral: 5 },
+    () => {
+      const alumnes = [
+        { nivell: 'Alt' }, { nivell: 'Alt' }, { nivell: 'Baix' },
+        { nivell: null, noAvaluat: true }, { nivell: null, noAvaluat: true },
+      ]
+      const d = distribucio(alumnes)
+      return { total: d.total, noAvaluats: d.noAvaluats, totalGeneral: d.totalGeneral }
+    }
+  ))
+
+  proves.push(comprova(
     "Els alumnes que no casen queden a part i no es desen",
     { casats: 1, sensCasar: 1 },
     () => {

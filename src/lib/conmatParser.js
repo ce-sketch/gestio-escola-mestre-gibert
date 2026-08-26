@@ -123,15 +123,43 @@ export async function llegeixConmat(buffer, nomFitxer = '') {
   }
 
   // ── Una pàgina per alumne ───────────────────────────────────────────
+  // Alguns alumnes no fan la prova (baixes, absències llargues...). Al PDF
+  // no desapareixen: la seva pàgina hi és igual, amb el nom a dalt, però en
+  // comptes de "Nivell: ..." hi diu "Aquest alumne no ha fet la ConMat de
+  // final/inici de curs". Es desen igualment (marcats com a `noAvaluat`)
+  // perquè els totals de l'app quadrin amb els de l'Excel del centre — que
+  // compta tota la classe, no només qui té resultat. Als percentatges per
+  // nivell NO hi compten: un alumne sense resultat no es pot classificar
+  // en cap dels quatre nivells.
+  // \s* entre cada paraula perquè no depengui de com el PDF hagi repartit
+  // els espais entre els fragments de text (com passa amb "Nivell:", que
+  // per això es compara sobre el text sense espais).
+  const RE_NO_AVALUAT = /Aquest\s*alumne\s*no\s*ha\s*fet\s*la\s*ConMat/i
+
   const alumnes = []
   for (let i = 0; i < pagines.length; i++) {
     const text = pagines[i]
     const sensEspais = text.replace(/[ \t]/g, '')
     const nivell = sensEspais.match(/Nivell:([^\n]+)/i)
-    if (!nivell) continue
+    const noAvaluat = !nivell && RE_NO_AVALUAT.test(text)
+    if (!nivell && !noAvaluat) continue
 
     const nom = (text.split('\n')[0] ?? '').trim()
     if (!nom) continue
+
+    if (noAvaluat) {
+      alumnes.push({
+        nomPdf: nom,
+        clau: claueDeNom(nom),
+        nivell: null,
+        percentatge: null,
+        respostes: null,
+        preguntes: null,
+        noAvaluat: true,
+        pagina: i + 1,
+      })
+      continue
+    }
 
     const preguntes = sensEspais.match(/Nombredepreguntesambresposta:([\d]+)\/([\d]+)/i)
     alumnes.push({
@@ -151,15 +179,27 @@ export async function llegeixConmat(buffer, nomFitxer = '') {
       "l'Innovamat n'ha canviat el format i el lector s'ha de posar al dia."
     )
   }
-  if (esperats !== null && esperats !== alumnes.length) {
+  const avaluats = alumnes.filter((a) => !a.noAvaluat)
+  const noAvaluats = alumnes.filter((a) => a.noAvaluat)
+  // La pàgina de participació només compta qui té prou informació per ser
+  // avaluat: es compara amb els avaluats, no amb tots els llegits, o els
+  // "no avaluats" farien saltar l'avís cada vegada.
+  if (esperats !== null && esperats !== avaluats.length) {
     avisos.push(
-      `L'informe diu que hi ha ${esperats} alumnes i n'he llegit ${alumnes.length}. ` +
+      `L'informe diu que hi ha ${esperats} alumnes avaluats i n'he llegit ${avaluats.length}. ` +
       'Revisa la llista abans de desar-la.'
     )
   }
-  const senseNivell = alumnes.filter((a) => a.percentatge === null)
+  const senseNivell = avaluats.filter((a) => a.percentatge === null)
   if (senseNivell.length > 0) {
     avisos.push(`${senseNivell.length} alumnes tenen un nivell que no reconec (${[...new Set(senseNivell.map((a) => a.nivell))].join(', ')}).`)
+  }
+  if (noAvaluats.length > 0) {
+    avisos.push(
+      `${noAvaluats.length} alumne${noAvaluats.length === 1 ? '' : 's'} consta${noAvaluats.length === 1 ? '' : 'n'} ` +
+      `com a "no avaluat" a l'informe (${noAvaluats.map((a) => a.nomPdf).join(', ')}). ` +
+      "Es desaran igualment perquè els totals quadrin amb l'Excel del centre, però no compten als percentatges per nivell."
+    )
   }
   avisos.push(
     'Del PDF només se n\'obté el nivell global de cada alumne: els resultats per bloc ' +
@@ -293,18 +333,28 @@ export function casaAmbAlumnes(delPdf, delCentre) {
   return { casats, sensCasar, dubtosos }
 }
 
-/** Distribució per nivells d'una classe, per a l'avaluació referencial. */
+/** Distribució per nivells d'una classe, per a l'avaluació referencial.
+ *
+ * Els alumnes marcats `noAvaluat` (no van fer la prova) no compten al
+ * `total` ni als percentatges — no es poden classificar en cap nivell —
+ * però es recompten a part (`noAvaluats`) perquè es pugui mostrar que
+ * s'han desat igualment. `totalGeneral` és la xifra que ha de quadrar amb
+ * l'Excel del centre (avaluats + no avaluats). */
 export function distribucio(alumnes) {
+  const avaluats = alumnes.filter((a) => !a.noAvaluat)
+  const noAvaluats = alumnes.length - avaluats.length
   const recompte = Object.fromEntries(NIVELLS_CONMAT.map((n) => [n.id, 0]))
   let sense = 0
-  for (const a of alumnes) {
+  for (const a of avaluats) {
     const nivell = NIVELLS_CONMAT.find((n) => n.label.toLowerCase() === String(a.nivell).toLowerCase())
     if (nivell) recompte[nivell.id]++
     else sense++
   }
-  const total = alumnes.length
+  const total = avaluats.length
   return {
     total,
+    noAvaluats,
+    totalGeneral: alumnes.length,
     recompte,
     sense,
     percentatges: Object.fromEntries(

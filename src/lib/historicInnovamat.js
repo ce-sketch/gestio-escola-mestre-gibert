@@ -56,9 +56,18 @@ export function momentsConmat(registre) {
     return [{ ...c, moment: momentId(c.moment) }]
   }
   // Format nou: un mapa { inici: {...}, final: {...} }
+  //
+  // ⚠️ Mateix parany que al format antic (vegeu comentari de dalt): cada
+  // objecte de dins del mapa TAMBÉ porta el seu propi camp `moment` amb el
+  // text lliure de la portada ("Avaluació final"), perquè `resultat()` a
+  // Matematiques.jsx el desa així. Si `moment: m.id` va abans de l'expansió
+  // de `c[m.id]`, el text lliure el sobreescriu i l'id normalitzat
+  // ('inici'/'final') es perd — que és exactament el que feia que
+  // "Evolució del centre" sortís sempre buit: filtrava per l'id i mai hi
+  // havia cap entrada que el tingués.
   return MOMENTS
     .filter((m) => c[m.id])
-    .map((m) => ({ moment: m.id, ...c[m.id] }))
+    .map((m) => ({ ...c[m.id], moment: m.id }))
 }
 
 /**
@@ -78,6 +87,12 @@ export function entradesHistoric(registres) {
         // Alumnes que no consten com a actius al centre (cursos passats):
         // el nom ve del PDF de l'Innovamat, no de la fitxa d'alumne.
         sensCasar: r.sensCasar === true,
+        // Alumnes que consten a l'informe però no van fer la prova: es
+        // desen igualment (per quadrar els totals amb l'Excel del centre)
+        // amb `nivell: null`, i es distingeixen amb aquest senyalador
+        // perquè no se'ls confongui amb un registre antic sense aquesta
+        // dada o amb un nivell no reconegut.
+        noAvaluat: m.noAvaluat === true,
         moment: m.moment,
         classe: m.classe ?? null,
         nivell: m.nivell ?? null,
@@ -108,18 +123,25 @@ export function ultimConmatDe(registres, alumneId) {
  * Reparteix un conjunt d'entrades pels quatre nivells del ConMat i en
  * calcula els percentatges — el mateix càlcul que es feia a mà al full
  * "ConMath Curs actual" (columnes ALUMNES i CENTRE).
+ *
+ * Els alumnes que no van fer la prova (`nivell: null`, típicament marcats
+ * `noAvaluat`) no compten al `total` ni als percentatges — no es poden
+ * classificar en cap nivell —, però sí que es desen i es poden mostrar a
+ * part amb `noAvaluats`. `totalGeneral` és la xifra que ha de quadrar amb
+ * l'Excel del centre (avaluats + no avaluats).
  */
 export function distribucioPerNivell(entrades) {
-  const total = entrades.length
+  const avaluats = entrades.filter((e) => e.nivell != null)
+  const total = avaluats.length
   const files = NIVELLS_CONMAT.map((n) => {
-    const alumnes = entrades.filter((e) => String(e.nivell ?? '').toLowerCase() === n.label.toLowerCase()).length
+    const alumnes = avaluats.filter((e) => String(e.nivell ?? '').toLowerCase() === n.label.toLowerCase()).length
     return {
       nivell: n.label,
       alumnes,
       percentatge: total > 0 ? Math.round((alumnes / total) * 10000) / 100 : 0,
     }
   })
-  return { files, total }
+  return { files, total, noAvaluats: entrades.length - total, totalGeneral: entrades.length }
 }
 
 /** Agrupa les entrades per curs escolar i moment, per poder-les mostrar

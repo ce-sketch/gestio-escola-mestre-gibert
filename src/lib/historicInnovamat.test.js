@@ -32,6 +32,19 @@ describe('momentsConmat', () => {
     expect(m[0].nivell).toBe('Alt')
   })
 
+  it('normalitza el moment del format nou encara que el text lliure de la portada hi sigui a dins', () => {
+    // Bug real (curs 2025-26): `resultat()` desa dins de cada moment un
+    // camp `moment` amb el text de la portada ("Avaluació final"), no
+    // l'id normalitzat. Si l'expansió d'aquest objecte va DESPRÉS de fixar
+    // `moment: m.id`, el text lliure el sobreescriu i tota la secció
+    // "Evolució del centre" es queda buida perquè mai troba cap entrada
+    // amb moment === 'final'.
+    const r = { conmat: { final: { nivell: 'Alt', moment: 'Avaluació final', classe: '3rA' } } }
+    const [entrada] = momentsConmat(r)
+    expect(entrada.moment).toBe('final')
+    expect(entrada.classe).toBe('3rA')
+  })
+
   it('no peta si no hi ha ConMat', () => {
     expect(momentsConmat({})).toEqual([])
     expect(momentsConmat(null)).toEqual([])
@@ -56,6 +69,33 @@ describe('entradesHistoric', () => {
   it('dins d\'un curs, el final va abans que l\'inici', () => {
     const del25 = entradesHistoric(registres).filter((e) => e.cursEscolar === '2025-26')
     expect(del25[0].moment).toBe('final')
+  })
+
+  it('marca com a noAvaluat l\'alumne que consta a l\'informe però no va fer la prova', () => {
+    const amb = [
+      { cursEscolar: '2025-26', alumneId: 'b', nom: 'Alumne B', conmat: { final: { nivell: null, noAvaluat: true, classe: '3rA' } } },
+    ]
+    const [entrada] = entradesHistoric(amb)
+    expect(entrada.noAvaluat).toBe(true)
+    expect(entrada.nivell).toBeNull()
+  })
+
+  it('no marca noAvaluat un alumne normal, encara que el registre sigui del format antic', () => {
+    expect(entradesHistoric(registres)[0].noAvaluat).toBe(false)
+  })
+
+  it('les entrades del format nou queden filtrables per moment normalitzat, no pel text de la portada', () => {
+    // És exactament el que fa servir "Evolució del centre" a
+    // HistoricInnovamat.jsx: filtra `entrades` per `e.moment === 'final'`.
+    // Si el moment es queda amb el text lliure ("Avaluació final") en
+    // comptes de l'id, aquest filtre no troba mai res i la secció sencera
+    // surt buida encara que hi hagi 207 alumnes desats.
+    const amb = [{
+      cursEscolar: '2025-26', alumneId: 'c', nom: 'Alumne C',
+      conmat: { final: { nivell: 'Baix', moment: 'Avaluació final', classe: '3rA' } },
+    }]
+    const entrades = entradesHistoric(amb)
+    expect(entrades.filter((e) => e.moment === 'final')).toHaveLength(1)
   })
 })
 
@@ -92,5 +132,21 @@ describe('distribucioPerNivell', () => {
   it('no divideix per zero quan no hi ha dades', () => {
     const { files } = distribucioPerNivell([])
     expect(files.every((f) => f.percentatge === 0)).toBe(true)
+  })
+
+  it('els alumnes sense nivell (no van fer la prova) no compten al total ni als percentatges', () => {
+    // Cas real: als totals de l'Excel hi ha alumnes que l'app no comptava
+    // perquè el PDF diu "Aquest alumne no ha fet la ConMat...". Es desen
+    // amb `nivell: null`, però no es poden classificar en cap dels quatre
+    // nivells.
+    const entrades = [
+      { nivell: 'Alt' }, { nivell: 'Alt' }, { nivell: 'Baix' },
+      { nivell: null, noAvaluat: true }, { nivell: null, noAvaluat: true },
+    ]
+    const { total, noAvaluats, totalGeneral, files } = distribucioPerNivell(entrades)
+    expect(total).toBe(3)
+    expect(noAvaluats).toBe(2)
+    expect(totalGeneral).toBe(5) // el que ha de quadrar amb l'Excel
+    expect(files.find((f) => f.nivell === 'Alt').percentatge).toBeCloseTo(66.67, 1)
   })
 })
