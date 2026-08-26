@@ -104,22 +104,26 @@ export async function llegeixConmat(buffer, nomFitxer = '') {
   const curs = portada.find((l) => /^\d+$/.test(l)) ?? null
 
   // ── Participació: quants alumnes hauria d'haver-hi ──────────────────
-  // La taula de participació dona DOS números: els alumnes avaluats a
-  // l'inici de curs i els del final ("27 24"). Es tria el del final,
-  // perquè és la llista que l'informe fa servir per a tot.
-  //
-  // Compte: abans es buscava sobre el text amb els espais tallats, i
-  // llavors "27 24" es llegia com un sol número, 2724.
+  // La taula de participació dona DOS números, els alumnes avaluats a
+  // l'inici de curs i els del final. Al PDF real vénen ENGANXATS sense
+  // espai, just després de "ser" ("...perser2724avaluats" → 27 i 24), i
+  // fins i tot "amb prou" i "informació per" es peguen entre si segons
+  // com l'Innovamat hagi repartit els fragments de text. Per això:
+  //   - la comprovació de si som a la pàgina correcta admet \s* entre
+  //     cada paraula, no espais literals;
+  //   - els dos números es parteixen pel mig del bloc de dígits. Les
+  //     classes del centre sempre en tenen dues xifres (mai per sota de
+  //     deu ni per sobre de noranta-nou), així que partir-los per la
+  //     meitat és fiable; si mai sortís un nombre senar de dígits, es
+  //     deixa sense llegir en lloc d'endevinar per on tallar.
   let esperats = null
   for (const pagina of pagines.slice(0, 6)) {
-    if (!/Alumnes amb prou informaci[óo] per ser/i.test(pagina)) continue
-    // Els dos números van sols en una línia; el número de pàgina també
-    // va sol, però és un de sol i no dos.
-    for (const linia of pagina.split('\n')) {
-      const m = linia.trim().match(/^(\d{1,3})\s+(\d{1,3})$/)
-      if (m) { esperats = Number(m[2]); break }
+    if (!/Alumnes\s*amb\s*prou\s*informaci[óo]\s*per\s*ser/i.test(pagina)) continue
+    const m = pagina.match(/per\s*ser\s*(\d+)/i)
+    if (m && m[1].length % 2 === 0) {
+      esperats = Number(m[1].slice(m[1].length / 2))
     }
-    if (esperats !== null) break
+    break
   }
 
   // ── Una pàgina per alumne ───────────────────────────────────────────
