@@ -6,6 +6,8 @@ import { entradesHistoric, entradesCosmos, momentLabel, MOMENTS } from '../../..
 import Matematiques from './Matematiques'
 import HistoricConmat from './HistoricConmat'
 import HistoricCosmos from './HistoricCosmos'
+import { exportaExcel, exportaPDF } from '../../../lib/exportTaula'
+import { fullsInnovamat, nomFitxerInnovamat } from '../../../lib/innovamatExport'
 
 /** Els quatre nivells del ConMat, l'escala de les referències que es
  *  copien a mà de la pàgina 4 de l'informe. */
@@ -58,6 +60,11 @@ export default function HistoricInnovamat() {
   // alumnat diferent (3r-6è contra 1r-2n); en una sola pàgina, per veure
   // el COSMOS calia passar de llarg tot el ConMat.
   const [prova, setProva] = useState('conmat')
+  // Si la descàrrega inclou el detall alumne per alumne. Són els fulls
+  // més llargs i no sempre calen: per a la memòria del centre n'hi ha
+  // prou amb els resums.
+  const [ambDetall, setAmbDetall] = useState(true)
+  const [exportant, setExportant] = useState(false)
 
   useEffect(() => { carrega() }, [])
 
@@ -269,6 +276,47 @@ export default function HistoricInnovamat() {
   // La caixa de referències va dins de la pestanya de ConMat: els seus
   // quatre nivells (Baix/Mitjà-baix/Mitjà-alt/Alt) són els del ConMat i
   // al COSMOS, que en té tres i amb altres noms, no hi encaixen.
+  /**
+   * Descarrega l'històric d'Innovamat.
+   *
+   * Exporta NOMÉS la prova de la pestanya oberta: barrejar ConMat i
+   * COSMOS en un sol document convida a sumar-los, i tenen escales
+   * diferents (quatre nivells contra tres).
+   */
+  async function descarrega(format) {
+    setError(null)
+    setExportant(true)
+    try {
+      const fulls = fullsInnovamat(registres, refs, { prova, detall: ambDetall })
+      if (fulls.length === 0) {
+        setError('No hi ha res per descarregar en aquesta pestanya.')
+        return
+      }
+      const cursos = [...new Set([
+        ...entrades.map((e) => e.cursEscolar),
+        ...entradesCos.map((e) => e.cursEscolar),
+      ])].sort()
+      // La capçalera del centre demana un curs escolar. Quan l'històric
+      // en té diversos, cada full ja porta la columna "Curs": aquí s'hi
+      // posa el rang perquè la capçalera no n'afirmi un de sol.
+      const dades = {
+        cursEscolarId: cursos.length === 1 ? cursos[0] : `${cursos[0]} a ${cursos[cursos.length - 1]}`,
+        etiqueta: prova === 'cosmos' ? 'COSMOS' : 'ConMat',
+        subtitol: "Proves referencials d'Innovamat",
+        fulls,
+      }
+      if (format === 'excel') {
+        await exportaExcel(nomFitxerInnovamat(registres, prova, 'xlsx'), dades)
+      } else {
+        exportaPDF("Proves referencials d'Innovamat", dades)
+      }
+    } catch (err) {
+      setError(`No s'ha pogut generar la descàrrega: ${err.message}`)
+    } finally {
+      setExportant(false)
+    }
+  }
+
   const caixaReferencies = (
     <div className="placeholder-box" style={{ borderStyle: 'solid', marginTop: 20 }}>
       <strong>Referències d'Innovamat</strong>
@@ -530,6 +578,38 @@ export default function HistoricInnovamat() {
                 )}
               </button>
             ))}
+          </div>
+
+          {/* ── Descàrregues ────────────────────────────────────────
+              Van sota les pestanyes i no a dalt de tot a posta: el que
+              es descarrega és la prova que s'estigui mirant, i així es
+              veu quina és. */}
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 14 }}>
+            <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}>
+              Descarrega el {prova === 'cosmos' ? 'COSMOS' : 'ConMat'}:
+            </span>
+            <button
+              type="button"
+              onClick={() => descarrega('excel')}
+              disabled={exportant}
+              className="btn-ghost"
+              style={{ fontSize: 11, padding: '3px 10px' }}
+            >
+              {exportant ? 'Generant…' : '⬇ Excel'}
+            </button>
+            <button
+              type="button"
+              onClick={() => descarrega('pdf')}
+              disabled={exportant}
+              className="btn-ghost"
+              style={{ fontSize: 11, padding: '3px 10px' }}
+            >
+              ⬇ PDF
+            </button>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--ink-soft)' }}>
+              <input type="checkbox" checked={ambDetall} onChange={(e) => setAmbDetall(e.target.checked)} />
+              amb el detall per alumne
+            </label>
           </div>
 
           {prova === 'conmat' ? (
