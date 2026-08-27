@@ -25,6 +25,7 @@ import Resum from './avaluacio/Resum.jsx'
 import ResumConmat from './avaluacio/ResumConmat.jsx'
 import ResumCosmos from './avaluacio/ResumCosmos.jsx'
 import ResumLectoescripturaEI from './avaluacio/ResumLectoescripturaEI.jsx'
+import HistoricLectoescriptura from './avaluacio/HistoricLectoescriptura.jsx'
 import Historic from './avaluacio/Historic.jsx'
 import HistoricInnovamat from './avaluacio/HistoricInnovamat.jsx'
 
@@ -33,6 +34,8 @@ const GRUPS = [
     id: 'entrada',
     titol: 'Entrada de dades',
     pestanyes: [
+      // Per ordre de nivell, com la resta de grups: Infantil primer.
+      { id: 'lectoescriptura-ei', label: 'Lectoescriptura EI', component: LectoescripturaEI },
       { id: 'tee', label: 'TEE (Text Escrit)', component: TEE },
       { id: 'lectura', label: 'Lectura (VL/CL)', component: Lectura },
       { id: 'matematiques', label: 'Matemàtiques', component: Matematiques },
@@ -40,7 +43,6 @@ const GRUPS = [
       // Va a part de "Notes per àrea" a posta: és la graella de Català amb
       // els seus criteris propis, no una àrea més de la graella general.
       { id: 'area', label: 'Graella de Català', component: NotaArea },
-      { id: 'lectoescriptura-ei', label: 'Lectoescriptura EI', component: LectoescripturaEI },
     ],
   },
   {
@@ -72,6 +74,7 @@ const GRUPS = [
     id: 'historic',
     titol: 'Històric',
     pestanyes: [
+      { id: 'historic-lectoescriptura', label: 'Històric', subLabel: '(Lectoescriptura)', component: HistoricLectoescriptura, nomesAdmin: true },
       { id: 'historic', label: 'Històric', subLabel: '(TEE, VL i CL)', component: Historic, nomesAdmin: true },
       { id: 'historic-innovamat', label: 'Històric', subLabel: '(Innovamat)', component: HistoricInnovamat, nomesAdmin: true },
     ],
@@ -79,7 +82,9 @@ const GRUPS = [
 ]
 
 export default function Avaluacio() {
-  const [actiu, setActiu] = useState('tee')
+  // La primera pestanya del primer grup: si es canvia l'ordre, cal
+  // canviar-ho també aquí o s'obre una pestanya que ja no és la primera.
+  const [actiu, setActiu] = useState('lectoescriptura-ei')
 
   // Hi ha pestanyes restringides a direcció (l'Històric). Es filtren aquí
   // perquè no apareguin ni al menú ni es puguin obrir; el component
