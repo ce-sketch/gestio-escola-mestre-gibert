@@ -110,6 +110,12 @@ export default function InformeAlumne() {
 
   const cursos = useMemo(() => [...new Set(alumnesTots.map((a) => a.curs))].sort(), [alumnesTots])
   const alumnesClasse = useMemo(() => alumnesTots.filter((a) => a.curs === curs), [alumnesTots, curs])
+  // La llista de classes surt de la fitxa d'alumnat, que només sap on són
+  // ARA. Si es mira un curs passat, doncs, "1r A" vol dir "els que avui
+  // són a 1r A", que aquell any eren un curs més avall. Sense dir-ho,
+  // sembla que falten dades quan el que passa és que aquells alumnes
+  // encara no feien aquella prova.
+  const esCursPassat = cursEscolarId !== cursEscolarActual()
 
   useEffect(() => {
     if (alumnesClasse.length > 0 && !alumnesClasse.find((a) => a.id === alumneId)) {
@@ -240,7 +246,13 @@ export default function InformeAlumne() {
       lecturaPerMoment,
     })
 
-    setTextInforme(mates ? `${mates}\n\n${text}` : text)
+    // Cap de les dues parts no és obligatòria: un alumne de 1r pot tenir
+    // COSMOS i encara cap nota de llengua, i un de 6è al revés. Només si
+    // no hi ha res de res es diu que no hi ha prou dades.
+    const parts = [mates, text].filter(Boolean)
+    setTextInforme(parts.length > 0
+      ? parts.join('\n\n')
+      : "Encara no hi ha prou dades introduïdes (matemàtiques, TEE o Lectura) per generar cap informe qualitatiu.")
   }
 
   useEffect(() => {
@@ -277,7 +289,7 @@ export default function InformeAlumne() {
           />
         </label>
         <label className="field" style={{ minWidth: 160 }}>
-          <span>Classe</span>
+          <span>Classe {esCursPassat && <em style={{ fontWeight: 400, color: 'var(--ink-soft)' }}>(la d&apos;enguany)</em>}</span>
           <select value={curs} onChange={(e) => setCurs(e.target.value)} style={{ padding: '10px 12px', border: '1px solid var(--line)', borderRadius: 8 }}>
             {cursos.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
@@ -474,6 +486,14 @@ export default function InformeAlumne() {
             </button>
           </div>
         </>
+      )}
+
+      {esCursPassat && (
+        <p className="nota nota-avis" style={{ marginTop: 10 }}>
+          Estàs mirant el curs {cursEscolarId}, però les classes són les d&apos;enguany: els
+          alumnes de «{curs}» aquell any anaven un curs més avall. Per això pot ser que no hi
+          hagi resultats d&apos;una prova que encara no els tocava.
+        </p>
       )}
 
       {missatge && (
