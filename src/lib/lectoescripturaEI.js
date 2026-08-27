@@ -159,3 +159,45 @@ export const CAPÇALERA_RESUM_EI = ['Classe', 'Alumnes', ...NIVELLS_TEBEROSKY.ma
  *  columnes (classe i alumnes) queden fora dels grups: `exportaTaula`
  *  dedueix quantes en són d'índex restant els spans del total. */
 export const GRUPS_RESUM_EI = ETAPES_TEBEROSKY.map((e) => ({ label: e.titol, span: e.nivells.length }))
+
+/**
+ * L'històric: una fila per curs escolar i classe, a partir dels
+ * documents desats de tots els cursos.
+ *
+ * ⚠️ El total d'alumnes surt del PROPI document, no de la llista
+ * d'alumnes actius: els de fa tres cursos ja no hi són. Això vol dir que
+ * només s'hi compten els alumnes que tenen alguna casella marcada — que
+ * és l'únic que es pot saber mirant enrere, i per això la columna es diu
+ * "amb dades" i no "alumnes".
+ *
+ * @param {Array<{cursEscolar: string, classe: string, alumnes: object}>} documents
+ */
+export function historicEI(documents) {
+  const files = (documents ?? [])
+    .filter((d) => d.cursEscolar && d.classe)
+    .map((d) => {
+      const ids = Object.keys(d.alumnes ?? {})
+      return {
+        cursEscolar: d.cursEscolar,
+        classe: d.classe,
+        ambDades: ids.length,
+        comptes: comptaNivells(ids, d.alumnes ?? {}),
+      }
+    })
+
+  // Del curs més recent al més antic, i dins de cada curs per classe.
+  files.sort((a, b) =>
+    String(b.cursEscolar).localeCompare(String(a.cursEscolar))
+    || String(a.classe).localeCompare(String(b.classe), 'ca'))
+  return files
+}
+
+/** Els fulls per exportar l'històric sencer. */
+export function fullHistoricEI(files) {
+  const capçalera = ['Curs', 'Classe', 'Amb dades', ...NIVELLS_TEBEROSKY.map((n) => n.label)]
+  const cos = files.map((f) => [
+    f.cursEscolar, f.classe, f.ambDades,
+    ...NIVELLS_TEBEROSKY.map((n) => f.comptes[n.id] ?? 0),
+  ])
+  return { nom: 'Històric EI', files: [capçalera, ...cos] }
+}

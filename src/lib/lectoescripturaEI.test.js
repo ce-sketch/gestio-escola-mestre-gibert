@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 
 import {
   NIVELLS_TEBEROSKY, ETAPES_TEBEROSKY, esClasseEI4o5, nivellsBuits,
-  comptaNivells, fullResumEI, CAPÇALERA_RESUM_EI,
+  comptaNivells, fullResumEI, CAPÇALERA_RESUM_EI, historicEI, fullHistoricEI,
 } from './lectoescripturaEI'
 
 describe('esClasseEI4o5', () => {
@@ -106,5 +106,58 @@ describe('fullResumEI', () => {
 
   it('el nom del full cap dins del límit d\'Excel', () => {
     expect(fullResumEI(perClasse).nom.length).toBeLessThanOrEqual(31)
+  })
+})
+
+describe('historicEI', () => {
+  const documents = [
+    { cursEscolar: '2024-25', classe: 'I4A', alumnes: { a: { dibuix: true }, b: { dibuix: true, grafismes_primitius: true } } },
+    { cursEscolar: '2025-26', classe: 'I5B', alumnes: { c: { dibuix: true } } },
+    { cursEscolar: '2025-26', classe: 'I4A', alumnes: { d: {} } },
+  ]
+
+  it('posa el curs més recent primer, i dins del curs ordena per classe', () => {
+    const files = historicEI(documents)
+    expect(files.map((f) => `${f.cursEscolar} ${f.classe}`))
+      .toEqual(['2025-26 I4A', '2025-26 I5B', '2024-25 I4A'])
+  })
+
+  it('compta els alumnes del propi document, no de la fitxa actual', () => {
+    // Els alumnes de fa tres cursos ja no consten com a actius: l'única
+    // font possible és el document desat.
+    const files = historicEI(documents)
+    expect(files.find((f) => f.cursEscolar === '2024-25').ambDades).toBe(2)
+  })
+
+  it('recompta els nivells de cada càrrega', () => {
+    const files = historicEI(documents)
+    const del24 = files.find((f) => f.cursEscolar === '2024-25')
+    expect(del24.comptes.dibuix).toBe(2)
+    expect(del24.comptes.grafismes_primitius).toBe(1)
+  })
+
+  it('descarta els documents sense curs o sense classe', () => {
+    expect(historicEI([{ alumnes: {} }, { cursEscolar: '2025-26' }])).toEqual([])
+  })
+
+  it('no peta sense documents', () => {
+    expect(historicEI([])).toEqual([])
+    expect(historicEI(null)).toEqual([])
+  })
+})
+
+describe('fullHistoricEI', () => {
+  it('fa una fila per càrrega, amb curs i classe', () => {
+    const files = historicEI([
+      { cursEscolar: '2025-26', classe: 'I4A', alumnes: { a: { dibuix: true } } },
+    ])
+    const { files: taula } = fullHistoricEI(files)
+    expect(taula[0].slice(0, 3)).toEqual(['Curs', 'Classe', 'Amb dades'])
+    expect(taula[1].slice(0, 3)).toEqual(['2025-26', 'I4A', 1])
+  })
+
+  it('la capçalera porta una columna per nivell', () => {
+    const { files } = fullHistoricEI([])
+    expect(files[0]).toHaveLength(NIVELLS_TEBEROSKY.length + 3)
   })
 })
