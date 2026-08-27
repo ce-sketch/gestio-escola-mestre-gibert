@@ -24,6 +24,7 @@ import InformeAlumne from './avaluacio/InformeAlumne.jsx'
 import Resum from './avaluacio/Resum.jsx'
 import ResumConmat from './avaluacio/ResumConmat.jsx'
 import ResumCosmos from './avaluacio/ResumCosmos.jsx'
+import ResumLectoescripturaEI from './avaluacio/ResumLectoescripturaEI.jsx'
 import Historic from './avaluacio/Historic.jsx'
 import HistoricInnovamat from './avaluacio/HistoricInnovamat.jsx'
 
@@ -54,6 +55,7 @@ const GRUPS = [
       // Abans era la pestanya "Resum escola" dins de "Notes per àrea".
       // Les ConMat d'aquest curs, classe per classe. L'evolució al llarg
       // dels anys va a la pestanya "Històric (Innovamat)".
+      { id: 'resum-lectoescriptura', label: 'Resum Lectoescriptura', subLabel: '(I4 i I5)', component: ResumLectoescripturaEI },
       { id: 'resum-cosmos', label: 'Resum COSMOS', subLabel: '(1r i 2n)', component: ResumCosmos },
       { id: 'resum-conmat', label: 'Resum ConMat', subLabel: '(3r a 6è)', component: ResumConmat },
       { id: 'resum-area', label: 'Resum per àrea', component: ResumPerArea },
