@@ -26,6 +26,9 @@ export const DESTINACIONS = [
     // "informe per alumne" es manté a les paraules: era el nom d'abans i
     // hi haurà qui el continuï buscant així una temporada.
     paraules: ['informe', 'informe per alumne', 'informe qualitatiu', 'redactat', 'acta', 'comentari'] },
+  { modul: 'avaluacio', nom: 'Resum Lectoescriptura (I4 i I5)', on: 'Avaluació',
+    paraules: ['resum lectoescriptura', 'lectoescriptura', 'teberosky', 'infantil', 'i4', 'i5',
+      'presil·làbic', 'sil·làbic', 'alfabètic', 'escriptura'] },
   { modul: 'avaluacio', nom: 'Resum COSMOS (1r i 2n)', on: 'Avaluació',
     paraules: ['resum cosmos', 'cosmos', 'innovamat', 'rendiment', 'primer', 'segon', 'cicle inicial'] },
   { modul: 'avaluacio', nom: 'Resum ConMat (3r a 6è)', on: 'Avaluació',

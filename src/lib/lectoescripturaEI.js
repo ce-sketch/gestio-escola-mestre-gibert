@@ -118,3 +118,44 @@ export const GRUPS_EXPORT_EI = ETAPES_TEBEROSKY.map((e) => ({ label: e.titol, sp
 export function filaAlumneExportEI(alumne, marcats) {
   return [alumne.nom, ...NIVELLS_TEBEROSKY.map((n) => (marcats[n.id] ? 'X' : ''))]
 }
+
+/**
+ * Els fulls per exportar el RESUM de tota l'etapa: una fila per classe
+ * amb quants alumnes han assolit cada nivell, més les files de total i
+ * de percentatge del centre.
+ *
+ * Reprodueix el full "RESUM EI" de l'Eina d'avaluació original.
+ *
+ * Es construeix a partir dels recomptes JA calculats per la pantalla, no
+ * de les marques en brut: així el que es baixa és exactament el que s'hi
+ * veu, i no hi ha dos càlculs que es puguin desincronitzar.
+ *
+ * @param {Array<{classe: string, comptes: Object, total: number}>} perClasse
+ */
+export function fullResumEI(perClasse) {
+  const files = [CAPÇALERA_RESUM_EI]
+
+  for (const { classe, comptes, total } of perClasse) {
+    files.push([classe, total, ...NIVELLS_TEBEROSKY.map((n) => comptes[n.id] ?? 0)])
+  }
+
+  const totalAlumnes = perClasse.reduce((t, c) => t + c.total, 0)
+  const sumes = NIVELLS_TEBEROSKY.map((n) =>
+    perClasse.reduce((t, c) => t + (c.comptes[n.id] ?? 0), 0))
+
+  files.push(['TOTAL', totalAlumnes, ...sumes])
+  files.push([
+    '% del centre', '',
+    ...sumes.map((v) => (totalAlumnes ? Math.round((v / totalAlumnes) * 1000) / 10 : 0)),
+  ])
+
+  return { nom: 'Resum EI', files, grups: GRUPS_RESUM_EI }
+}
+
+/** ['Classe', 'Alumnes', ...18 nivells] */
+export const CAPÇALERA_RESUM_EI = ['Classe', 'Alumnes', ...NIVELLS_TEBEROSKY.map((n) => n.label)]
+
+/** Les etapes fusionades a sobre de les seves columnes. Les dues primeres
+ *  columnes (classe i alumnes) queden fora dels grups: `exportaTaula`
+ *  dedueix quantes en són d'índex restant els spans del total. */
+export const GRUPS_RESUM_EI = ETAPES_TEBEROSKY.map((e) => ({ label: e.titol, span: e.nivells.length }))
