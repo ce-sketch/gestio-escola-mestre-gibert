@@ -618,7 +618,12 @@ export function generaInformeQualitatiu({
   }
 
   if (paragrafs.length === 0) {
-    return 'Encara no hi ha prou dades introduïdes (TEE o Lectura) per generar cap informe qualitatiu.'
+    // Cadena buida, no un missatge: qui crida la funció ha de poder
+    // distingir "no hi ha res a dir de llengua" de "hi ha un text".
+    // Abans es tornava el missatge, i quan hi havia paràgraf de
+    // matemàtiques l'informe primer redactava i tot seguit deia que no
+    // podia redactar res.
+    return ''
   }
 
   const propostes = []

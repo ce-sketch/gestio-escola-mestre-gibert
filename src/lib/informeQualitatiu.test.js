@@ -92,8 +92,11 @@ describe('generaInformeQualitatiu', () => {
     teePerTrimestre: {},
   }
 
-  it('avisa quan no hi ha prou dades, en comptes d\'inventar-se un text', () => {
-    expect(generaInformeQualitatiu(base)).toMatch(/Encara no hi ha prou dades/i)
+  it('torna text buit quan no hi ha dades, en comptes d\'inventar-se\'n', () => {
+    // Cadena buida i no un missatge: qui la crida ha de poder-la
+    // combinar amb el paràgraf de matemàtiques sense que l'informe digui
+    // que no pot redactar res just després d'haver redactat.
+    expect(generaInformeQualitatiu(base)).toBe('')
   })
 
   it('només fa servir el nom de fonts, mai els cognoms', () => {
