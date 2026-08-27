@@ -1,20 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
 import { collection, query, where, getDocs } from 'firebase/firestore'
 import { db } from '../../../firebase'
-import { redueixVigents } from '../../../lib/avaluacioCatala'
-import { NIVELLS_PER_CICLE, cicleDe, aEscalaComuna } from '../../../lib/rubricaTEE'
-import { MOMENTS_LECTURA, vlAEscalaComuna, grauPrimaria } from '../../../lib/rubricaLectura'
+import { grauPrimaria } from '../../../lib/rubricaLectura'
+import {
+  COLUMNES_COMUNES, COLUMNES_CL, totalGlobal, resumTee as calculaTee,
+  resumCl as calculaCl, resumVl as calculaVl, fullsTee, fullsLectura,
+} from '../../../lib/resumProvesTaules'
 import { cursEscolarActual } from '../../../lib/cursEscolar'
 import { exportaExcel, exportaPDF } from '../../../lib/exportTaula'
 
 const TRIMESTRES = ['1r trimestre', '2n trimestre', '3r trimestre']
-const COLUMNES_COMUNES = [
-  { id: 'no_assoliment', label: 'No Assoliment' },
-  { id: 'assoliment_satisfactori', label: 'Ass. Satisfactori' },
-  { id: 'assoliment_notable', label: 'Ass. Notable' },
-  { id: 'assoliment_excel·lent', label: 'Ass. Excel·lent' },
-]
-const COLUMNES_CL = ['BAIX', 'M.BAIX', 'M.ALT', 'ALT']
 
 export default function Resum() {
   const [alumnesTots, setAlumnesTots] = useState([])
@@ -56,18 +51,6 @@ export default function Resum() {
   /** Suma totes les files d'un resum en un únic total global — amb l'opció
    *  d'excloure 1r (que fa servir un criteri diferent, sense curs inferior
    *  amb què comparar-se, així que sovint interessa veure'l a part). */
-  function totalGlobal(files, columnes, excloure1r) {
-    const ids = columnes.map((c) => c.id ?? c)
-    const comptadors = Object.fromEntries(ids.map((id) => [id, 0]))
-    let total = 0
-    files.forEach((f) => {
-      if (excloure1r && grauPrimaria(f.curs) === 1) return
-      for (const id of ids) comptadors[id] += f.comptadors[id]
-      total += f.total
-    })
-    return { comptadors, total }
-  }
-
   function FilaTotal({ label, files, columnes }) {
     const ambPrimer = totalGlobal(files, columnes, false)
     const sensePrimer = totalGlobal(files, columnes, true)
@@ -89,86 +72,27 @@ export default function Resum() {
   }
 
   // ---- Resum TEE del trimestre seleccionat ----
-  const resumTee = useMemo(() => {
-    const delTrimestre = teeRegistres.filter((r) => r.trimestre === trimestre && (r.cursEscolar ?? cursEscolarActual()) === cursEscolarId)
-    const vigents = redueixVigents(delTrimestre, (r) => `${r.alumneId}-${r.trimestre}`)
-    return cursos.map((curs) => {
-      const comptadors = Object.fromEntries(COLUMNES_COMUNES.map((c) => [c.id, 0]))
-      vigents.filter((r) => r.curs === curs).forEach((r) => {
-        const comu = aEscalaComuna(r.global)
-        if (comu) comptadors[comu] += 1
-      })
-      return { curs, comptadors, total: Object.values(comptadors).reduce((a, b) => a + b, 0) }
-    })
-  }, [teeRegistres, trimestre, cursos, cursEscolarId])
+  const resumTee = useMemo(
+    () => calculaTee(teeRegistres, { trimestre, cursos, cursEscolarId }),
+    [teeRegistres, trimestre, cursos, cursEscolarId]
+  )
 
   // ---- Resum Lectura CL (Inicial i Final) ----
-  const resumCl = useMemo(() => {
-    return ['inicial', 'final'].map((momentId) => {
-      const vigents = redueixVigents(
-        lecturaRegistres.filter((r) => r.moment === momentId && (r.cursEscolar ?? cursEscolarActual()) === cursEscolarId),
-        (r) => `${r.alumneId}-${momentId}`
-      )
-      const files = cursos.map((curs) => {
-        const comptadors = Object.fromEntries(COLUMNES_CL.map((c) => [c, 0]))
-        vigents.filter((r) => r.curs === curs && r.nivellCl).forEach((r) => {
-          comptadors[r.nivellCl] += 1
-        })
-        return { curs, comptadors, total: Object.values(comptadors).reduce((a, b) => a + b, 0) }
-      })
-      return { momentId, label: MOMENTS_LECTURA.find((m) => m.id === momentId)?.label, files }
-    })
-  }, [lecturaRegistres, cursos, cursEscolarId])
+  const resumCl = useMemo(
+    () => calculaCl(lecturaRegistres, { cursos, cursEscolarId }),
+    [lecturaRegistres, cursos, cursEscolarId]
+  )
 
-  // ---- Resum Velocitat Lectora (VL), amb la fórmula real (comparació amb el propi curs) ----
-  const resumVl = useMemo(() => {
-    return MOMENTS_LECTURA.map((moment) => {
-      const vigents = redueixVigents(
-        lecturaRegistres.filter((r) => r.moment === moment.id && (r.cursEscolar ?? cursEscolarActual()) === cursEscolarId),
-        (r) => `${r.alumneId}-${moment.id}`
-      )
-      const files = cursos.map((curs) => {
-        const comptadors = Object.fromEntries(COLUMNES_COMUNES.map((c) => [c.id, 0]))
-        vigents.filter((r) => r.curs === curs && r.vl !== null && r.vl !== undefined).forEach((r) => {
-          const comu = vlAEscalaComuna(r.vl, r.nivellVl, curs)
-          if (comu) comptadors[comu] += 1
-        })
-        return { curs, comptadors, total: Object.values(comptadors).reduce((a, b) => a + b, 0) }
-      })
-      return { moment, files }
-    })
-  }, [lecturaRegistres, cursos, cursEscolarId])
+  // ---- Resum Velocitat Lectora (VL) ----
+  const resumVl = useMemo(
+    () => calculaVl(lecturaRegistres, { cursos, cursEscolarId }),
+    [lecturaRegistres, cursos, cursEscolarId]
+  )
 
   if (carregant) return <p>Carregant…</p>
 
-  /** Converteix una taula (files amb .curs/.comptadors/.total) al format
-   *  "array de files" que fan servir exportaExcel/exportaPDF, incloent les
-   *  dues files de TOTAL (amb 1r i sense 1r). */
-  function taulaExportable(capçalera, files, columnes) {
-    const ids = columnes.map((c) => c.id ?? c)
-    const labels = columnes.map((c) => c.label ?? c)
-    const files_ = files.map((f) => [f.curs, ...ids.map((id) => f.comptadors[id]), f.total])
-    const ambPrimer = totalGlobal(files, columnes, false)
-    const sensePrimer = totalGlobal(files, columnes, true)
-    files_.push(['TOTAL (amb 1r)', ...ids.map((id) => ambPrimer.comptadors[id]), ambPrimer.total])
-    files_.push(['TOTAL (sense 1r)', ...ids.map((id) => sensePrimer.comptadors[id]), sensePrimer.total])
-    return [[capçalera, ...labels, 'Total avaluats'], ...files_]
-  }
-
-  function taulesTEE() {
-    return [{ nom: `TEE ${trimestre}`, files: taulaExportable('Classe', resumTee, COLUMNES_COMUNES) }]
-  }
-
-  function taulesLectura() {
-    const fulls = []
-    resumCl.forEach(({ label, files }) => {
-      fulls.push({ nom: `CL ${label}`, files: taulaExportable('Classe', files, COLUMNES_CL) })
-    })
-    resumVl.forEach(({ moment, files }) => {
-      fulls.push({ nom: `VL ${moment.label}`, files: taulaExportable('Classe', files, COLUMNES_COMUNES) })
-    })
-    return fulls
-  }
+  const taulesTEE = () => fullsTee(teeRegistres, { trimestre, cursos, cursEscolarId })
+  const taulesLectura = () => fullsLectura(lecturaRegistres, { cursos, cursEscolarId })
 
   const nomFitxerTEE = `Resum-TEE-${cursEscolarId}-${trimestre.replace(/\s+/g, '_')}`
   const nomFitxerLectura = `Resum-CL-VL-${cursEscolarId}`

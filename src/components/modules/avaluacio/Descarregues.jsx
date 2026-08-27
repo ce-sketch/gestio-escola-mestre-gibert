@@ -9,11 +9,20 @@
 // aquells botons — hi continuen sent, per baixar només un bloc concret —
 // és el lloc per quan es vol tot alhora.
 //
-// Nota d'abast: només inclou "Notes per àrea" (notes, resum global, àrees
-// no superades). Els resums de TEE i VL/CL tenen el seu propi botó a la
-// pestanya "Resums de proves", perquè vénen d'una font de dades diferent.
+// Abast: ho inclou TOT el que es resumeix del curs — les notes per àrea,
+// els resums de TEE i VL/CL, la lectoescriptura d'Infantil i les proves
+// d'Innovamat (COSMOS i ConMat). Cada pestanya conserva el seu botó per
+// baixar només el seu bloc; aquesta és per quan es vol el document
+// sencer, típicament per a la memòria del centre.
+//
+// Els fulls es construeixen amb les MATEIXES funcions que pinten cada
+// pantalla (resumProvesTaules, lectoescripturaEI, innovamatExport): si es
+// recalculessin aquí, un canvi de criteri en una pantalla deixaria
+// l'exportació dient una altra cosa sense que ningú se n'adonés.
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { collection, getDocs, query, where } from 'firebase/firestore'
+import { db } from '../../../firebase'
 import { nivellDe, redueixVigents } from '../../../lib/avaluacioCatala'
 import { AREES, TRIMESTRES, areaAplicaAClasse, notaFinalArea } from '../../../lib/notesArea'
 import { cursEscolarActual } from '../../../lib/cursEscolar'
@@ -21,6 +30,17 @@ import { grauPrimaria } from '../../../lib/rubricaLectura'
 import { exportaExcel, exportaPDF } from '../../../lib/exportTaula'
 import { taulesNotesClasse } from '../../../lib/notesTaules'
 import { useNotesAreaDades } from './useNotesAreaDades'
+import { fullsTee, fullsLectura } from '../../../lib/resumProvesTaules'
+import { esClasseEI4o5, comptaNivells, fullResumEI } from '../../../lib/lectoescripturaEI'
+import { slug } from '../../../lib/slug'
+import {
+  entradesHistoric, distribucioPerNivell, entradesCosmos, distribucioCosmos,
+  NIVELLS_COSMOS, MOMENTS_COSMOS, MOMENTS,
+} from '../../../lib/historicInnovamat'
+import { NIVELLS_CONMAT } from '../../../lib/conmatParser'
+import { fullResumCurs } from '../../../lib/innovamatExport'
+
+const NIVELLS_CM = NIVELLS_CONMAT.map((n) => n.label)
 
 const NIVELLS_RESUM = [
   { id: 'no_assoliment', label: 'No Assoliment' },
@@ -34,6 +54,40 @@ export default function Descarregues() {
   const { alumnesTots, registres, carregant, missatge } = useNotesAreaDades()
   const [cursEscolarId, setCursEscolarId] = useState(cursEscolarActual())
   const [generant, setGenerant] = useState(null) // 'excel' | 'pdf' | null
+
+  // Les altres proves viuen a col·leccions diferents de les notes per
+  // àrea, i el hook de dades només carrega aquelles. Es carreguen aquí
+  // perquè el document complet les pugui incloure.
+  const [teeRegistres, setTeeRegistres] = useState([])
+  const [lecturaRegistres, setLecturaRegistres] = useState([])
+  const [docsEI, setDocsEI] = useState([])
+  const [registresMates, setRegistresMates] = useState([])
+  const [errorExtra, setErrorExtra] = useState(null)
+
+  useEffect(() => {
+    let viu = true
+    async function carregaExtra() {
+      try {
+        const [snapAval, snapEI, snapMates] = await Promise.all([
+          getDocs(query(collection(db, 'avaluacio'), where('cursEscolar', '==', cursEscolarId))),
+          getDocs(query(collection(db, 'lectoescripturaEI'), where('cursEscolar', '==', cursEscolarId))),
+          getDocs(query(collection(db, 'matematiques'), where('cursEscolar', '==', cursEscolarId))),
+        ])
+        if (!viu) return
+        const totes = snapAval.docs.map((d) => ({ id: d.id, ...d.data() }))
+        setTeeRegistres(totes.filter((r) => r.tipus === 'tee'))
+        setLecturaRegistres(totes.filter((r) => r.tipus === 'lectura'))
+        setDocsEI(snapEI.docs.map((d) => ({ id: d.id, ...d.data() })))
+        setRegistresMates(snapMates.docs.map((d) => ({ id: d.id, ...d.data() })))
+      } catch (err) {
+        // No atura la resta: si falla una prova, el document es genera
+        // igualment amb el que sí que s'hagi pogut llegir.
+        if (viu) setErrorExtra(err.message)
+      }
+    }
+    carregaExtra()
+    return () => { viu = false }
+  }, [cursEscolarId])
 
   const vigentsTotes = useMemo(
     () => redueixVigents(
@@ -164,8 +218,68 @@ export default function Descarregues() {
     }]
   }
 
+  /** Els resums de TEE i de lectura, els tres trimestres del TEE inclosos.
+   *  Les seves pantalles en mostren un de sol perquè hi ha un selector;
+   *  al document complet hi han de sortir tots. */
+  function fullsProves() {
+    const cursos = totesLesClasses.filter((c) => grauPrimaria(c))
+    const opcions = { cursos, cursEscolarId }
+    return [
+      ...TRIMESTRES.flatMap((trimestre) => fullsTee(teeRegistres, { ...opcions, trimestre })),
+      ...fullsLectura(lecturaRegistres, opcions),
+    ]
+  }
+
+  /** El resum de lectoescriptura d'Infantil, una fila per classe. */
+  function fullsLectoescriptura() {
+    const classes = [...new Set(alumnesTots.map((a) => a.curs))].filter(esClasseEI4o5).sort()
+    if (classes.length === 0) return []
+    const perClasse = classes.map((classe) => {
+      const ids = alumnesTots.filter((a) => a.curs === classe).map((a) => a.id)
+      const doc = docsEI.find((d) => d.id === `${cursEscolarId}__${slug(classe)}`)
+      return { classe, total: ids.length, comptes: comptaNivells(ids, doc?.alumnes ?? {}) }
+    })
+    return [fullResumEI(perClasse)]
+  }
+
+  /** Els resums d'Innovamat: COSMOS (1r i 2n) i ConMat (3r a 6è), amb un
+   *  full per moment. Per ordre de nivell, com a la resta de l'app. */
+  function fullsInnovamatResums() {
+    const fulls = []
+
+    const cosmos = entradesCosmos(registresMates)
+    for (const moment of MOMENTS_COSMOS) {
+      const dels = cosmos.filter((e) => e[moment.id] != null || e.noAvaluat)
+      if (dels.length === 0) continue
+      fulls.push(fullResumCurs(dels, {
+        prova: 'COSMOS', nivells: NIVELLS_COSMOS,
+        distribucio: (llista) => distribucioCosmos(llista, moment.id),
+        moment: moment.label, curs: cursEscolarId,
+      }))
+    }
+
+    const conmat = entradesHistoric(registresMates)
+    for (const moment of MOMENTS) {
+      const dels = conmat.filter((e) => e.moment === moment.id)
+      if (dels.length === 0) continue
+      fulls.push(fullResumCurs(dels, {
+        prova: 'ConMat', nivells: NIVELLS_CM,
+        distribucio: distribucioPerNivell,
+        moment: moment.label, curs: cursEscolarId,
+      }))
+    }
+
+    return fulls
+  }
+
+  /** Tots els resums del curs, en el mateix ordre que les pestanyes:
+   *  primer Infantil, després les proves de llengua, després Innovamat i
+   *  al final les notes per àrea. */
   function totsElsFulls() {
     return [
+      ...fullsLectoescriptura(),
+      ...fullsProves(),
+      ...fullsInnovamatResums(),
       ...taulaTotesLesClassesExportable(),
       ...taulesResumGlobalExportables(),
       ...taulaAreesNoSuperadesExportable(),
@@ -180,6 +294,9 @@ export default function Descarregues() {
    */
   function totsElsFullsPerImprimir() {
     return [
+      ...fullsLectoescriptura(),
+      ...fullsProves(),
+      ...fullsInnovamatResums(),
       ...totesLesClasses.flatMap((cl) => taulesNotesClasse(
         cl,
         alumnesTots.filter((a) => a.curs === cl),
@@ -246,14 +363,22 @@ export default function Descarregues() {
       </div>
 
       <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 16 }}>
-        Inclou: un full per classe amb les seves notes, un full per àrea amb el resum global dels
-        quatre moments, i el full d&apos;àrees no superades. No inclou els resums de TEE ni de
-        VL/CL — aquests tenen el seu propi botó a &quot;Resums de proves&quot;.
+        Inclou tot el que es resumeix del curs: la lectoescriptura d&apos;Infantil, els resums de
+        TEE (els tres trimestres) i de CL i VL, els d&apos;Innovamat (COSMOS i ConMat, per moment),
+        un full per classe amb les seves notes, un full per àrea amb el resum global dels quatre
+        moments, i el full d&apos;àrees no superades. Els blocs que no tinguin dades no hi surten.
       </p>
 
       {missatge && (
         <p style={{ marginTop: 12, fontSize: 13, color: 'var(--red)' }}>
           {missatge.text}
+        </p>
+      )}
+
+      {errorExtra && (
+        <p style={{ marginTop: 12, fontSize: 13, color: 'var(--red)' }}>
+          No s&apos;han pogut carregar algunes proves ({errorExtra}). El document es generarà
+          igualment, però potser hi faltaran fulls.
         </p>
       )}
     </div>
