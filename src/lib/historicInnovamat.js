@@ -77,7 +77,7 @@ export function momentsConmat(registre) {
  */
 export function entradesHistoric(registres) {
   const entrades = []
-  for (const r of registres) {
+  for (const r of registres ?? []) {
     if (r.tipus === 'informe') continue // els registres d'informes carregats no són alumnes
     for (const m of momentsConmat(r)) {
       entrades.push({
@@ -300,7 +300,7 @@ export function evolucioCosmos(entrades) {
  * l'Excel del centre (avaluats + no avaluats).
  */
 export function distribucioPerNivell(entrades) {
-  const avaluats = entrades.filter((e) => e.nivell != null)
+  const avaluats = (entrades ?? []).filter((e) => e?.nivell != null)
   const total = avaluats.length
   const files = NIVELLS_CONMAT.map((n) => {
     const alumnes = avaluats.filter((e) => String(e.nivell ?? '').toLowerCase() === n.label.toLowerCase()).length
@@ -310,14 +310,14 @@ export function distribucioPerNivell(entrades) {
       percentatge: total > 0 ? Math.round((alumnes / total) * 10000) / 100 : 0,
     }
   })
-  return { files, total, noAvaluats: entrades.length - total, totalGeneral: entrades.length }
+  return { files, total, noAvaluats: (entrades ?? []).length - total, totalGeneral: (entrades ?? []).length }
 }
 
 /** Agrupa les entrades per curs escolar i moment, per poder-les mostrar
  *  com una taula d'històric amb una secció per prova. */
 export function agrupaPerProva(entrades) {
   const grups = new Map()
-  for (const e of entrades) {
+  for (const e of entrades ?? []) {
     const clau = `${e.cursEscolar}__${e.moment}`
     if (!grups.has(clau)) {
       grups.set(clau, { cursEscolar: e.cursEscolar, moment: e.moment, entrades: [] })

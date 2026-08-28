@@ -200,7 +200,7 @@ export function rendimentAPercentatge(text) {
  * l'Excel del centre: avaluats + no avaluats.
  */
 export function resumClasse(alumnes) {
-  const avaluats = alumnes.filter((a) => !a.noAvaluat)
+  const avaluats = (alumnes ?? []).filter((a) => a && !a.noAvaluat)
   const compta = (moment) => {
     const recompte = { alt: 0, mitja: 0, baix: 0, sense: 0 }
     for (const a of avaluats) {
@@ -220,8 +220,8 @@ export function resumClasse(alumnes) {
 
   return {
     total: avaluats.length,
-    noAvaluats: alumnes.length - avaluats.length,
-    totalGeneral: alumnes.length,
+    noAvaluats: (alumnes ?? []).length - avaluats.length,
+    totalGeneral: (alumnes ?? []).length,
     inicial: compta('inicial'),
     final: compta('final'),
     ambTotesDues: ambTotesDues.length,

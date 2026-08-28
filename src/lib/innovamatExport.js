@@ -210,6 +210,7 @@ export function fullCosmosAlumnes(registres) {
  *        afegeix els fulls per alumne, que són llargs i no sempre calen.
  */
 export function fullsInnovamat(registres, refs = {}, opcions = {}) {
+  registres = registres ?? []
   const { prova = 'tot', detall = true } = opcions
   const fulls = []
 
@@ -262,6 +263,7 @@ export function fullResumCurs(entrades, { prova, nivells, distribucio, moment, c
 /** El nom del fitxer, amb el curs si només n'hi ha un. Sense el curs, un
  *  "innovamat.xlsx" a la carpeta de baixades no diu de què és. */
 export function nomFitxerInnovamat(registres, prova = 'tot', extensio = 'xlsx') {
+  registres = registres ?? []
   const cursos = [...new Set([
     ...entradesHistoric(registres).map((e) => e.cursEscolar),
     ...entradesCosmos(registres).map((e) => e.cursEscolar),

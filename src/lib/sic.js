@@ -108,6 +108,7 @@ export function blocBuit(codi = '', titol = '') {
  *                                         descartar-ne un en silenci
  */
 export function analitzaLlista(linies) {
+  linies = Array.isArray(linies) ? linies : []
   const avisos = []
   const blocs = []
   const vistos = new Map()
@@ -208,6 +209,7 @@ export function analitzaLlista(linies) {
  * @returns {{blocs, avisos, reaprofitats: number, perduts: string[]}}
  */
 export function fusionaValors(blocsNous, blocsVells) {
+  blocsNous = (blocsNous ?? []).filter((b) => b && Array.isArray(b.seccions))
   const perCodi = new Map()
   for (const indicador of totsElsIndicadors(blocsVells)) {
     if (!indicador.codi) continue
@@ -260,9 +262,9 @@ export function fusionaValors(blocsNous, blocsVells) {
 /** Tots els indicadors de l'arbre, en ordre de lectura. */
 export function totsElsIndicadors(blocs) {
   const llista = []
-  for (const bloc of blocs ?? []) {
-    for (const seccio of bloc.seccions ?? []) {
-      for (const indicador of seccio.indicadors ?? []) llista.push(indicador)
+  for (const bloc of (Array.isArray(blocs) ? blocs : [])) {
+    for (const seccio of bloc?.seccions ?? []) {
+      for (const indicador of seccio?.indicadors ?? []) llista.push(indicador)
     }
   }
   return llista
@@ -310,15 +312,15 @@ export function variacio(indicador) {
  * llegir-los sense passar per aquí ompliria la pantalla de `undefined`.
  */
 export function normalitzaBlocs(blocs) {
-  return (Array.isArray(blocs) ? blocs : []).map((bloc) => ({
+  return (Array.isArray(blocs) ? blocs : []).filter(Boolean).map((bloc) => ({
     id: bloc.id ?? id(),
     codi: String(bloc.codi ?? '').trim(),
     titol: bloc.titol ?? '',
-    seccions: (bloc.seccions ?? []).map((seccio) => ({
+    seccions: (bloc.seccions ?? []).filter(Boolean).map((seccio) => ({
       id: seccio.id ?? id(),
       codi: String(seccio.codi ?? '').trim(),
       titol: seccio.titol ?? '',
-      indicadors: (seccio.indicadors ?? []).map((i) => ({
+      indicadors: (seccio.indicadors ?? []).filter(Boolean).map((i) => ({
         id: i.id ?? id(),
         codi: String(i.codi ?? '').trim(),
         text: i.text ?? '',

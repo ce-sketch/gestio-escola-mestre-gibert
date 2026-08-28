@@ -93,8 +93,11 @@ export function nivellsBuits() {
  * @param {Object<string, Object<string, boolean>>} marquesPerAlumne  alumneId -> { nivellId: boolean }
  */
 export function comptaNivells(alumnesIds, marquesPerAlumne) {
+  // Una classe sense document desat encara no té marques: ha de tornar
+  // tots els nivells a zero, no petar.
+  marquesPerAlumne = marquesPerAlumne ?? {}
   const comptes = Object.fromEntries(NIVELLS_TEBEROSKY.map((n) => [n.id, 0]))
-  for (const id of alumnesIds) {
+  for (const id of alumnesIds ?? []) {
     const marcats = marquesPerAlumne[id] ?? {}
     for (const n of NIVELLS_TEBEROSKY) {
       if (marcats[n.id]) comptes[n.id] += 1
@@ -133,6 +136,7 @@ export function filaAlumneExportEI(alumne, marcats) {
  * @param {Array<{classe: string, comptes: Object, total: number}>} perClasse
  */
 export function fullResumEI(perClasse) {
+  perClasse = (perClasse ?? []).filter((c) => c && c.comptes)
   const files = [CAPÇALERA_RESUM_EI]
 
   for (const { classe, comptes, total } of perClasse) {
@@ -194,6 +198,7 @@ export function historicEI(documents) {
 
 /** Els fulls per exportar l'històric sencer. */
 export function fullHistoricEI(files) {
+  files = (files ?? []).filter(Boolean)
   const capçalera = ['Curs', 'Classe', 'Amb dades', ...NIVELLS_TEBEROSKY.map((n) => n.label)]
   const cos = files.map((f) => [
     f.cursEscolar, f.classe, f.ambDades,

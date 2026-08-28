@@ -63,7 +63,7 @@ export function taulaExportable(capçalera, files, columnes) {
 
 /** El repartiment del TEE d'un trimestre, classe per classe. */
 export function resumTee(teeRegistres, { trimestre, cursos, cursEscolarId }) {
-  const delTrimestre = teeRegistres.filter(
+  const delTrimestre = (teeRegistres ?? []).filter(
     (r) => r.trimestre === trimestre && (r.cursEscolar ?? cursEscolarId) === cursEscolarId)
   const vigents = redueixVigents(delTrimestre, (r) => `${r.alumneId}-${r.trimestre}`)
   return cursos.map((curs) => {
@@ -83,7 +83,7 @@ export function resumTee(teeRegistres, { trimestre, cursos, cursEscolarId }) {
 export function resumCl(lecturaRegistres, { cursos, cursEscolarId }) {
   return ['inicial', 'final'].map((momentId) => {
     const vigents = redueixVigents(
-      lecturaRegistres.filter((r) => r.moment === momentId && (r.cursEscolar ?? cursEscolarId) === cursEscolarId),
+      (lecturaRegistres ?? []).filter((r) => r.moment === momentId && (r.cursEscolar ?? cursEscolarId) === cursEscolarId),
       (r) => `${r.alumneId}-${momentId}`
     )
     const files = cursos.map((curs) => {
@@ -101,7 +101,7 @@ export function resumCl(lecturaRegistres, { cursos, cursEscolarId }) {
 export function resumVl(lecturaRegistres, { cursos, cursEscolarId }) {
   return MOMENTS_LECTURA.map((moment) => {
     const vigents = redueixVigents(
-      lecturaRegistres.filter((r) => r.moment === moment.id && (r.cursEscolar ?? cursEscolarId) === cursEscolarId),
+      (lecturaRegistres ?? []).filter((r) => r.moment === moment.id && (r.cursEscolar ?? cursEscolarId) === cursEscolarId),
       (r) => `${r.alumneId}-${moment.id}`
     )
     const files = cursos.map((curs) => {

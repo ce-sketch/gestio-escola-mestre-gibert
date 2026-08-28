@@ -190,7 +190,7 @@ export function fullHistoricNotaArea(cursos) {
   ]
   const files = [capcalera]
 
-  for (const curs of cursos ?? []) {
+  for (const curs of (cursos ?? []).filter((c) => c && Array.isArray(c.files))) {
     for (const trimestre of trimestresDe(curs.files)) {
       for (const area of areesDe(curs.files)) {
         const delGrup = curs.files.filter((f) => f.trimestre === trimestre && f.area === area.id)
@@ -222,7 +222,8 @@ export function fullHistoricNotaArea(cursos) {
  * — si el centre millora o empitjora al llarg dels anys.
  */
 export function fullEvolucioNotaArea(cursos, { trimestre = '3r trimestre', sensePrimer = false } = {}) {
-  const anys = (cursos ?? []).map((c) => c.cursEscolar).reverse() // del més antic al més recent
+  cursos = (cursos ?? []).filter((c) => c && Array.isArray(c.files))
+  const anys = cursos.map((c) => c.cursEscolar).reverse() // del més antic al més recent
   const capcalera = ['Àrea', ...anys]
   const files = [capcalera]
 
