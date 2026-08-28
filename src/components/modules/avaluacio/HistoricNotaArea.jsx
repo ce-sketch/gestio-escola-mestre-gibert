@@ -35,6 +35,13 @@ export default function HistoricNotaArea() {
   const [trimestre, setTrimestre] = useState('3r trimestre')
   const [sensePrimer, setSensePrimer] = useState(false)
   const [cursObert, setCursObert] = useState(null)
+  // Esborrar un curs sencer de l'històric no es pot desfer des de l'app
+  // (si venia d'un full antic, caldria tornar-lo a pujar). Amb un simple
+  // clic era massa fàcil prémer'l sense voler mentre es despleguen els
+  // cursos amb la fletxa — el mateix parany que ja vam trobar a
+  // l'Innovamat. Cal escriure el curs exacte per confirmar-ho.
+  const [cursPerEsborrar, setCursPerEsborrar] = useState(null)
+  const [confirmaEsborraCurs, setConfirmaEsborraCurs] = useState('')
 
   useEffect(() => { carrega() }, [])
 
@@ -154,6 +161,9 @@ export default function HistoricNotaArea() {
     setDesant(true)
     try {
       await deleteDoc(doc(db, 'historicNotaArea', cursEscolar))
+      setCursPerEsborrar(null)
+      setConfirmaEsborraCurs('')
+      if (cursObert === cursEscolar) setCursObert(null)
       await carrega()
     } catch (err) {
       setError(err.message)
@@ -366,14 +376,60 @@ export default function HistoricNotaArea() {
                     <span
                       role="button"
                       tabIndex={0}
-                      onClick={(e) => { e.stopPropagation(); esborraCurs(c.cursEscolar) }}
-                      onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); esborraCurs(c.cursEscolar) } }}
+                      onClick={(e) => { e.stopPropagation(); setCursPerEsborrar(c.cursEscolar); setConfirmaEsborraCurs('') }}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); setCursPerEsborrar(c.cursEscolar); setConfirmaEsborraCurs('') } }}
                       style={{ marginLeft: 'auto', border: '1px solid var(--red, #b03030)', color: 'var(--red, #b03030)', borderRadius: 6, padding: '2px 8px', fontSize: 11, cursor: 'pointer' }}
                     >
                       Treu-lo
                     </span>
                   )}
                 </button>
+
+                {/* Segon pas obligatori: cal escriure el curs exacte.
+                    Esborrar-lo no es pot desfer des de l'app. */}
+                {cursPerEsborrar === c.cursEscolar && (
+                  <div className="caixa-discreta" style={{ margin: '0 12px 12px', borderColor: 'var(--red, #b03030)' }}>
+                    <strong style={{ fontSize: 12, color: 'var(--red, #b03030)' }}>
+                      Treure el curs {c.cursEscolar} de l&apos;històric?
+                    </strong>
+                    <p className="nota">
+                      S&apos;esborraran les {c.files.length} files desades. <strong>Aquesta acció no es
+                      pot desfer des de l&apos;app</strong> — si el curs venia d&apos;un full antic,
+                      caldria tornar-lo a pujar. Escriu <strong>{c.cursEscolar}</strong> per confirmar-ho.
+                    </p>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 6, flexWrap: 'wrap' }}>
+                      <input
+                        type="text"
+                        value={confirmaEsborraCurs}
+                        onChange={(e) => setConfirmaEsborraCurs(e.target.value)}
+                        placeholder={c.cursEscolar}
+                        className="camp camp-petit"
+                        style={{ maxWidth: 120 }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => esborraCurs(c.cursEscolar)}
+                        disabled={desant || confirmaEsborraCurs !== c.cursEscolar}
+                        style={{
+                          background: confirmaEsborraCurs === c.cursEscolar ? 'var(--red, #b03030)' : 'var(--line)',
+                          color: confirmaEsborraCurs === c.cursEscolar ? '#fff' : 'var(--ink-soft)',
+                          border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 11,
+                          cursor: confirmaEsborraCurs === c.cursEscolar ? 'pointer' : 'not-allowed',
+                        }}
+                      >
+                        {desant ? 'Esborrant…' : 'Treu-lo definitivament'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setCursPerEsborrar(null); setConfirmaEsborraCurs('') }}
+                        disabled={desant}
+                        style={{ background: 'none', border: '1px solid var(--line)', borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer' }}
+                      >
+                        Cancel·la
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {obert && (
                   <div style={{ padding: '0 12px 12px' }} className="taula-scroll">
