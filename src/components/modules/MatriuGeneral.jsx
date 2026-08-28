@@ -812,7 +812,7 @@ export default function MatriuGeneral() {
   if (carregant) return <p>Carregant…</p>
 
   return (
-    <div>
+    <div className="module">
       <p className="module-lead">
         Vista de conjunt de totes les valoracions de cicle/comissió/equip que els docents han
         anat introduint des del mòdul "Valoracions". Només lectura des d'aquí.

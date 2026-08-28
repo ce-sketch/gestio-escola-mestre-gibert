@@ -350,7 +350,7 @@ export default function Economia() {
   if (carregant) return <p>Carregant…</p>
 
   return (
-    <div>
+    <div className="module">
       <p className="module-lead">
         Aportacions econòmiques de les famílies per curs escolar — substitueix l'ompliment
         manual de la plantilla oficial del Departament. Cada canvi es desa sol.

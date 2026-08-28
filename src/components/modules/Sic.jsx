@@ -189,7 +189,7 @@ export default function Sic() {
   if (carregant) return <p>Carregant…</p>
 
   return (
-    <div>
+    <div className="module">
       <p className="module-lead">
         Sistema d&apos;Indicadors de Centre: la llista d&apos;indicadors que es lliura cada curs.
         Com que la llista canvia d&apos;un any a l&apos;altre, es pot substituir pujant l&apos;Excel

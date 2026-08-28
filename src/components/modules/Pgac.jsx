@@ -325,7 +325,7 @@ export default function Pgac() {
   if (carregant) return <p>Carregant…</p>
 
   return (
-    <div>
+    <div className="module">
       <p className="module-lead">
         Seguiment de la Programació General Anual de Centre (PGAC). El càlcul reprodueix el del
         document oficial: cada indicador es multiplica pel seu pes dins de l'operatiu, i cada
