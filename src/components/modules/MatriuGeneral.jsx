@@ -10,7 +10,7 @@ import { CICLES } from '../../lib/valoracions'
 import { normalitzaFesta, mitjanaGeneralFesta, mitjanaGrup } from '../../lib/festesDetall'
 import { normalitzaCooperatiu, grauGlobal, grauCicle, CICLES_COOPERATIU } from '../../lib/aprenentatgeCooperatiu'
 import { grauSatisfaccioCicle, percentValorades, totalRepetirSi, mitjanaActivitat } from '../../lib/activitatsComplementariesDetall'
-import { resultatObjectiu } from '../../lib/pgac'
+import { resultatObjectiu, resultatOperatiu } from '../../lib/pgac'
 import { construeixMatriu, filesProves, colorCella } from '../../lib/matriuColors'
 import { esConfigEI } from '../../lib/lectoescripturaEI'
 import { cicleDe } from '../../lib/rubricaTEE'
@@ -1166,6 +1166,46 @@ export default function MatriuGeneral() {
             detall={a.activitats.map((act) => ({ etiqueta: `${act.nom || 'Sense nom'} (${act.nivell})`, valor: mitjanaActivitat(act) === null ? null : mitjanaActivitat(act) * 10 }))}
           />
         ))}
+      </SeccioResum>
+
+      {/* Els objectius del PGAC. Les dades ja es carregaven —la matriu de
+          colors les feia servir— però no hi havia cap secció que els
+          resumís: qui obria el Quadre de comandament veia les valoracions
+          i les activitats, i havia d'anar al mòdul del PGAC per saber com
+          anaven els objectius, que és justament el que hauria de sortir
+          aquí.
+
+          Es plega igual que la resta: el detall per objectiu operatiu
+          només s'obre si es demana. */}
+      <SeccioResum
+        titol="Objectius del PGAC"
+        quantes={objectiusPgac.length}
+        buit="Encara no s'han definit els objectius del PGAC."
+      >
+        {objectiusPgac.map((objectiu, i) => {
+          const gener = resultatObjectiu(objectiu, 'gener')
+          const juny = resultatObjectiu(objectiu, 'juny')
+          return (
+            <FilaResum
+              key={objectiu.id ?? i}
+              nom={objectiu.titol || `Objectiu ${i + 1}`}
+              valors={[
+                { etiqueta: 'Gener', valor: gener.valor },
+                { etiqueta: 'Juny', valor: juny.valor },
+              ]}
+              // Quants indicadors s'han valorat, que és el que diu si el
+              // percentatge es pot llegir o encara està a mig omplir.
+              extra={`${(objectiu.operatius ?? []).length} operatius · ${juny.valorats}/${juny.total} indicadors valorats`}
+              detall={(objectiu.operatius ?? []).flatMap((op, j) => {
+                const nom = op.titol || `Operatiu ${j + 1}`
+                return [
+                  { etiqueta: `${nom} · gener`, valor: resultatOperatiu(op, 'gener').valor },
+                  { etiqueta: `${nom} · juny`, valor: resultatOperatiu(op, 'juny').valor },
+                ]
+              })}
+            />
+          )
+        })}
       </SeccioResum>
     </div>
   )
