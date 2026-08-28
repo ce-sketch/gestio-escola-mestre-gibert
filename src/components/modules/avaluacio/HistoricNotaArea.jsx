@@ -32,6 +32,11 @@ export default function HistoricNotaArea() {
   const [desant, setDesant] = useState(false)
   const [llegint, setLlegint] = useState(false)
   const [proposta, setProposta] = useState(null)
+  // El curs al qual pertany el full que es puja. Es demana ABANS, com a
+  // l'Històric d'Innovamat: així se sap sempre quin any s'està carregant.
+  // El fitxer sol portar-lo escrit a dins ("Curs: 2023-24"); si el porta
+  // i no coincideix amb el que s'ha triat, es diu, però mana el triat.
+  const [cursCarrega, setCursCarrega] = useState('')
   const [trimestre, setTrimestre] = useState('3r trimestre')
   const [sensePrimer, setSensePrimer] = useState(false)
   const [cursObert, setCursObert] = useState(null)
@@ -124,7 +129,11 @@ export default function HistoricNotaArea() {
     setError(null)
     try {
       const resultat = await llegeixResumNotaArea(await fitxer.arrayBuffer())
-      setProposta({ ...resultat, fitxer: fitxer.name, curs: resultat.cursEscolar ?? '' })
+      // Mana el curs que s'ha triat a dalt. Si el camp és buit (perquè
+      // encara no s'ha omplert), s'agafa el que digui el fitxer.
+      const triat = cursCarrega.trim() || resultat.cursEscolar || ''
+      if (triat && !cursCarrega.trim()) setCursCarrega(triat)
+      setProposta({ ...resultat, fitxer: fitxer.name, curs: triat })
     } catch (err) {
       setError(err.message)
       setProposta(null)
@@ -134,21 +143,26 @@ export default function HistoricNotaArea() {
   }
 
   async function desaProposta() {
-    if (!proposta?.curs?.trim()) {
-      setError('Falta el curs escolar del fitxer.')
+    const any = cursCarrega.trim()
+    if (!any) {
+      setError("Falta dir de quin curs escolar és el full (el camp de dalt).")
       return
     }
     setDesant(true)
     try {
-      await setDoc(doc(db, 'historicNotaArea', proposta.curs.trim()), {
-        cursEscolar: proposta.curs.trim(),
+      await setDoc(doc(db, 'historicNotaArea', any), {
+        cursEscolar: any,
         files: proposta.files,
         origenFitxer: proposta.fitxer ?? null,
         actualitzatEl: serverTimestamp(),
         actualitzatPer: auth.currentUser?.email ?? null,
       })
-      setMissatge(`Curs ${proposta.curs} desat, amb ${proposta.files.length} files.`)
+      setMissatge(`Curs ${any} desat, amb ${proposta.files.length} files.`)
       setProposta(null)
+      // Es buida perquè el curs següent no hereti l'any de l'anterior:
+      // importar quatre cursos seguits és justament el cas d'ús, i
+      // desar-ne un a sobre d'un altre no es podria desfer.
+      setCursCarrega('')
       await carrega()
     } catch (err) {
       setError(`No s'ha pogut desar: ${err.message}`)
@@ -232,6 +246,16 @@ export default function HistoricNotaArea() {
           n&apos;llegeixen només els fulls &quot;Resum 1r Trim.&quot;, &quot;Resum 2n
           trim.&quot; i &quot;Resum 3r trim.&quot;; els fulls de cada classe s&apos;ignoren.
         </p>
+        <label className="field" style={{ maxWidth: 140, marginTop: 10 }}>
+          <span>Curs escolar del full</span>
+          <input
+            type="text"
+            value={cursCarrega}
+            onChange={(e) => setCursCarrega(e.target.value)}
+            placeholder="2023-24"
+            className="camp camp-destacat"
+          />
+        </label>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
           <BotoDrive
             onFitxer={puja}
@@ -255,21 +279,36 @@ export default function HistoricNotaArea() {
               {' '}{areesDe(proposta.files).length} àrees)
             </strong>
             {proposta.avisos.map((a, i) => <p key={i} className="nota nota-avis">{a}</p>)}
-            <label className="field" style={{ maxWidth: 140, marginTop: 8 }}>
-              <span>Curs escolar</span>
-              <input type="text" value={proposta.curs} className="camp camp-petit"
-                onChange={(e) => setProposta({ ...proposta, curs: e.target.value })} />
-            </label>
-            {cursos.some((c) => c.cursEscolar === proposta.curs && c.origen === 'calculat') && (
+
+            {/* Un sol lloc per triar el curs: el camp de dalt. Aquí només
+                es recorda a quin es desarà, perquè no calgui pujar amunt
+                a comprovar-ho abans de prémer "Desa". */}
+            <p className="nota" style={{ marginTop: 8 }}>
+              Es desarà com a curs <strong>{cursCarrega.trim() || '(cap: omple el camp de dalt)'}</strong>.
+            </p>
+            {proposta.cursEscolar && cursCarrega.trim() && proposta.cursEscolar !== cursCarrega.trim() && (
               <p className="nota nota-avis">
-                El curs {proposta.curs} ja es calcula de les notes desades a l&apos;app. Es
+                Compte: el fitxer diu que és del curs <strong>{proposta.cursEscolar}</strong> i
+                l&apos;estàs desant com a <strong>{cursCarrega.trim()}</strong>. Si t&apos;has
+                equivocat, canvia el camp de dalt abans de desar.
+              </p>
+            )}
+            {cursos.some((c) => c.cursEscolar === cursCarrega.trim() && c.origen === 'calculat') && (
+              <p className="nota nota-avis">
+                El curs {cursCarrega.trim()} ja es calcula de les notes desades a l&apos;app. Es
                 desarà igualment, però l&apos;històric seguirà mostrant les calculades, que
                 vénen de les notes una per una.
               </p>
             )}
             <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-              <button type="button" onClick={desaProposta} disabled={desant} className="btn-primary" style={{ maxWidth: 200 }}>
-                {desant ? 'Desant…' : 'Desa aquest curs'}
+              <button
+                type="button"
+                onClick={desaProposta}
+                disabled={desant || !cursCarrega.trim()}
+                className="btn-primary"
+                style={{ maxWidth: 220 }}
+              >
+                {desant ? 'Desant…' : `Desa el curs ${cursCarrega.trim() || '…'}`}
               </button>
               <button type="button" onClick={() => setProposta(null)} className="btn-ghost">Cancel·la</button>
             </div>
