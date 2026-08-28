@@ -46,6 +46,12 @@ const AREES_FULL = {
   religio: 'religio',
   valors: 'valors',
   relivalors: 'religio',
+  // La columna "GF" (global final) de Medi i d'Artística, quan el full
+  // les porta com a bloc propi. Si un curs concret no les té, l'àrea
+  // simplement no surt aquell any — no s'inventa.
+  artistica: 'artistica',
+  mediglobal: 'medi_global',
+  medigf: 'medi_global',
 }
 
 const neteja = (t) => String(t ?? '')

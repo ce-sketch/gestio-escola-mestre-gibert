@@ -27,10 +27,11 @@ export const FRANGES = [
   { id: 'ae', label: 'Assoliment Excel·lent' },
 ]
 
-/** Les àrees que es resumeixen. Les calculades (Medi global, Artística)
- *  en queden fora: no són una àrea que es qualifiqui, sinó la mitjana de
- *  dues que ja hi surten. */
-export const AREES_HISTORIC = AREES.filter((a) => !a.calculada)
+/** Totes les àrees que pot arribar a mostrar l'històric, en l'ordre de
+ *  la graella. Inclou les calculades (Medi global, Artística): no són
+ *  una àrea que es qualifiqui directament, però sí que es mostren —
+ *  vegeu `calculaAreesCalculades` per com se'n treu el recompte. */
+export const AREES_HISTORIC = AREES
 
 const idFranja = (nivellId) => {
   const t = String(nivellId ?? '').toLowerCase()
@@ -76,10 +77,49 @@ export function resumDesDeRegistres(registres, cursEscolar) {
     fila.total += 1
   }
 
+  afegeixAreesCalculades(vigents, acumulat)
+
   return [...acumulat.entries()].map(([clau, fila]) => {
     const [trimestre, area, classe] = clau.split('__')
     return { trimestre, area, classe, ...fila }
   })
+}
+
+/**
+ * "Medi (global)" i "Artística" no tenen notes pròpies: al full original
+ * són una columna "GF" que fa la mitjana d'altres dues (Medi+Science,
+ * Plàstica+Música). No es poden treure sumant els recomptes ja fets de
+ * les àrees reals — cal la nota de cada alumne per parelles, igual que
+ * fa `ResumPerArea.jsx` per a una sola classe. Aquí es generalitza per a
+ * totes les classes del curs alhora.
+ *
+ * Només compta un alumne si té LES DUES notes d'aquell trimestre, com la
+ * fórmula original del full.
+ */
+function afegeixAreesCalculades(vigents, acumulat) {
+  for (const calc of AREES.filter((a) => a.calculada)) {
+    const [a1, a2] = calc.deArees
+    // alumneId__trimestre__classe → { [areaId]: nota }
+    const perAlumne = new Map()
+    for (const r of vigents) {
+      if (r.area !== a1 && r.area !== a2) continue
+      const clau = `${r.alumneId}__${r.trimestre}__${r.curs}`
+      if (!perAlumne.has(clau)) perAlumne.set(clau, {})
+      perAlumne.get(clau)[r.area] = r.nota
+    }
+    for (const [clau, notes] of perAlumne) {
+      if (notes[a1] === undefined || notes[a2] === undefined) continue
+      const mitjana = (Number(notes[a1]) + Number(notes[a2])) / 2
+      const franja = idFranja(nivellDe(mitjana)?.id)
+      if (!franja) continue
+      const [, trimestre, classe] = clau.split('__')
+      const clauFila = `${trimestre}__${calc.id}__${classe}`
+      if (!acumulat.has(clauFila)) acumulat.set(clauFila, filaBuida())
+      const fila = acumulat.get(clauFila)
+      fila[franja] += 1
+      fila.total += 1
+    }
+  }
 }
 
 /**

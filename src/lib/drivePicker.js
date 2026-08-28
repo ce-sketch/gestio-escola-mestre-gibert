@@ -92,15 +92,17 @@ export async function triaDocumentsDelDrive(tipus = 'fulls', multiple = true) {
     // documents de text, els informes de l'Innovamat arriben en CSV, i la
     // resta són fulls de càlcul. Un CSV no surt a la vista de fulls de
     // Google, perquè per al Drive és un fitxer qualsevol.
-    // Compte amb la vista DOCUMENTS: només ensenya documents de Google
-    // Docs. Els informes de l'Innovamat són PDF, que per al Drive són un
-    // tipus diferent, i per això les carpetes sortien buides. Els PDF
-    // s'han de demanar per mime type sobre la vista genèrica DOCS.
+    // Compte amb les vistes DOCUMENTS i SPREADSHEETS: només ensenyen el
+    // format PROPI de Google (Docs, Fulls de càlcul de Google), no els
+    // fitxers .xlsx/.pdf/.csv de veritat que s'hagin pujat al Drive. Els
+    // informes de l'Innovamat són PDF i per això les carpetes sortien
+    // buides; el mateix li passava a "fulls" amb un .xlsx real com el de
+    // "Nota mitjana d'àrea" — la vista SPREADSHEETS no el mostrava. Per
+    // qualsevol format que no sigui nadiu de Google cal demanar-lo per
+    // mime type sobre la vista genèrica DOCS.
     const idVista = tipus === 'documents'
       ? window.google.picker.ViewId.DOCUMENTS
-      : (tipus === 'csv' || tipus === 'pdf')
-        ? window.google.picker.ViewId.DOCS
-        : window.google.picker.ViewId.SPREADSHEETS
+      : window.google.picker.ViewId.DOCS
     const vista = new window.google.picker.DocsView(idVista)
       .setIncludeFolders(true)
       .setSelectFolderEnabled(false)
@@ -111,6 +113,15 @@ export async function triaDocumentsDelDrive(tipus = 'fulls', multiple = true) {
     }
     if (tipus === 'pdf') {
       vista.setMimeTypes('application/pdf')
+    }
+    if (tipus === 'fulls') {
+      // Tant els fulls natius de Google com un .xlsx/.xls de veritat
+      // pujat al Drive (com el de "Nota mitjana d'àrea").
+      vista.setMimeTypes([
+        'application/vnd.google-apps.spreadsheet',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'application/vnd.ms-excel',
+      ].join(','))
     }
 
     const constructor = new window.google.picker.PickerBuilder()

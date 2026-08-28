@@ -63,6 +63,60 @@ describe('resumDesDeRegistres', () => {
   })
 })
 
+describe('resumDesDeRegistres — àrees calculades', () => {
+  // "Medi (global)" i "Artística" no s'introdueixen mai directament: al
+  // full original són la mitjana d'altres dues (Medi+Science,
+  // Plàstica+Música). No es poden treure sumant els recomptes de les
+  // àrees reals — calen les notes aparellades, alumne per alumne.
+  it('calcula Artística com la mitjana de Plàstica i Música', () => {
+    const files = resumDesDeRegistres([
+      nota('a', '5èA', 'plastica', '1r trimestre', 9),
+      nota('a', '5èA', 'musica', '1r trimestre', 7),
+    ], '2026-27')
+    const art = files.find((f) => f.area === 'artistica')
+    expect(art).toBeDefined()
+    // Mitjana (9+7)/2 = 8 → Assoliment Notable
+    expect(art).toMatchObject({ an: 1, total: 1 })
+  })
+
+  it('només compta l\'alumne si té LES DUES notes del mateix trimestre', () => {
+    // Com la fórmula original del full: sense Música, no hi ha "GF".
+    const files = resumDesDeRegistres([
+      nota('a', '5èA', 'plastica', '1r trimestre', 9),
+    ], '2026-27')
+    expect(files.find((f) => f.area === 'artistica')).toBeUndefined()
+  })
+
+  it('no barreja notes de trimestres diferents', () => {
+    const files = resumDesDeRegistres([
+      nota('a', '5èA', 'plastica', '1r trimestre', 9),
+      nota('a', '5èA', 'musica', '2n trimestre', 7),
+    ], '2026-27')
+    expect(files.find((f) => f.area === 'artistica')).toBeUndefined()
+  })
+
+  it('agrupa Medi (global) per separat d\'Artística', () => {
+    const files = resumDesDeRegistres([
+      nota('a', '3rA', 'medi', '1r trimestre', 6),
+      nota('a', '3rA', 'science', '1r trimestre', 6),
+      nota('a', '3rA', 'plastica', '1r trimestre', 9),
+      nota('a', '3rA', 'musica', '1r trimestre', 9),
+    ], '2026-27')
+    expect(files.find((f) => f.area === 'medi_global').total).toBe(1)
+    expect(files.find((f) => f.area === 'artistica').total).toBe(1)
+    // I les àrees reals hi segueixen sent, sense tocar-les.
+    expect(files.find((f) => f.area === 'medi').total).toBe(1)
+  })
+
+  it('no barreja alumnes ni classes diferents', () => {
+    const files = resumDesDeRegistres([
+      nota('a', '5èA', 'plastica', '1r trimestre', 2),
+      nota('b', '5èA', 'musica', '1r trimestre', 9),
+    ], '2026-27')
+    expect(files.find((f) => f.area === 'artistica')).toBeUndefined()
+  })
+})
+
 describe('fusionaHistoric', () => {
   const importat = { cursEscolar: '2023-24', files: [{ trimestre: '1r trimestre', area: 'catala', classe: '1A', na: 1, as: 1, an: 1, ae: 1, total: 4 }] }
   const calculat = { '2026-27': [{ trimestre: '1r trimestre', area: 'catala', classe: '1A', na: 0, as: 0, an: 2, ae: 0, total: 2 }] }
@@ -233,5 +287,21 @@ describe('fullEvolucioNotaArea', () => {
 describe('FRANGES', () => {
   it('van de menys a més, com a tots els documents del centre', () => {
     expect(FRANGES.map((f) => f.id)).toEqual(['na', 'as', 'an', 'ae'])
+  })
+})
+
+describe('areesDe — amb les calculades', () => {
+  it('inclou Artística i Medi (global) quan hi ha dades', () => {
+    const arees = areesDe([
+      { area: 'catala' }, { area: 'artistica' }, { area: 'medi_global' },
+    ])
+    expect(arees.map((a) => a.id)).toEqual(['catala', 'medi_global', 'artistica'])
+  })
+
+  it('les etiqueta amb el seu nom real, no "antic"', () => {
+    // Al contrari de medi_natural/medi_social, aquestes SÍ que existeixen
+    // avui a la graella — no s'han de marcar com a coses d'abans.
+    expect(etiquetaArea('artistica')).toBe('Artística')
+    expect(etiquetaArea('medi_global')).toBe('Medi (global)')
   })
 })

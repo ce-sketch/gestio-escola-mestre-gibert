@@ -54,3 +54,36 @@ describe('cursEscolarDeFull', () => {
     expect(cursEscolarDeFull([])).toBeNull()
   })
 })
+
+describe('llegeixResumNotaArea — un full real', () => {
+  // `carregaExcelJS` és un simple `import('exceljs')`, sense res propi del
+  // navegador: es pot exercitar de veritat, sense mock, generant l'Excel
+  // amb la mateixa llibreria que fa servir el lector.
+  async function fullDeProva() {
+    const ExcelJS = (await import('exceljs')).default
+    const wb = new ExcelJS.Workbook()
+    const ws = wb.addWorksheet('Resum 1r Trim.')
+    ws.addRow(['Curs: 2023-24'])
+    // Blocs reals: català i, al costat, la "GF" d'Artística — el cas que
+    // no es llegia fins ara.
+    ws.addRow(['català', '', '', '', '', '', 'artística'])
+    ws.addRow(['No Assoliment', 'Assoliment Satisfactòri', 'Assoliment Notable', 'Assoliment Excel·lent'])
+    ws.addRow(['1A', 5, 6, 15, 1, 27, '1A', 2, 3, 20, 2, 27])
+    const buf = await wb.xlsx.writeBuffer()
+    return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength)
+  }
+
+  it('llegeix també la columna "artística", que abans quedava fora', async () => {
+    const { llegeixResumNotaArea } = await import('./historicNotaAreaParser')
+    const { files } = await llegeixResumNotaArea(await fullDeProva())
+    const art = files.find((f) => f.area === 'artistica')
+    expect(art).toBeDefined()
+    expect(art).toMatchObject({ classe: '1A', na: 2, as: 3, an: 20, ae: 2 })
+  })
+
+  it('el curs escolar es llegeix igual que abans', async () => {
+    const { llegeixResumNotaArea } = await import('./historicNotaAreaParser')
+    const { cursEscolar } = await llegeixResumNotaArea(await fullDeProva())
+    expect(cursEscolar).toBe('2023-24')
+  })
+})
