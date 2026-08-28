@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { collection, doc, getDocs, query, setDoc, deleteDoc, where, serverTimestamp } from 'firebase/firestore'
 import { db, auth } from '../../../firebase'
 import { cursEscolarActual } from '../../../lib/cursEscolar'
-import { TRIMESTRES } from '../../../lib/notesArea'
+import { TRIMESTRES, AREES } from '../../../lib/notesArea'
 import {
   FRANGES, resumDesDeRegistres, fusionaHistoric, totalCentre, percentatgeSuperacio,
   classesDe, areesDe, trimestresDe, fullHistoricNotaArea, fullEvolucioNotaArea,
@@ -38,7 +38,6 @@ export default function HistoricNotaArea() {
   // i no coincideix amb el que s'ha triat, es diu, però mana el triat.
   const [cursCarrega, setCursCarrega] = useState('')
   const [trimestre, setTrimestre] = useState('3r trimestre')
-  const [sensePrimer, setSensePrimer] = useState(false)
   const [cursObert, setCursObert] = useState(null)
   // Esborrar un curs sencer de l'històric no es pot desfer des de l'app
   // (si venia d'un full antic, caldria tornar-lo a pujar). Amb un simple
@@ -128,7 +127,7 @@ export default function HistoricNotaArea() {
     setMissatge(null)
     setError(null)
     try {
-      const resultat = await llegeixResumNotaArea(await fitxer.arrayBuffer())
+      const resultat = await llegeixResumNotaArea(await fitxer.arrayBuffer(), fitxer.name)
       // Mana el curs que s'ha triat a dalt. Si el camp és buit (perquè
       // encara no s'ha omplert), s'agafa el que digui el fitxer.
       const triat = cursCarrega.trim() || resultat.cursEscolar || ''
@@ -196,7 +195,7 @@ export default function HistoricNotaArea() {
         etiqueta: 'Avaluació',
         subtitol: "Històric de notes per àrea",
         fulls: [
-          fullEvolucioNotaArea(cursos, { trimestre, sensePrimer }),
+          fullEvolucioNotaArea(cursos, { trimestre }),
           fullHistoricNotaArea(cursos),
         ],
       }
@@ -242,9 +241,10 @@ export default function HistoricNotaArea() {
       <div className="caixa-discreta" style={{ marginTop: 16 }}>
         <strong style={{ fontSize: 14 }}>Afegeix un curs d&apos;abans de l&apos;app</strong>
         <p className="nota">
-          Puja el fitxer de la graella de notes d&apos;aquell any (en format .xlsx). Se
-          n&apos;llegeixen només els fulls &quot;Resum 1r Trim.&quot;, &quot;Resum 2n
-          trim.&quot; i &quot;Resum 3r trim.&quot;; els fulls de cada classe s&apos;ignoren.
+          Puja el fitxer de la graella de notes d&apos;aquell any, en <strong>PDF</strong> o
+          en <strong>.xlsx</strong>. Se n&apos;llegeixen només els resums per trimestre; els
+          fulls amb les notes de cada alumne s&apos;ignoren. Del PDF, els trimestres es
+          dedueixen de l&apos;ordre de les pàgines de resum.
         </p>
         <label className="field" style={{ maxWidth: 140, marginTop: 10 }}>
           <span>Curs escolar del full</span>
@@ -261,12 +261,12 @@ export default function HistoricNotaArea() {
             onFitxer={puja}
             onError={(text) => setError(text)}
             disabled={llegint}
-            tipus="fulls"
-            etiqueta="Tria el full del Drive"
+            tipus="fulls_o_pdf"
+            etiqueta="Tria el full o el PDF del Drive"
           />
           <label className="btn-ghost" style={{ display: 'inline-flex', alignItems: 'center', cursor: llegint ? 'wait' : 'pointer' }}>
-            {llegint ? 'Llegint…' : '📤 Puja l\'Excel'}
-            <input type="file" accept=".xlsx,.xlsm" style={{ display: 'none' }} disabled={llegint}
+            {llegint ? 'Llegint…' : '📤 Puja el PDF o l\'Excel'}
+            <input type="file" accept=".pdf,.xlsx,.xlsm" style={{ display: 'none' }} disabled={llegint}
               onChange={(e) => { puja(e); e.target.value = '' }} />
           </label>
         </div>
@@ -275,6 +275,7 @@ export default function HistoricNotaArea() {
           <div style={{ marginTop: 14, borderTop: '1px solid var(--line)', paddingTop: 12 }}>
             <strong style={{ fontSize: 13 }}>
               {proposta.files.length} files llegides de &quot;{proposta.fitxer}&quot;
+              {proposta.format === 'pdf' && <span style={{ fontWeight: 400, color: 'var(--ink-soft)' }}> (PDF)</span>}
               {' '}({trimestresDe(proposta.files).length} trimestres,
               {' '}{areesDe(proposta.files).length} àrees)
             </strong>
@@ -343,10 +344,6 @@ export default function HistoricNotaArea() {
                 {TRIMESTRES.map((t) => <option key={t} value={t}>{t}</option>)}
               </select>
             </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, paddingBottom: 8 }}>
-              <input type="checkbox" checked={sensePrimer} onChange={(e) => setSensePrimer(e.target.checked)} />
-              sense 1r
-            </label>
           </div>
 
           <div className="taula-scroll" style={{ marginTop: 10 }}>
@@ -370,7 +367,7 @@ export default function HistoricNotaArea() {
                     <td>{area.label}</td>
                     {[...cursos].reverse().map((c) => {
                       const pct = percentatgeSuperacio(
-                        totalCentre(c.files, { area: area.id, trimestre, sensePrimer }))
+                        totalCentre(c.files, { area: area.id, trimestre }))
                       return (
                         <td key={c.cursEscolar} className="num">
                           {pct === null ? <span style={{ color: 'var(--line)' }}>—</span> : `${pct}%`}
@@ -379,6 +376,23 @@ export default function HistoricNotaArea() {
                     })}
                   </tr>
                 ))}
+                <tr style={{ fontWeight: 700, borderTop: '2px solid var(--line)' }}>
+                  <td>GLOBAL</td>
+                  {[...cursos].reverse().map((c) => {
+                    // Sobre el total d'avaluacions, no la mitjana dels
+                    // percentatges: una àrea amb 20 alumnes no pot pesar
+                    // igual que una amb 300. Les calculades (Medi global,
+                    // Artística) en queden fora, o es comptarien dues
+                    // vegades els mateixos alumnes.
+                    const reals = c.files.filter((f) => !AREES.some((a) => a.calculada && a.id === f.area))
+                    const pct = percentatgeSuperacio(totalCentre(reals, { trimestre }))
+                    return (
+                      <td key={c.cursEscolar} className="num">
+                        {pct === null ? <span style={{ color: 'var(--line)' }}>—</span> : `${pct}%`}
+                      </td>
+                    )
+                  })}
+                </tr>
               </tbody>
             </table>
           </div>
