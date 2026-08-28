@@ -26,6 +26,7 @@ import ResumConmat from './avaluacio/ResumConmat.jsx'
 import ResumCosmos from './avaluacio/ResumCosmos.jsx'
 import ResumLectoescripturaEI from './avaluacio/ResumLectoescripturaEI.jsx'
 import HistoricLectoescriptura from './avaluacio/HistoricLectoescriptura.jsx'
+import HistoricNotaArea from './avaluacio/HistoricNotaArea.jsx'
 import Historic from './avaluacio/Historic.jsx'
 import HistoricInnovamat from './avaluacio/HistoricInnovamat.jsx'
 
@@ -77,6 +78,7 @@ const GRUPS = [
       { id: 'historic-lectoescriptura', label: 'Històric', subLabel: '(Lectoescriptura)', component: HistoricLectoescriptura, nomesAdmin: true },
       { id: 'historic', label: 'Històric', subLabel: '(TEE, VL i CL)', component: Historic, nomesAdmin: true },
       { id: 'historic-innovamat', label: 'Històric', subLabel: '(Innovamat)', component: HistoricInnovamat, nomesAdmin: true },
+      { id: 'historic-nota-area', label: 'Històric', subLabel: '(Notes per àrea)', component: HistoricNotaArea, nomesAdmin: true },
     ],
   },
 ]
