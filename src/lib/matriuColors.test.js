@@ -219,3 +219,33 @@ describe('construeixMatriu', () => {
     }, helpers)).not.toThrow()
   })
 })
+
+describe('filesProves — classes que no fan la prova', () => {
+  it('Educació Infantil no compta al TEE', () => {
+    // La rúbrica en té nivells i el mòdul n'ofereix les classes, però al
+    // centre no es passa: comptar-la deixava la columna en vermell fix.
+    const fila = filaDe(proves(), 'TEE — 1r')
+    expect(cel·la(fila, 'EI')).toBeNull()
+  })
+
+  it('una classe desmarcada surt del numerador i del denominador', () => {
+    // Ara mateix la lectoescriptura només la passa I5. Amb I4 exclosa,
+    // el 100% s'ha de calcular només sobre I5.
+    const docs = [{ classe: 'I5A', alumnes: { 'i5-0': { dibuix: true }, 'i5-1': { dibuix: true } } }]
+    const ambI4 = filaDe(proves({ docsLectoescriptura: docs }), 'Lectoescriptura')
+    const senseI4 = filaDe(
+      filesProves({ alumnes, docsLectoescriptura: docs, lectoExcloses: ['I4A'] }, { cicleDe, MOMENTS_LECTURA }),
+      'Lectoescriptura'
+    )
+    expect(cel·la(ambI4, 'EI')).toBe(25)    // 2 de 8 (I4 + I5)
+    expect(cel·la(senseI4, 'EI')).toBe(50)  // 2 de 4 (només I5)
+  })
+
+  it('si es desmarquen totes, la casella queda buida i no a zero', () => {
+    const fila = filaDe(
+      filesProves({ alumnes, lectoExcloses: ['I4A', 'I5A'] }, { cicleDe, MOMENTS_LECTURA }),
+      'Lectoescriptura'
+    )
+    expect(cel·la(fila, 'EI')).toBeNull()
+  })
+})

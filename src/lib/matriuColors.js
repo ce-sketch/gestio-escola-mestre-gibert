@@ -154,6 +154,9 @@ export function filesProves(dades, { cicleDe, MOMENTS_LECTURA }) {
   const notaAreaRegistres = dades?.notaAreaRegistres ?? []
   const docsLectoescriptura = dades?.docsLectoescriptura ?? []
   const registresMates = dades?.registresMates ?? []
+  // Les classes d'I4/I5 que aquest curs NO passen la lectoescriptura.
+  // Es configura des del Resum: ara només la fa I5, però pot canviar.
+  const lectoExcloses = dades?.lectoExcloses ?? []
   const cicleColumnes = COLUMNES_GRUP // EI · CI · CM · CS
 
   /** Un alumne de 1r de Primària? */
@@ -165,8 +168,12 @@ export function filesProves(dades, { cicleDe, MOMENTS_LECTURA }) {
    * arribaria mai al 100% i sortiria vermell sense que hi hagués res a
    * corregir.
    */
-  function compta(curs, { nomesTercerTrimestre = false, nomesCursos = null }) {
+  function compta(curs, { nomesTercerTrimestre = false, nomesCursos = null, excloses = [] }) {
     if (nomesTercerTrimestre && esDePrimer(curs)) return false
+    // Classes que aquest curs no passen la prova: no compten ni al
+    // numerador ni al denominador, o sortiria vermell sense que hi hagi
+    // res per corregir.
+    if (excloses.includes(curs)) return false
     // Algunes proves només les fa una part del cicle: la lectoescriptura,
     // I4 i I5 (no I3); el COSMOS, 1r i 2n. El denominador ha de ser
     // només aquest alumnat.
@@ -223,13 +230,20 @@ export function filesProves(dades, { cicleDe, MOMENTS_LECTURA }) {
   files.push(fila('Lectoescriptura (I4 i I5)', 'Lectoescriptura EI', registresLecto, {
     senseCicles: ['CI', 'CM', 'CS'],
     nomesCursos: ['I4', 'I5'],
+    excloses: lectoExcloses,
   }))
 
   // --- TEE, un per trimestre -----------------------------------------------
   for (const t of TRIMESTRES) {
     files.push(fila('Llengua catalana', `TEE — ${t.label}`,
       teeRegistres.filter((r) => Number(r.trimestre) === t.num),
-      { nomesTercerTrimestre: t.num !== 3 }))
+      {
+        // Educació Infantil no passa el TEE. La rúbrica en té nivells i el
+        // mòdul n'ofereix les classes, però al centre no es fa: comptar-les
+        // deixava la columna d'Infantil en vermell permanent.
+        senseCicles: ['EI'],
+        nomesTercerTrimestre: t.num !== 3,
+      }))
   }
 
   // --- VL/CL, un per moment ------------------------------------------------

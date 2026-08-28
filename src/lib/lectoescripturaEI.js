@@ -164,6 +164,13 @@ export const CAPÇALERA_RESUM_EI = ['Classe', 'Alumnes', ...NIVELLS_TEBEROSKY.ma
  *  dedueix quantes en són d'índex restant els spans del total. */
 export const GRUPS_RESUM_EI = ETAPES_TEBEROSKY.map((e) => ({ label: e.titol, span: e.nivells.length }))
 
+/** L'id del document de configuració d'un curs. No pot xocar amb el
+ *  d'una classe: cap classe no es diu "config". */
+export const idConfigEI = (cursEscolar) => `${cursEscolar}__config`
+
+/** Si un document de la col·lecció és el de configuració i no una classe. */
+export const esConfigEI = (doc) => doc?.tipus === 'config' || /__config$/.test(doc?.id ?? '')
+
 /**
  * L'històric: una fila per curs escolar i classe, a partir dels
  * documents desats de tots els cursos.
@@ -178,7 +185,9 @@ export const GRUPS_RESUM_EI = ETAPES_TEBEROSKY.map((e) => ({ label: e.titol, spa
  */
 export function historicEI(documents) {
   const files = (documents ?? [])
-    .filter((d) => d.cursEscolar && d.classe)
+    // El document de configuració no porta classe, així que ja quedaria
+    // fora; es descarta expressament perquè es vegi que és a posta.
+    .filter((d) => d && !esConfigEI(d) && d.cursEscolar && d.classe)
     .map((d) => {
       const ids = Object.keys(d.alumnes ?? {})
       return {
@@ -205,4 +214,30 @@ export function fullHistoricEI(files) {
     ...NIVELLS_TEBEROSKY.map((n) => f.comptes[n.id] ?? 0),
   ])
   return { nom: 'Històric EI', files: [capçalera, ...cos] }
+}
+
+// ── Quines classes fan la prova ────────────────────────────────────────
+//
+// Quines classes passen la lectoescriptura canvia d'un curs a l'altre:
+// ara mateix només la fa I5, però I4 la pot començar a fer en qualsevol
+// moment. Deixar-ho escrit al codi voldria dir tocar el codi cada cop
+// que canviï, i posar-hi totes les classes faria sortir en vermell les
+// que no la fan, com si hi faltessin dades.
+//
+// Per això es desa al mateix lloc que les dades, amb un document de
+// configuració per curs, i es tria des de la pantalla de Resum.
+
+/**
+ * Les classes que fan la prova aquest curs.
+ *
+ * Per defecte, TOTES les d'I4 i I5: una escola que comenci a fer-la no ha
+ * de configurar res perquè li surti. El document de configuració només
+ * serveix per TREURE'N les que no la facin.
+ *
+ * @param {object|null} config - el document de configuració, si n'hi ha
+ * @param {string[]} totesLesClasses - les classes d'I4 i I5 del centre
+ */
+export function classesQueFanLaProva(config, totesLesClasses) {
+  const fora = new Set(config?.classesExcloses ?? [])
+  return (totesLesClasses ?? []).filter((c) => esClasseEI4o5(c) && !fora.has(c))
 }

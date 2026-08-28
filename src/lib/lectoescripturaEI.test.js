@@ -3,6 +3,7 @@ import { describe, it, expect } from 'vitest'
 import {
   NIVELLS_TEBEROSKY, ETAPES_TEBEROSKY, esClasseEI4o5, nivellsBuits,
   comptaNivells, fullResumEI, CAPÇALERA_RESUM_EI, historicEI, fullHistoricEI,
+  classesQueFanLaProva, esConfigEI,
 } from './lectoescripturaEI'
 
 describe('esClasseEI4o5', () => {
@@ -159,5 +160,58 @@ describe('fullHistoricEI', () => {
   it('la capçalera porta una columna per nivell', () => {
     const { files } = fullHistoricEI([])
     expect(files[0]).toHaveLength(NIVELLS_TEBEROSKY.length + 3)
+  })
+})
+
+describe('classesQueFanLaProva', () => {
+  const totes = ['I4A', 'I4B', 'I5A', 'I5B']
+
+  it('per defecte les fan totes: una escola que la comenci no ha de configurar res', () => {
+    expect(classesQueFanLaProva(null, totes)).toEqual(totes)
+    expect(classesQueFanLaProva({}, totes)).toEqual(totes)
+  })
+
+  it('treu les que s\'hagin desmarcat', () => {
+    // Cas real: ara mateix només la passa I5.
+    const config = { classesExcloses: ['I4A', 'I4B'] }
+    expect(classesQueFanLaProva(config, totes)).toEqual(['I5A', 'I5B'])
+  })
+
+  it('no deixa colar classes que no són d\'I4 ni d\'I5', () => {
+    expect(classesQueFanLaProva(null, ['I3A', 'I4A', '1rA'])).toEqual(['I4A'])
+  })
+
+  it('no peta sense classes', () => {
+    expect(classesQueFanLaProva(null, null)).toEqual([])
+  })
+})
+
+describe('esConfigEI', () => {
+  it('reconeix el document de configuració pel tipus', () => {
+    expect(esConfigEI({ tipus: 'config' })).toBe(true)
+  })
+
+  it('el reconeix també per l\'id, si el document és antic', () => {
+    expect(esConfigEI({ id: '2026-27__config' })).toBe(true)
+  })
+
+  it('no confon una classe amb la configuració', () => {
+    expect(esConfigEI({ id: '2026-27__i4a', classe: 'I4A' })).toBe(false)
+  })
+
+  it('no peta amb valors buits', () => {
+    expect(esConfigEI(null)).toBe(false)
+    expect(esConfigEI({})).toBe(false)
+  })
+})
+
+describe('historicEI — el document de configuració', () => {
+  it('no compta la configuració com si fos una classe', () => {
+    const files = historicEI([
+      { cursEscolar: '2026-27', classe: 'I5A', alumnes: { a: { dibuix: true } } },
+      { id: '2026-27__config', tipus: 'config', cursEscolar: '2026-27', classesExcloses: ['I4A'] },
+    ])
+    expect(files).toHaveLength(1)
+    expect(files[0].classe).toBe('I5A')
   })
 })
