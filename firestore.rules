@@ -145,6 +145,14 @@ service cloud.firestore {
       allow read, write: if esAdmin();
     }
 
+    // Històric de notes per àrea: un document per curs escolar dels anys
+    // anteriors a l'app. Els cursos que sí que s'hi porten no es desen
+    // aquí, es calculen de la col·lecció "avaluacio".
+    match /historicNotaArea/{cursEscolarId} {
+      allow read: if esComptePersonal();
+      allow write: if esAdmin();
+    }
+
     // SIC: Sistema d'Indicadors de Centre, un document per curs escolar.
     // Com el PGAC i l'Economia, és documentació de direcció: només
     // l'administrador.
