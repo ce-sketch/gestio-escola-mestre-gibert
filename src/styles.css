@@ -327,21 +327,14 @@ input {
 }
 
 /* ---------- Modules ---------- */
-/* 760px és l'amplada còmoda per llegir text seguit, i per això és el
-   valor per defecte. Els mòduls amb taules de moltes columnes (una per
-   classe, una per curs escolar…) queden estretes i s'han de desplaçar de
-   costat contínuament: aquests demanen `.module-ample` i aprofiten la
-   pantalla. El límit de 1600px hi és perquè en un monitor gran les files
-   no s'estirin tant que costi seguir-les amb la vista. */
-.module { max-width: 760px; }
-
-.module-ample { max-width: min(100%, 1600px); }
-
-/* Dins d'un mòdul ample, el text seguit es queda estret: llegir una
-   línia de 1500px és incòmode, encara que la taula de sota els necessiti. */
-.module-ample > .module-lead,
-.module-ample > .module-note,
-.module-ample > p.nota { max-width: 760px; }
+/* Tots els mòduls ocupen la mateixa amplada.
+   Abans n'hi havia de dues menes: uns amb contenidor `.module` (760px) i
+   uns altres —Economia, PGAC, SIC, Quadre de comandament— que no en
+   tenien i, per tant, arribaven fins al final. Es notava en passar d'un
+   mòdul a l'altre: el text saltava d'amplada.
+   El límit de 1600px hi és perquè en un monitor gran les línies no
+   s'estirin tant que costi tornar al principi de la següent. */
+.module { max-width: min(100%, 1600px); }
 
 .module-eyebrow {
   margin: 0 0 6px 0;
@@ -353,6 +346,17 @@ input {
 }
 
 .module h2 { font-size: 26px; margin-bottom: 12px; }
+
+/* El text seguit va justificat a banda i banda. Amb `hyphens: auto` i
+   el `lang="ca"` del document, el navegador parteix els mots amb les
+   regles del català; sense això, la justificació deixa forats blancs
+   enormes entre paraules, que en català són sovint llargues. */
+.module-lead,
+.module-note,
+p.nota {
+  text-align: justify;
+  hyphens: auto;
+}
 
 .module-lead {
   color: var(--ink-soft);
