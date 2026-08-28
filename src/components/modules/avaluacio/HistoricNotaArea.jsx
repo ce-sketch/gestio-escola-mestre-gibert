@@ -194,6 +194,26 @@ export default function HistoricNotaArea() {
         del full &quot;Resum&quot; del Google Sheet que es feia servir aleshores.
       </p>
 
+      {/* Les descàrregues van a dalt i amb etiqueta, com a la resta
+          d'històrics: abans quedaven empeses a la dreta de la fila del
+          selector de trimestre i costaven de veure. */}
+      {cursos.length > 0 && (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 14 }}>
+          <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}>Descarrega l&apos;històric:</span>
+          <button type="button" onClick={() => descarrega('excel')} disabled={exportant}
+            className="btn-ghost" style={{ fontSize: 11, padding: '3px 10px' }}>
+            {exportant ? 'Generant…' : '⬇ Excel'}
+          </button>
+          <button type="button" onClick={() => descarrega('pdf')} disabled={exportant}
+            className="btn-ghost" style={{ fontSize: 11, padding: '3px 10px' }}>
+            ⬇ PDF
+          </button>
+          <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}>
+            ({cursos.length} curs{cursos.length === 1 ? '' : 'os'}: evolució + detall)
+          </span>
+        </div>
+      )}
+
       {/* ── Importar un curs antic ──────────────────────────────────── */}
       <div className="caixa-discreta" style={{ marginTop: 16 }}>
         <strong style={{ fontSize: 14 }}>Afegeix un curs d&apos;abans de l&apos;app</strong>
@@ -278,16 +298,6 @@ export default function HistoricNotaArea() {
               <input type="checkbox" checked={sensePrimer} onChange={(e) => setSensePrimer(e.target.checked)} />
               sense 1r
             </label>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', paddingBottom: 6, marginLeft: 'auto' }}>
-              <button type="button" onClick={() => descarrega('excel')} disabled={exportant}
-                className="btn-ghost" style={{ fontSize: 11, padding: '3px 10px' }}>
-                {exportant ? 'Generant…' : '⬇ Excel'}
-              </button>
-              <button type="button" onClick={() => descarrega('pdf')} disabled={exportant}
-                className="btn-ghost" style={{ fontSize: 11, padding: '3px 10px' }}>
-                ⬇ PDF
-              </button>
-            </div>
           </div>
 
           <div className="taula-scroll" style={{ marginTop: 10 }}>
