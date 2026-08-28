@@ -263,7 +263,7 @@ export default function Assistencia() {
   }
 
   return (
-    <div className={`module${vista === 'mes' ? ' module-ample' : ''}`}>
+    <div className="module">
       <p className="module-eyebrow">Passar llista</p>
       <h2>Assistència</h2>
       <p className="module-lead">

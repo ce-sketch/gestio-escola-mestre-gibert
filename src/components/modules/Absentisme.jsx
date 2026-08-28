@@ -193,9 +193,7 @@ export default function Absentisme() {
   }
 
   return (
-    // Una columna per classe: amb 760px la taula queda tallada i cal
-    // desplaçar-la de costat contínuament.
-    <div className="module module-ample">
+    <div className="module">
       <p className="module-eyebrow">Curs {CURS_ESCOLAR}</p>
       <h2>Absentisme</h2>
       <p className="module-lead">
