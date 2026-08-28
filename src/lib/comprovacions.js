@@ -1178,10 +1178,23 @@ function grupCosmos() {
 
   proves.push(comprova(
     'El resum compta els alumnes que milloren entre les dues proves',
-    { total: 3, ambTotesDues: 2, milloren: 2 },
+    { ambTotesDues: 2, milloren: 2 },
     () => {
       const r = resumClasse(llegeixCosmos(csv).alumnes)
-      return { total: r.total, ambTotesDues: r.ambTotesDues, milloren: r.milloren }
+      return { ambTotesDues: r.ambTotesDues, milloren: r.milloren }
+    }
+  ))
+
+  proves.push(comprova(
+    "Qui no va fer la prova no compta als percentatges, però sí al total del centre",
+    // Dels tres alumnes del CSV, la Dana no va fer cap de les dues
+    // proves. Els percentatges de rendiment s'han de calcular sobre els
+    // dos que sí que la van fer; el total general, en canvi, ha de
+    // seguir sent tres, que és el que ha de quadrar amb l'Excel.
+    { total: 2, noAvaluats: 1, totalGeneral: 3 },
+    () => {
+      const r = resumClasse(llegeixCosmos(csv).alumnes)
+      return { total: r.total, noAvaluats: r.noAvaluats, totalGeneral: r.totalGeneral }
     }
   ))
 
