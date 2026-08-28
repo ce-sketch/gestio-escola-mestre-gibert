@@ -99,7 +99,7 @@ export default function Avaluacio() {
   const Actiu = totes.find((p) => p.id === actiu)?.component ?? TEE
 
   return (
-    <div className="module" style={{ maxWidth: 1100 }}>
+    <div className="module module-ample">
       <h2>Avaluació</h2>
 
       <div style={{ marginTop: 20, borderBottom: '1px solid var(--line)', paddingBottom: 4 }}>

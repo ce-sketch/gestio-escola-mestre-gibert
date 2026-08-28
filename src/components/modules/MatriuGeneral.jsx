@@ -12,6 +12,7 @@ import { normalitzaCooperatiu, grauGlobal, grauCicle, CICLES_COOPERATIU } from '
 import { grauSatisfaccioCicle, percentValorades, totalRepetirSi, mitjanaActivitat } from '../../lib/activitatsComplementariesDetall'
 import { resultatObjectiu } from '../../lib/pgac'
 import { construeixMatriu, filesProves, colorCella } from '../../lib/matriuColors'
+import { esConfigEI } from '../../lib/lectoescripturaEI'
 import { cicleDe } from '../../lib/rubricaTEE'
 import { MOMENTS_LECTURA } from '../../lib/rubricaLectura'
 import { triaDocumentsDelDrive } from '../../lib/drivePicker'
@@ -1011,7 +1012,11 @@ export default function MatriuGeneral() {
               ...filesProves(
                 {
                   alumnes, teeRegistres, lecturaRegistres,
-                  notaAreaRegistres, docsLectoescriptura, registresMates,
+                  notaAreaRegistres, registresMates,
+                  // El document de configuració no és cap classe: es
+                  // treu de la llista i se n'agafen les exclusions.
+                  docsLectoescriptura: docsLectoescriptura.filter((d) => !esConfigEI(d)),
+                  lectoExcloses: docsLectoescriptura.find(esConfigEI)?.classesExcloses ?? [],
                 },
                 { cicleDe, MOMENTS_LECTURA }
               ),
