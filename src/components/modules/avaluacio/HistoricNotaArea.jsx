@@ -42,12 +42,23 @@ export default function HistoricNotaArea() {
     setCarregant(true)
     setError(null)
     try {
+      // ⚠️ NOMÉS el curs en marxa, no tots els anys.
+      //
+      // Llegir totes les notes de tota la història sortiria a ~10.800
+      // documents per any acumulat (400 alumnes × 9 àrees × 3 trimestres),
+      // i Firestore factura per document llegit: als deu cursos serien
+      // més de cent mil lectures cada vegada que algú obre la pantalla.
+      //
+      // Els cursos passats no cal recalcular-los mai: ja no canviaran. Es
+      // desen una vegada com a resum a "historicNotaArea" (uns quants
+      // documents en total) i es llegeixen d'allà.
       const [snapDesats, snapNotes] = await Promise.all([
         getDocs(collection(db, 'historicNotaArea')),
-        // Sense filtre de curs escolar: aquí es volen TOTS els anys que
-        // s'hagin portat amb l'app. Es filtra per tipus per no arrossegar
-        // el TEE i la lectura, que ja tenen el seu propi històric.
-        getDocs(query(collection(db, 'avaluacio'), where('tipus', '==', 'nota_area'))),
+        getDocs(query(
+          collection(db, 'avaluacio'),
+          where('tipus', '==', 'nota_area'),
+          where('cursEscolar', '==', cursEscolarActual()),
+        )),
       ])
       setCursosDesats(snapDesats.docs.map((d) => ({ id: d.id, ...d.data() })))
       setRegistres(snapNotes.docs.map((d) => ({ id: d.id, ...d.data() })))
@@ -58,12 +69,42 @@ export default function HistoricNotaArea() {
     }
   }
 
-  const cursos = useMemo(() => {
-    const anys = [...new Set(registres.map((r) => r.cursEscolar ?? cursEscolarActual()))]
-    const calculats = Object.fromEntries(
-      anys.map((any) => [any, resumDesDeRegistres(registres, any)]))
-    return fusionaHistoric(cursosDesats, calculats)
-  }, [registres, cursosDesats])
+  const curs = cursEscolarActual()
+  const filesActuals = useMemo(() => resumDesDeRegistres(registres, curs), [registres, curs])
+  const cursos = useMemo(
+    () => fusionaHistoric(cursosDesats, filesActuals.length > 0 ? { [curs]: filesActuals } : {}),
+    [filesActuals, cursosDesats, curs]
+  )
+
+  // El curs en marxa es recalcula sempre de les notes; els passats es
+  // llegeixen del resum desat. Perquè el curs d'enguany hi sigui l'any
+  // que ve, se n'ha de deixar la foto feta: es desa sola quan hi ha
+  // canvis i qui mira la pantalla té permís per escriure-hi.
+  const desatActual = cursosDesats.find((c) => c.cursEscolar === curs)
+  const calFotografiar = filesActuals.length > 0
+    && JSON.stringify(desatActual?.files ?? []) !== JSON.stringify(filesActuals)
+
+  useEffect(() => {
+    if (!calFotografiar || carregant || desant) return
+    let viu = true
+    setDoc(doc(db, 'historicNotaArea', curs), {
+      cursEscolar: curs,
+      files: filesActuals,
+      origenFitxer: null,
+      actualitzatEl: serverTimestamp(),
+      actualitzatPer: auth.currentUser?.email ?? null,
+    })
+      // Si l'usuari no té permís d'escriptura, no passa res: la pantalla
+      // segueix mostrant el curs en marxa calculat en directe. La foto ja
+      // la desarà qui pugui.
+      .then(() => { if (viu) setCursosDesats((a) => [
+        ...a.filter((c) => c.cursEscolar !== curs),
+        { id: curs, cursEscolar: curs, files: filesActuals },
+      ]) })
+      .catch(() => {})
+    return () => { viu = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [calFotografiar, carregant])
 
   const arees = useMemo(() => areesDe(cursos.flatMap((c) => c.files)), [cursos])
 
