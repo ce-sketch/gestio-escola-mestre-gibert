@@ -327,7 +327,21 @@ input {
 }
 
 /* ---------- Modules ---------- */
+/* 760px és l'amplada còmoda per llegir text seguit, i per això és el
+   valor per defecte. Els mòduls amb taules de moltes columnes (una per
+   classe, una per curs escolar…) queden estretes i s'han de desplaçar de
+   costat contínuament: aquests demanen `.module-ample` i aprofiten la
+   pantalla. El límit de 1600px hi és perquè en un monitor gran les files
+   no s'estirin tant que costi seguir-les amb la vista. */
 .module { max-width: 760px; }
+
+.module-ample { max-width: min(100%, 1600px); }
+
+/* Dins d'un mòdul ample, el text seguit es queda estret: llegir una
+   línia de 1500px és incòmode, encara que la taula de sota els necessiti. */
+.module-ample > .module-lead,
+.module-ample > .module-note,
+.module-ample > p.nota { max-width: 760px; }
 
 .module-eyebrow {
   margin: 0 0 6px 0;
