@@ -211,45 +211,117 @@ function FilaResum({ nom, valors, extra, detall }) {
 /** La graella de colors, calcada de la pestanya "MATRIU GENERAL" de l'Eina
  *  PGAC: files = mesures, columnes = grups, i el mateix codi de colors del
  *  full (vermell ≤30% · taronja 30-60% · blau 60-80% · verd >80%). */
+/**
+ * La matriu de colors del PGA.
+ *
+ * Va per BLOCS, cadascun amb la seva capçalera de columnes. Abans era una
+ * sola taula sense capçalera i calia passar el cursor per cada cel·la per
+ * saber a què corresponia — i, com que no totes les files tenen les
+ * mateixes columnes (uns cicles, unes comissions, un objectiu), una sola
+ * capçalera no hauria servit. Separant-ho per blocs, cada capçalera
+ * descriu exactament les columnes de sota.
+ */
 function MatriuColorsPGA({ files }) {
   if (files.length === 0) {
     return <p style={{ fontSize: 12, color: 'var(--ink-soft)', padding: '8px 0' }}>Encara no hi ha res a mostrar.</p>
   }
+
+  // Els blocs, en l'ordre en què arriben, i dins de cada bloc els grups
+  // de files que comparteixen les mateixes columnes.
+  const blocs = []
+  for (const fila of files) {
+    const nomBloc = fila.bloc ?? 'Altres'
+    let bloc = blocs.find((b) => b.nom === nomBloc)
+    if (!bloc) { bloc = { nom: nomBloc, grups: [] }; blocs.push(bloc) }
+    const clau = fila.columnes.map((c) => c.label).join('|')
+    let grup = bloc.grups.find((g) => g.clau === clau)
+    if (!grup) { grup = { clau, columnes: fila.columnes, files: [] }; bloc.grups.push(grup) }
+    grup.files.push(fila)
+  }
+
   return (
-    <div style={{ overflowX: 'auto', marginTop: 8 }}>
-      <table style={{ borderCollapse: 'collapse', fontSize: 11 }}>
-        <tbody>
-          {files.map((fila) => (
-            <tr key={fila.titol}>
-              <td style={{ padding: '4px 8px', whiteSpace: 'nowrap', color: 'var(--ink-soft)', borderBottom: '1px solid var(--line)' }}>
-                {fila.titol}
-              </td>
-              {fila.columnes.map((col) => {
-                const c = colorCella(col.valor)
-                return (
-                  <td
-                    key={col.id}
-                    title={`${col.label}: ${col.valor === null ? 'sense dades' : Math.round(col.valor) + '%'}`}
-                    style={{
-                      padding: '4px 6px', textAlign: 'center', minWidth: 44, borderBottom: '1px solid var(--line)',
-                      background: c?.bg ?? 'var(--paper)', color: c?.color ?? 'var(--ink-soft)',
-                      fontWeight: c ? 600 : 400,
-                    }}
-                  >
-                    {col.valor === null ? '—' : `${Math.round(col.valor)}%`}
-                  </td>
-                )
-              })}
-            </tr>
+    <div style={{ marginTop: 8 }}>
+      {blocs.map((bloc) => (
+        <div key={bloc.nom} style={{ marginTop: 14 }}>
+          <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--navy)', margin: '0 0 4px' }}>
+            {bloc.nom}
+          </p>
+          {bloc.grups.map((grup) => (
+            <div key={grup.clau} className="taula-scroll" style={{ marginBottom: 8 }}>
+              <table style={{ borderCollapse: 'collapse', fontSize: 11 }}>
+                <thead>
+                  <tr>
+                    <th style={{ padding: '4px 8px', textAlign: 'left', minWidth: 210 }}></th>
+                    {grup.columnes.map((col) => (
+                      <th
+                        key={col.id}
+                        style={{
+                          padding: '4px 6px', minWidth: 66, fontSize: 10, fontWeight: 600,
+                          color: 'var(--ink-soft)', textAlign: 'center',
+                          borderBottom: '2px solid var(--line)', whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {col.label}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {grup.files.map((fila) => (
+                    <tr key={fila.titol}>
+                      <td style={{ padding: '4px 8px', whiteSpace: 'nowrap', color: 'var(--ink-soft)', borderBottom: '1px solid var(--line)' }}>
+                        {fila.titol}
+                      </td>
+                      {fila.columnes.map((col) => {
+                        const c = colorCella(col.valor)
+                        return (
+                          <td
+                            key={col.id}
+                            style={{
+                              padding: '4px 6px', textAlign: 'center', minWidth: 66,
+                              borderBottom: '1px solid var(--line)',
+                              background: c?.bg ?? 'var(--paper)', color: c?.color ?? 'var(--ink-soft)',
+                              fontWeight: c ? 600 : 400,
+                            }}
+                          >
+                            {/* Un buit vol dir "aquest cicle no fa aquesta
+                                prova", no "0%": per això no es pinta. */}
+                            {col.valor === null ? '—' : `${Math.round(col.valor)}%`}
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           ))}
-        </tbody>
-      </table>
-      <p style={{ fontSize: 10, color: 'var(--ink-soft)', marginTop: 6 }}>
-        Passa el cursor per una cel·la per veure a què correspon. A TEE i VL/CL la xifra és
+        </div>
+      ))}
+
+      {/* Llegenda dels colors: sense això, saber si un blau és millor o
+          pitjor que un taronja demana anar a buscar-ho al full original. */}
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginTop: 12, fontSize: 10 }}>
+        <span style={{ color: 'var(--ink-soft)' }}>Franges:</span>
+        {[
+          { txt: '≤ 30%', bg: '#FF0000', color: '#fff' },
+          { txt: '30–60%', bg: '#FF9900', color: '#fff' },
+          { txt: '60–80%', bg: '#4A86E8', color: '#fff' },
+          { txt: '> 80%', bg: '#00FF00', color: '#1a1a1a' },
+        ].map((f) => (
+          <span key={f.txt} style={{ background: f.bg, color: f.color, padding: '2px 8px', borderRadius: 4, fontWeight: 600 }}>
+            {f.txt}
+          </span>
+        ))}
+        <span style={{ color: 'var(--ink-soft)' }}>— = aquest cicle no fa la prova</span>
+      </div>
+
+      <p style={{ fontSize: 10, color: 'var(--ink-soft)', marginTop: 8 }}>
+        A les proves (lectoescriptura, TEE, VL/CL, notes per àrea i Innovamat) la xifra és
         el <strong>percentatge de participació</strong>: 100% vol dir que tots els alumnes que
-        havien de fer la prova l&apos;han feta. L&apos;alumnat de 1r només hi compta al
-        <strong> tercer trimestre</strong> (a l&apos;Avaluació Final, en el cas de VL/CL);
-        abans no passa les proves i per això no entra al 100% de Cicle Inicial.
+        havien de fer la prova l&apos;han feta. L&apos;alumnat de 1r només compta al
+        <strong> tercer trimestre</strong> a TEE i VL/CL (a l&apos;Avaluació Final, en el cas de
+        VL/CL); abans no passa les proves i per això no entra al 100% de Cicle Inicial.
       </p>
     </div>
   )
@@ -275,6 +347,11 @@ export default function MatriuGeneral() {
   const [alumnes, setAlumnes] = useState([])
   const [teeRegistres, setTeeRegistres] = useState([])
   const [lecturaRegistres, setLecturaRegistres] = useState([])
+  // Per a les files noves de la matriu: notes per àrea, lectoescriptura
+  // d'Infantil i les proves d'Innovamat.
+  const [notaAreaRegistres, setNotaAreaRegistres] = useState([])
+  const [docsLectoescriptura, setDocsLectoescriptura] = useState([])
+  const [registresMates, setRegistresMates] = useState([])
 
   useEffect(() => {
     carrega()
@@ -685,7 +762,8 @@ export default function MatriuGeneral() {
     setMissatge(null)
     const delCurs = (nom) => getDocs(query(collection(db, nom), where('cursEscolar', '==', cursEscolarId)))
     try {
-      const [snapVal, snapFestes, snapCoop, snapAct, snapPgac, snapAlumnes, snapAvaluacio] = await Promise.all([
+      const [snapVal, snapFestes, snapCoop, snapAct, snapPgac, snapAlumnes, snapAvaluacio,
+        snapLecto, snapMates] = await Promise.all([
         delCurs('valoracions'),
         delCurs('festesDetall'),
         getDoc(doc(db, 'aprenentatgeCooperatiu', cursEscolarId)),
@@ -696,6 +774,8 @@ export default function MatriuGeneral() {
         // `cursEscolar` l'any — el filtre va per l'any, com al Resum.
         getDocs(query(collection(db, 'alumnes'), where('actiu', '==', true))),
         getDocs(query(collection(db, 'avaluacio'), where('cursEscolar', '==', cursEscolarId))),
+        delCurs('lectoescripturaEI'),
+        delCurs('matematiques'),
       ])
       setObjectiusPgac(snapPgac.exists() ? (snapPgac.data().objectius ?? []) : [])
 
@@ -703,6 +783,9 @@ export default function MatriuGeneral() {
       const avaluacions = snapAvaluacio.docs.map((d) => ({ id: d.id, ...d.data() }))
       setTeeRegistres(avaluacions.filter((r) => r.tipus === 'tee'))
       setLecturaRegistres(avaluacions.filter((r) => r.tipus === 'lectura'))
+      setNotaAreaRegistres(avaluacions.filter((r) => r.tipus === 'nota_area'))
+      setDocsLectoescriptura(snapLecto.docs.map((d) => ({ id: d.id, ...d.data() })))
+      setRegistresMates(snapMates.docs.map((d) => ({ id: d.id, ...d.data() })))
 
       setValoracions(snapVal.docs
         .map((d) => ({ id: d.id, ...d.data() }))
@@ -926,7 +1009,10 @@ export default function MatriuGeneral() {
                 { mitjanaValoracio, mitjanaGeneralFesta, mitjanaGrup, grauGlobal, grauCicle, CICLES_COOPERATIU, resultatObjectiu }
               ),
               ...filesProves(
-                { alumnes, teeRegistres, lecturaRegistres },
+                {
+                  alumnes, teeRegistres, lecturaRegistres,
+                  notaAreaRegistres, docsLectoescriptura, registresMates,
+                },
                 { cicleDe, MOMENTS_LECTURA }
               ),
             ]}
