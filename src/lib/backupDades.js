@@ -28,6 +28,9 @@ export const COL·LECCIONS = [
   { id: 'calendari', nom: 'Calendari', sobreescriu: true },
   { id: 'pgac', nom: 'PGAC', sobreescriu: true },
   { id: 'sic', nom: 'SIC (indicadors de centre)', sobreescriu: true },
+  // Els cursos d'abans de l'app: si es perdessin, caldria tornar a
+  // importar els fulls antics un per un.
+  { id: 'historicNotaArea', nom: 'Històric de notes per àrea', sobreescriu: true },
   { id: 'valoracions', nom: 'Valoracions', sobreescriu: true },
   { id: 'valoracionsConfig', nom: 'Configuració de valoracions', sobreescriu: true },
   { id: 'festesDetall', nom: 'Festes', sobreescriu: true },
