@@ -114,6 +114,17 @@ export async function triaDocumentsDelDrive(tipus = 'fulls', multiple = true) {
     if (tipus === 'pdf') {
       vista.setMimeTypes('application/pdf')
     }
+    if (tipus === 'fulls_o_pdf') {
+      // L'Històric de notes per àrea: d'uns cursos només existeix el PDF
+      // del full, i d'altres el full de càlcul. Han de sortir tots dos al
+      // selector o l'any que només té PDF no es podria carregar.
+      vista.setMimeTypes([
+        'application/pdf',
+        'application/vnd.google-apps.spreadsheet',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'application/vnd.ms-excel',
+      ].join(','))
+    }
     if (tipus === 'fulls') {
       // Tant els fulls natius de Google com un .xlsx/.xls de veritat
       // pujat al Drive (com el de "Nota mitjana d'àrea").
@@ -161,6 +172,9 @@ async function baixa(fitxer, tipus, token) {
   const mimeExport = tipus === 'documents' ? 'text/plain'
     : tipus === 'csv' ? 'text/csv'
     : XLSX_MIME
+  // Un PDF del Drive no és cap document de Google: es baixa tal qual i no
+  // passa per l'exportador. Amb "fulls_o_pdf" poden arribar totes dues
+  // coses, i qui mana és el tipus del fitxer, no el de la vista.
   const esDeGoogle = (fitxer.mimeType ?? '').startsWith('application/vnd.google-apps.')
   const url = esDeGoogle
     ? `https://www.googleapis.com/drive/v3/files/${fitxer.id}/export?mimeType=${encodeURIComponent(mimeExport)}`

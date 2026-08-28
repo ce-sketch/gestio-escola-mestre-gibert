@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 
-import { trimestreDeFull, cursEscolarDeFull } from './historicNotaAreaParser'
+import { trimestreDeFull, cursEscolarDeFull, esPdf } from './historicNotaAreaParser'
 
 describe('trimestreDeFull', () => {
   it('reconeix els noms de full del centre', () => {
@@ -85,5 +85,68 @@ describe('llegeixResumNotaArea — un full real', () => {
     const { llegeixResumNotaArea } = await import('./historicNotaAreaParser')
     const { cursEscolar } = await llegeixResumNotaArea(await fullDeProva())
     expect(cursEscolar).toBe('2023-24')
+  })
+})
+
+describe('esPdf', () => {
+  const ambCaps = (bytes) => new Uint8Array(bytes).buffer
+
+  it('reconeix un PDF pels seus primers bytes', () => {
+    // 0x25 0x50 0x44 0x46 = "%PDF"
+    expect(esPdf(ambCaps([0x25, 0x50, 0x44, 0x46, 0x2d]))).toBe(true)
+  })
+
+  it('no confon un .xlsx amb un PDF', () => {
+    // Un .xlsx és un ZIP: comença per "PK"
+    expect(esPdf(ambCaps([0x50, 0x4b, 0x03, 0x04]))).toBe(false)
+  })
+
+  it('mira el contingut i no l\'extensió: del Drive el nom pot ser un altre', () => {
+    expect(esPdf(ambCaps([0x25, 0x50, 0x44, 0x46]))).toBe(true)
+  })
+
+  it('no peta amb un fitxer buit o massa curt', () => {
+    expect(esPdf(null)).toBe(false)
+    expect(esPdf(new ArrayBuffer(0))).toBe(false)
+    expect(esPdf(ambCaps([0x25]))).toBe(false)
+  })
+})
+
+describe('el total com a comprovació', () => {
+  // Al PDF, la fila de TOTALS d'un bloc pot quedar a la mateixa alçada
+  // que la fila d'una classe d'un altre bloc; llavors els seus números
+  // s'enganxen darrere d'un codi de classe que no és seu. Passa de debò
+  // al curs 25-26, on els totals de Science cauen sobre la fila de 5A.
+  async function fullAmb(files) {
+    const ExcelJS = (await import('exceljs')).default
+    const wb = new ExcelJS.Workbook()
+    const ws = wb.addWorksheet('Resum 1r Trim.')
+    ws.addRow(['Curs: 2023-24'])
+    ws.addRow(['català', '', '', '', '', '', 'castellà'])
+    for (const f of files) ws.addRow(f)
+    const buf = await wb.xlsx.writeBuffer()
+    return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength)
+  }
+
+  it('accepta la fila quan el total quadra amb la suma', async () => {
+    const { llegeixResumNotaArea } = await import('./historicNotaAreaParser')
+    const { files } = await llegeixResumNotaArea(await fullAmb([['1A', 5, 6, 15, 1, 27]]))
+    expect(files).toHaveLength(1)
+    expect(files[0]).toMatchObject({ classe: '1A', total: 27 })
+  })
+
+  it('descarta la fila quan el total no quadra: no és una classe', async () => {
+    const { llegeixResumNotaArea } = await import('./historicNotaAreaParser')
+    const { files, avisos } = await llegeixResumNotaArea(await fullAmb([['5A', 0, 13, 56, 95, 45]]))
+    expect(files).toHaveLength(0)
+    expect(avisos.some((a) => /no quadrava/i.test(a))).toBe(true)
+  })
+
+  it('accepta la fila si el full no porta columna de total', async () => {
+    // Hi ha fulls que no la tenen: exigir-la deixaria l'any sense dades.
+    const { llegeixResumNotaArea } = await import('./historicNotaAreaParser')
+    const { files } = await llegeixResumNotaArea(await fullAmb([['1A', 5, 6, 15, 1]]))
+    expect(files).toHaveLength(1)
+    expect(files[0].total).toBe(27) // recalculat de la suma
   })
 })

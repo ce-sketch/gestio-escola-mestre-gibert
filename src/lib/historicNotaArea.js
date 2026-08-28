@@ -279,5 +279,25 @@ export function fullEvolucioNotaArea(cursos, { trimestre = '3r trimestre', sense
       }),
     ])
   }
+
+  // La xifra GLOBAL del centre: totes les àrees juntes. És la que es
+  // lliura a la memòria i al SIC, i la que diu si el centre millora en
+  // conjunt — mirant només àrea per àrea es pot perdre.
+  //
+  // Es calcula sobre el total d'avaluacions, no fent la mitjana dels
+  // percentatges per àrea: una àrea amb 20 alumnes no pot pesar igual que
+  // una amb 300.
+  files.push([
+    'GLOBAL',
+    ...anys.map((any) => {
+      const curs = cursos.find((c) => c.cursEscolar === any)
+      // Les calculades (Medi global, Artística) queden fora del global:
+      // són la mitjana d'àrees que ja hi compten, i comptar-les seria
+      // comptar dues vegades els mateixos alumnes.
+      const reals = (curs?.files ?? []).filter((f) => !AREES.some((a) => a.calculada && a.id === f.area))
+      return percentatgeSuperacio(totalCentre(reals, { trimestre, sensePrimer })) ?? ''
+    }),
+  ])
+
   return { nom: `Evolució (${trimestre})`, files }
 }
