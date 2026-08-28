@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { collection, getDocs, query, where } from 'firebase/firestore'
-import { db } from '../../../firebase'
+import { collection, doc, getDocs, query, setDoc, where, serverTimestamp } from 'firebase/firestore'
+import { db, auth } from '../../../firebase'
 import { cursEscolarActual } from '../../../lib/cursEscolar'
 import { slug } from '../../../lib/slug'
 import {
   ETAPES_TEBEROSKY, NIVELLS_TEBEROSKY, esClasseEI4o5, comptaNivells, fullResumEI,
+  idConfigEI, esConfigEI, classesQueFanLaProva,
 } from '../../../lib/lectoescripturaEI'
 import { exportaExcel, exportaPDF } from '../../../lib/exportTaula'
 
@@ -30,6 +31,7 @@ export default function ResumLectoescripturaEI() {
   const [carregant, setCarregant] = useState(true)
   const [error, setError] = useState(null)
   const [exportant, setExportant] = useState(false)
+  const [desantConfig, setDesantConfig] = useState(false)
 
   const cursEscolarId = cursEscolarActual()
 
@@ -53,8 +55,40 @@ export default function ResumLectoescripturaEI() {
     carrega()
   }, [cursEscolarId])
 
+  const config = useMemo(() => documents.find(esConfigEI) ?? null, [documents])
+  const totesLesClasses = useMemo(
+    () => [...new Set(alumnes.map((a) => a.curs))].filter(esClasseEI4o5).sort(),
+    [alumnes]
+  )
+
+  /** Marca o desmarca una classe. Es desa de seguida: és un clic i no
+   *  té sentit demanar després un botó de desar. */
+  async function canviaClasse(classe, laFa) {
+    const excloses = new Set(config?.classesExcloses ?? [])
+    if (laFa) excloses.delete(classe)
+    else excloses.add(classe)
+    setDesantConfig(true)
+    try {
+      await setDoc(doc(db, 'lectoescripturaEI', idConfigEI(cursEscolarId)), {
+        tipus: 'config',
+        cursEscolar: cursEscolarId,
+        classesExcloses: [...excloses],
+        actualitzatEl: serverTimestamp(),
+        actualitzatPer: auth.currentUser?.email ?? null,
+      }, { merge: true })
+      setDocuments((a) => [
+        ...a.filter((d) => !esConfigEI(d)),
+        { id: idConfigEI(cursEscolarId), tipus: 'config', cursEscolar: cursEscolarId, classesExcloses: [...excloses] },
+      ])
+    } catch (err) {
+      setError(`No s'ha pogut desar: ${err.message}`)
+    } finally {
+      setDesantConfig(false)
+    }
+  }
+
   const perClasse = useMemo(() => {
-    const classes = [...new Set(alumnes.map((a) => a.curs))].filter(esClasseEI4o5).sort()
+    const classes = classesQueFanLaProva(config, totesLesClasses)
     return classes.map((classe) => {
       const ids = alumnes.filter((a) => a.curs === classe).map((a) => a.id)
       const doc = documents.find((d) => d.id === `${cursEscolarId}__${slug(classe)}`)
@@ -65,7 +99,7 @@ export default function ResumLectoescripturaEI() {
         teDades: Boolean(doc),
       }
     })
-  }, [alumnes, documents, cursEscolarId])
+  }, [alumnes, documents, cursEscolarId, config, totesLesClasses])
 
   const totalAlumnes = perClasse.reduce((t, c) => t + c.total, 0)
   const suma = (nivellId) => perClasse.reduce((t, c) => t + (c.comptes[nivellId] ?? 0), 0)
@@ -98,6 +132,36 @@ export default function ResumLectoescripturaEI() {
         EI&quot; d&apos;entrada de dades.
       </p>
 
+      {/* Quines classes fan la prova aquest curs. Ara només la passa I5,
+          però I4 la pot començar a fer: en comptes de deixar-ho escrit al
+          codi, es tria aquí i es desa amb el curs. Una classe desmarcada
+          no compta enlloc — ni al resum ni a la matriu del PGA— i per
+          tant no surt en vermell com si hi faltessin dades. */}
+      {totesLesClasses.length > 0 && (
+        <div className="caixa-discreta" style={{ marginTop: 14 }}>
+          <strong style={{ fontSize: 13 }}>Quines classes passen la prova aquest curs</strong>
+          <p className="nota">
+            Desmarca les que no la facin: no comptaran ni aquí ni al quadre de comandament.
+          </p>
+          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 6 }}>
+            {totesLesClasses.map((classe) => {
+              const laFa = !(config?.classesExcloses ?? []).includes(classe)
+              return (
+                <label key={classe} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13 }}>
+                  <input
+                    type="checkbox"
+                    checked={laFa}
+                    disabled={desantConfig}
+                    onChange={(e) => canviaClasse(classe, e.target.checked)}
+                  />
+                  {classe}
+                </label>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       {perClasse.length > 0 && (
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 14 }}>
           <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}>Descarrega el resum:</span>
@@ -117,7 +181,9 @@ export default function ResumLectoescripturaEI() {
 
       {!carregant && perClasse.length === 0 && (
         <p className="nota" style={{ marginTop: 16 }}>
-          No consta cap classe d&apos;I4 o I5 amb alumnes actius aquest curs.
+          {totesLesClasses.length === 0
+            ? "No consta cap classe d'I4 o I5 amb alumnes actius aquest curs."
+            : 'Cap de les classes d\'I4 o I5 no està marcada com a que passi la prova.'}
         </p>
       )}
 
