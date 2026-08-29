@@ -38,6 +38,11 @@ export default function HistoricNotaArea() {
   // i no coincideix amb el que s'ha triat, es diu, però mana el triat.
   const [cursCarrega, setCursCarrega] = useState('')
   const [trimestre, setTrimestre] = useState('3r trimestre')
+  // A 1r encara s'està aprenent a llegir i escriure, i els seus resultats
+  // arrosseguen avall la mitjana del centre. La resta de resums del
+  // centre donen sempre les dues xifres, i comparar-les diu coses
+  // diferents: per això aquí també es pot treure.
+  const [sensePrimer, setSensePrimer] = useState(false)
   const [cursObert, setCursObert] = useState(null)
   // Esborrar un curs sencer de l'històric no es pot desfer des de l'app
   // (si venia d'un full antic, caldria tornar-lo a pujar). Amb un simple
@@ -195,7 +200,9 @@ export default function HistoricNotaArea() {
         etiqueta: 'Avaluació',
         subtitol: "Històric de notes per àrea",
         fulls: [
-          fullEvolucioNotaArea(cursos, { trimestre }),
+          // Amb el mateix filtre que la pantalla: si es baixés sempre amb
+          // 1r inclòs, el fitxer no coincidiria amb el que s'acaba de veure.
+          fullEvolucioNotaArea(cursos, { trimestre, sensePrimer }),
           fullHistoricNotaArea(cursos),
         ],
       }
@@ -344,6 +351,10 @@ export default function HistoricNotaArea() {
                 {TRIMESTRES.map((t) => <option key={t} value={t}>{t}</option>)}
               </select>
             </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, paddingBottom: 8 }}>
+              <input type="checkbox" checked={sensePrimer} onChange={(e) => setSensePrimer(e.target.checked)} />
+              sense 1r
+            </label>
           </div>
 
           <div className="taula-scroll" style={{ marginTop: 10 }}>
@@ -367,7 +378,7 @@ export default function HistoricNotaArea() {
                     <td>{area.label}</td>
                     {[...cursos].reverse().map((c) => {
                       const pct = percentatgeSuperacio(
-                        totalCentre(c.files, { area: area.id, trimestre }))
+                        totalCentre(c.files, { area: area.id, trimestre, sensePrimer }))
                       return (
                         <td key={c.cursEscolar} className="num">
                           {pct === null ? <span style={{ color: 'var(--line)' }}>—</span> : `${pct}%`}
@@ -385,7 +396,7 @@ export default function HistoricNotaArea() {
                     // Artística) en queden fora, o es comptarien dues
                     // vegades els mateixos alumnes.
                     const reals = c.files.filter((f) => !AREES.some((a) => a.calculada && a.id === f.area))
-                    const pct = percentatgeSuperacio(totalCentre(reals, { trimestre }))
+                    const pct = percentatgeSuperacio(totalCentre(reals, { trimestre, sensePrimer }))
                     return (
                       <td key={c.cursEscolar} className="num">
                         {pct === null ? <span style={{ color: 'var(--line)' }}>—</span> : `${pct}%`}
