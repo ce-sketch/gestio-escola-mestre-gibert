@@ -27,6 +27,7 @@ import ResumCosmos from './avaluacio/ResumCosmos.jsx'
 import ResumLectoescripturaEI from './avaluacio/ResumLectoescripturaEI.jsx'
 import HistoricLectoescriptura from './avaluacio/HistoricLectoescriptura.jsx'
 import HistoricNotaArea from './avaluacio/HistoricNotaArea.jsx'
+import ConfiguracioProves from './avaluacio/ConfiguracioProves.jsx'
 import Historic from './avaluacio/Historic.jsx'
 import HistoricInnovamat from './avaluacio/HistoricInnovamat.jsx'
 
@@ -66,6 +67,7 @@ const GRUPS = [
       { id: 'arees-no-superades', label: 'Àrees no superades', component: AreesNoSuperades },
       // El "lloc per imprimir": tot Notes per àrea en un sol Excel/PDF.
       { id: 'descarregues', label: 'Descàrregues', component: Descarregues },
+      { id: 'config-proves', label: 'Quines proves es passen', component: ConfiguracioProves, nomesAdmin: true },
     ],
   },
   {

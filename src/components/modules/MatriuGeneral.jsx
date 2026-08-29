@@ -353,6 +353,9 @@ export default function MatriuGeneral() {
   const [notaAreaRegistres, setNotaAreaRegistres] = useState([])
   const [docsLectoescriptura, setDocsLectoescriptura] = useState([])
   const [registresMates, setRegistresMates] = useState([])
+  // Quines classes passen cada prova aquest curs. Sense això, la matriu
+  // marcaria en vermell proves que un cicle no ha de fer.
+  const [configProves, setConfigProves] = useState(null)
 
   useEffect(() => {
     carrega()
@@ -764,7 +767,7 @@ export default function MatriuGeneral() {
     const delCurs = (nom) => getDocs(query(collection(db, nom), where('cursEscolar', '==', cursEscolarId)))
     try {
       const [snapVal, snapFestes, snapCoop, snapAct, snapPgac, snapAlumnes, snapAvaluacio,
-        snapLecto, snapMates] = await Promise.all([
+        snapLecto, snapMates, snapProves] = await Promise.all([
         delCurs('valoracions'),
         delCurs('festesDetall'),
         getDoc(doc(db, 'aprenentatgeCooperatiu', cursEscolarId)),
@@ -777,6 +780,7 @@ export default function MatriuGeneral() {
         getDocs(query(collection(db, 'avaluacio'), where('cursEscolar', '==', cursEscolarId))),
         delCurs('lectoescripturaEI'),
         delCurs('matematiques'),
+        getDoc(doc(db, 'provesActives', cursEscolarId)),
       ])
       setObjectiusPgac(snapPgac.exists() ? (snapPgac.data().objectius ?? []) : [])
 
@@ -787,6 +791,7 @@ export default function MatriuGeneral() {
       setNotaAreaRegistres(avaluacions.filter((r) => r.tipus === 'nota_area'))
       setDocsLectoescriptura(snapLecto.docs.map((d) => ({ id: d.id, ...d.data() })))
       setRegistresMates(snapMates.docs.map((d) => ({ id: d.id, ...d.data() })))
+      setConfigProves(snapProves.exists() ? snapProves.data() : null)
 
       setValoracions(snapVal.docs
         .map((d) => ({ id: d.id, ...d.data() }))
@@ -1016,7 +1021,7 @@ export default function MatriuGeneral() {
                   // El document de configuració no és cap classe: es
                   // treu de la llista i se n'agafen les exclusions.
                   docsLectoescriptura: docsLectoescriptura.filter((d) => !esConfigEI(d)),
-                  lectoExcloses: docsLectoescriptura.find(esConfigEI)?.classesExcloses ?? [],
+                  configProves,
                 },
                 { cicleDe, MOMENTS_LECTURA }
               ),
