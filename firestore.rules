@@ -153,6 +153,14 @@ service cloud.firestore {
       allow write: if esAdmin();
     }
 
+    // Quines classes passen cada prova, per curs escolar. La llegeix
+    // tothom (els resums i la matriu la necessiten); només la canvia
+    // l'administració.
+    match /provesActives/{cursEscolarId} {
+      allow read: if esComptePersonal();
+      allow write: if esAdmin();
+    }
+
     // SIC: Sistema d'Indicadors de Centre, un document per curs escolar.
     // Com el PGAC i l'Economia, és documentació de direcció: només
     // l'administrador.
