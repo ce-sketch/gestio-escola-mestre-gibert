@@ -293,11 +293,19 @@ export default function Backup() {
 
   /**
    * Baixa l'històric de proves (TEE i VL/CL) en el mateix format que espera
-   * el botó "Importa l'històric" de la pestanya Històric. És una còpia a
-   * banda del .zip general perquè és l'única col·lecció amb la lectura
-   * tancada per Firestore (només ce@escolamestregibert.cat hi arriba), i
-   * perquè el fitxer resultant s'ha de poder tornar a pujar tal qual amb
-   * aquell mateix botó, sense passar per la restauració general.
+   * el botó "Importa l'històric" de la pestanya Històric.
+   *
+   * NO substitueix el .zip general: `historicProves` també hi és. Aquest
+   * botó existeix perquè el fitxer que en surt es pot tornar a pujar tal
+   * qual amb "Importa l'històric", sense haver de passar per la
+   * restauració completa — útil per moure l'històric entre entorns o per
+   * revisar-lo a part.
+   *
+   * (El comentari d'abans deia que se n'excloïa per ser l'única col·lecció
+   * amb la lectura reservada a l'administrador. Ja no és cert: economia,
+   * pgac i sic estan igual i sí que van al .zip. El resultat era que una
+   * restauració general no recuperava l'històric, que és justament l'únic
+   * que no es pot refer des de l'app.)
    */
   async function exportaHistoric() {
     setExportantHistoric(true)
