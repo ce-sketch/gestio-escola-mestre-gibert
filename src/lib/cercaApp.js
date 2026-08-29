@@ -26,6 +26,9 @@ export const DESTINACIONS = [
     // "informe per alumne" es manté a les paraules: era el nom d'abans i
     // hi haurà qui el continuï buscant així una temporada.
     paraules: ['informe', 'informe per alumne', 'informe qualitatiu', 'redactat', 'acta', 'comentari'] },
+  { modul: 'avaluacio', nom: 'Quines proves es passen', on: 'Avaluació',
+    paraules: ['quines proves', 'classes que fan la prova', 'excepcions', 'primer no fa',
+      'infantil no fa', 'configuració proves', 'moments'] },
   { modul: 'avaluacio', nom: 'Històric de notes per àrea', on: 'Avaluació',
     paraules: ['històric notes', 'evolució àrees', 'superació', 'àrees instrumentals',
       'nota mitjana', 'anys anteriors', 'memòria'] },

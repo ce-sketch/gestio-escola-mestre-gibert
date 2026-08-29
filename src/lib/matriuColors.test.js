@@ -170,16 +170,23 @@ describe('filesProves — l\'alumnat de 1r', () => {
     { alumneId: '2n-3', curs: '2nA', trimestre },
   ]
 
-  it('no compta al 1r i 2n trimestre: només 2n de primària fa la prova', () => {
-    // Si 1r hi comptés, Cicle Inicial no arribaria mai al 100% i sortiria
-    // vermell sense que hi hagués res a corregir.
+  it('per defecte hi compta: que no passi les proves fins al tercer trimestre es configura', () => {
+    // Abans era una regla escrita al codi. Ara és una decisió del centre
+    // que es pot canviar sense tocar res, perquè pot canviar d'un any a
+    // l'altre. Sense configurar-ho, 1r entra al denominador.
     const fila = filaDe(proves({ teeRegistres: tee(1) }), 'TEE — 1r')
-    expect(cel·la(fila, 'CI')).toBe(100)
+    expect(cel·la(fila, 'CI')).toBe(50) // 4 de 8
   })
 
-  it('sí que compta al tercer trimestre', () => {
-    const fila = filaDe(proves({ teeRegistres: tee(3) }), 'TEE — 3r')
-    expect(cel·la(fila, 'CI')).toBe(50) // 4 de 8
+  it('desmarcant 1r als dos primers trimestres, el Cicle Inicial pot arribar al 100%', () => {
+    const fila = filaDe(
+      filesProves(
+        { alumnes, teeRegistres: tee(1), configProves: { exclusions: { 'tee__1': ['1rA'] } } },
+        { cicleDe, MOMENTS_LECTURA }
+      ),
+      'TEE — 1r'
+    )
+    expect(cel·la(fila, 'CI')).toBe(100) // 4 de 4, només 2n
   })
 })
 
@@ -220,21 +227,25 @@ describe('construeixMatriu', () => {
   })
 })
 
-describe('filesProves — classes que no fan la prova', () => {
-  it('Educació Infantil no compta al TEE', () => {
-    // La rúbrica en té nivells i el mòdul n'ofereix les classes, però al
-    // centre no es passa: comptar-la deixava la columna en vermell fix.
-    const fila = filaDe(proves(), 'TEE — 1r')
-    expect(cel·la(fila, 'EI')).toBeNull()
+describe('filesProves — quines classes passen cada prova', () => {
+  const ambConfig = (exclusions, dades = {}) => filesProves(
+    { alumnes, ...dades, configProves: { exclusions } },
+    { cicleDe, MOMENTS_LECTURA }
+  )
+
+  it('Educació Infantil no compta al TEE: no és dels seus nivells', () => {
+    // Ja no està escrit al codi: el catàleg diu que el TEE és de
+    // primària, i Infantil no hi entra ni al denominador.
+    expect(cel·la(filaDe(proves(), 'TEE — 1r'), 'EI')).toBeNull()
   })
 
   it('una classe desmarcada surt del numerador i del denominador', () => {
-    // Ara mateix la lectoescriptura només la passa I5. Amb I4 exclosa,
-    // el 100% s'ha de calcular només sobre I5.
+    // Ara mateix la lectoescriptura només la passa I5. Amb I4 fora, el
+    // 100% s'ha de calcular només sobre I5.
     const docs = [{ classe: 'I5A', alumnes: { 'i5-0': { dibuix: true }, 'i5-1': { dibuix: true } } }]
     const ambI4 = filaDe(proves({ docsLectoescriptura: docs }), 'Lectoescriptura')
     const senseI4 = filaDe(
-      filesProves({ alumnes, docsLectoescriptura: docs, lectoExcloses: ['I4A'] }, { cicleDe, MOMENTS_LECTURA }),
+      ambConfig({ 'lectoescriptura__curs': ['I4A'] }, { docsLectoescriptura: docs }),
       'Lectoescriptura'
     )
     expect(cel·la(ambI4, 'EI')).toBe(25)    // 2 de 8 (I4 + I5)
@@ -242,10 +253,28 @@ describe('filesProves — classes que no fan la prova', () => {
   })
 
   it('si es desmarquen totes, la casella queda buida i no a zero', () => {
-    const fila = filaDe(
-      filesProves({ alumnes, lectoExcloses: ['I4A', 'I5A'] }, { cicleDe, MOMENTS_LECTURA }),
-      'Lectoescriptura'
-    )
+    const fila = filaDe(ambConfig({ 'lectoescriptura__curs': ['I4A', 'I5A'] }), 'Lectoescriptura')
     expect(cel·la(fila, 'EI')).toBeNull()
+  })
+
+  it('cada moment es configura per separat', () => {
+    // El cas real: a 1r no passen el TEE fins al tercer trimestre.
+    const config = { 'tee__1': ['1rA'], 'tee__2': ['1rA'] }
+    const tee = [
+      { alumneId: '1r-0', curs: '1rA', trimestre: 1 },
+      { alumneId: '2n-0', curs: '2nA', trimestre: 1 },
+    ]
+    const primer = filaDe(ambConfig(config, { teeRegistres: tee }), 'TEE — 1r')
+    const tercer = filaDe(ambConfig(config, { teeRegistres: tee }), 'TEE — 3r')
+    // Al 1r trimestre, 1r no compta: el denominador és només 2n (4 alumnes).
+    expect(cel·la(primer, 'CI')).toBe(25)
+    // Al tercer sí que hi compta: 8 alumnes al denominador.
+    expect(cel·la(tercer, 'CI')).toBe(0)
+  })
+
+  it('sense configuració, les passen totes les que els toca', () => {
+    const fila = filaDe(proves(), 'COSMOS')
+    expect(cel·la(fila, 'CI')).not.toBeNull()
+    expect(cel·la(fila, 'CM')).toBeNull()
   })
 })

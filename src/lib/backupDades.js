@@ -41,6 +41,9 @@ export const COL·LECCIONS = [
   // algú ha desat expressament abans de fer un canvi gros: si es
   // perdessin, es perdria justament la xarxa de seguretat.
   { id: 'versions', nom: 'Versions desades', sobreescriu: false },
+  // Quines classes passen cada prova. Si es perdés, els resums i la
+  // matriu tornarien a marcar en vermell coses que no s'han de fer.
+  { id: 'provesActives', nom: 'Proves que es passen', sobreescriu: true },
   { id: 'valoracions', nom: 'Valoracions', sobreescriu: true },
   { id: 'valoracionsConfig', nom: 'Configuració de valoracions', sobreescriu: true },
   { id: 'festesDetall', nom: 'Festes', sobreescriu: true },

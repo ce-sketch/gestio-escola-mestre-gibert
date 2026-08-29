@@ -32,6 +32,8 @@ export function colorCella(percentatge) {
   return FRANGES.find((f) => fraccio <= f.fins) ?? FRANGES[FRANGES.length - 1]
 }
 
+import { passaLaProva } from './provesActives'
+
 export const COLUMNES_GRUP = [
   { id: 'EI', label: 'Ed. Infantil', nom: 'Educació Infantil' },
   { id: 'CI', label: 'C. Inicial', nom: 'Cicle Inicial' },
@@ -156,29 +158,25 @@ export function filesProves(dades, { cicleDe, MOMENTS_LECTURA }) {
   const registresMates = dades?.registresMates ?? []
   // Les classes d'I4/I5 que aquest curs NO passen la lectoescriptura.
   // Es configura des del Resum: ara només la fa I5, però pot canviar.
-  const lectoExcloses = dades?.lectoExcloses ?? []
+  // La configuració de quines classes passen cada prova aquest curs.
+  // Substitueix el que abans estava escrit al codi (que Infantil no fa
+  // TEE, que 1r no en fa fins al tercer trimestre…): ara tot això es pot
+  // canviar des de la pantalla, perquè canvia d'un any a l'altre.
+  const configProves = dades?.configProves ?? null
   const cicleColumnes = COLUMNES_GRUP // EI · CI · CM · CS
 
-  /** Un alumne de 1r de Primària? */
-  const esDePrimer = (curs) => String(curs ?? '').trim()[0] === '1'
-
   /**
-   * L'alumnat de 1r **només compta al tercer trimestre**: abans no passa
-   * les proves. Si es comptés als altres moments, Cicle Inicial no
-   * arribaria mai al 100% i sortiria vermell sense que hi hagués res a
-   * corregir.
+   * Si una classe passa una prova en un moment concret.
+   *
+   * Ho decideix tot `passaLaProva`: quins nivells fan la prova (el COSMOS
+   * és de 1r i 2n i no ho serà mai d'una altra cosa) i quines classes
+   * s'han desmarcat aquest curs. Abans hi havia dues regles escrites al
+   * codi —que Infantil no fa TEE, que 1r no en fa fins al tercer
+   * trimestre— i ara són configurables, que és el que calia: canvien
+   * d'un any a l'altre.
    */
-  function compta(curs, { nomesTercerTrimestre = false, nomesCursos = null, excloses = [] }) {
-    if (nomesTercerTrimestre && esDePrimer(curs)) return false
-    // Classes que aquest curs no passen la prova: no compten ni al
-    // numerador ni al denominador, o sortiria vermell sense que hi hagi
-    // res per corregir.
-    if (excloses.includes(curs)) return false
-    // Algunes proves només les fa una part del cicle: la lectoescriptura,
-    // I4 i I5 (no I3); el COSMOS, 1r i 2n. El denominador ha de ser
-    // només aquest alumnat.
-    if (nomesCursos && !nomesCursos.some((p) => String(curs ?? '').trim().toUpperCase().startsWith(p))) return false
-    return true
+  function compta(curs, { prova, moment }) {
+    return passaLaProva(configProves, prova, moment, curs)
   }
 
   /** Alumnes que han de fer la prova en aquest cicle i moment. */
@@ -197,15 +195,14 @@ export function filesProves(dades, { cicleDe, MOMENTS_LECTURA }) {
     return vistos.size
   }
 
-  function fila(bloc, titol, registres, opcions = {}) {
-    const { senseCicles = [] } = opcions
+  function fila(bloc, titol, registres, opcions) {
     return {
       bloc,
       titol,
       columnes: cicleColumnes.map((col) => {
-        // Un cicle que no fa la prova es deixa buit, no a 0%: si no,
-        // sortiria vermell sense que hi hagués res per corregir.
-        if (senseCicles.includes(col.id)) return { id: col.id, label: col.label, valor: null }
+        // Un cicle on cap classe no passa la prova es deixa BUIT, no a 0%:
+        // un guionet vol dir "aquí no toca" i un zero, "toca i no s'ha
+        // fet". El denominador ja hi arriba a zero sol.
         const total = denominador(col.id, opcions)
         if (total === 0) return { id: col.id, label: col.label, valor: null }
         return { id: col.id, label: col.label, valor: (participants(registres, col.id, opcions) / total) * 100 }
@@ -227,23 +224,14 @@ export function filesProves(dades, { cicleDe, MOMENTS_LECTURA }) {
       registresLecto.push({ alumneId, curs: d.classe })
     }
   }
-  files.push(fila('Lectoescriptura (I4 i I5)', 'Lectoescriptura EI', registresLecto, {
-    senseCicles: ['CI', 'CM', 'CS'],
-    nomesCursos: ['I4', 'I5'],
-    excloses: lectoExcloses,
-  }))
+  files.push(fila('Lectoescriptura (I4 i I5)', 'Lectoescriptura EI', registresLecto,
+    { prova: 'lectoescriptura', moment: 'curs' }))
 
   // --- TEE, un per trimestre -----------------------------------------------
   for (const t of TRIMESTRES) {
     files.push(fila('Llengua catalana', `TEE — ${t.label}`,
       teeRegistres.filter((r) => Number(r.trimestre) === t.num),
-      {
-        // Educació Infantil no passa el TEE. La rúbrica en té nivells i el
-        // mòdul n'ofereix les classes, però al centre no es fa: comptar-les
-        // deixava la columna d'Infantil en vermell permanent.
-        senseCicles: ['EI'],
-        nomesTercerTrimestre: t.num !== 3,
-      }))
+      { prova: 'tee', moment: String(t.num) }))
   }
 
   // --- VL/CL, un per moment ------------------------------------------------
@@ -252,12 +240,7 @@ export function filesProves(dades, { cicleDe, MOMENTS_LECTURA }) {
   for (const m of MOMENTS_LECTURA) {
     files.push(fila('Llengua catalana', `VL/CL — ${m.label}`,
       lecturaRegistres.filter((r) => r.moment === m.id),
-      {
-        senseCicles: ['EI'],
-        // L'Avaluació Final és la del tercer trimestre; a les altres dues,
-        // 1r no hi compta.
-        nomesTercerTrimestre: m.id !== 'final',
-      }))
+      { prova: 'lectura', moment: m.id }))
   }
 
   // --- Notes per àrea, un per trimestre ------------------------------------
@@ -267,7 +250,7 @@ export function filesProves(dades, { cicleDe, MOMENTS_LECTURA }) {
   for (const t of TRIMESTRES) {
     files.push(fila('Notes per àrea', `Notes per àrea — ${t.label}`,
       notaAreaRegistres.filter((r) => r.trimestre === t.label || Number(r.trimestre) === t.num),
-      { senseCicles: ['EI'] }))
+      { prova: 'notaArea', moment: t.label }))
   }
 
   // --- Innovamat -----------------------------------------------------------
@@ -282,8 +265,8 @@ export function filesProves(dades, { cicleDe, MOMENTS_LECTURA }) {
     alumneId: r.alumneId, curs: r.cosmos?.classe ?? null,
   })).filter((r) => r.alumneId && r.curs)
 
-  files.push(fila('Innovamat', 'COSMOS (1r i 2n)', ambCosmos, { senseCicles: ['EI', 'CM', 'CS'] }))
-  files.push(fila('Innovamat', 'ConMat (3r a 6è)', ambConmat, { senseCicles: ['EI', 'CI'] }))
+  files.push(fila('Innovamat', 'COSMOS (1r i 2n)', ambCosmos, { prova: 'cosmos', moment: 'final' }))
+  files.push(fila('Innovamat', 'ConMat (3r a 6è)', ambConmat, { prova: 'conmat', moment: 'final' }))
 
   return files
 }
