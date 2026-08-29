@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import JSZip from 'jszip'
-import { exportaDadesCrues, restauraDades, inspeccionaBackup } from '../../lib/backupDades'
+import { exportaDadesCrues, restauraDades, inspeccionaBackup, estatBackup } from '../../lib/backupDades'
 import { collection, getDocs, doc, getDoc, setDoc, deleteDoc, writeBatch, serverTimestamp, orderBy, query, limit } from 'firebase/firestore'
 import { db, auth } from '../../firebase'
 import { aCsv, formataData } from '../../lib/csv'
@@ -8,8 +8,6 @@ import { comptaDiesLectius } from '../../lib/calendar'
 import { calculaIndexos } from '../../lib/absentisme'
 import { cursEscolarActual } from '../../lib/cursEscolar'
 import { slug } from '../../lib/slug'
-
-const DIES_AVIS = 30
 
 export default function Backup() {
   const [exportant, setExportant] = useState(false)
@@ -382,10 +380,9 @@ export default function Backup() {
   const versioTriada = versions.find((v) => v.id === versioTriadaId) ?? null
   const dataVersioTriada = versioTriada?.creatEl?.toDate?.() ?? null
 
-  const diesDesDelBackup = ultimBackup
-    ? Math.floor((Date.now() - ultimBackup.getTime()) / (1000 * 60 * 60 * 24))
-    : null
-  const avisAntic = diesDesDelBackup !== null && diesDesDelBackup > DIES_AVIS
+  // El llindar viu a `backupDades.js` perquè l'Inici l'ha de fer servir
+  // igual: si cada pantalla portés el seu, una podria avisar i l'altra no.
+  const { dies: diesDesDelBackup, antic: avisAntic } = estatBackup(ultimBackup)
 
   return (
     <div className="module">

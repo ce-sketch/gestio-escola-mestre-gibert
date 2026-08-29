@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react'
 import { carregaVersions, desaVersio, restauraVersio } from '../../lib/versions'
 import { nomAmbData } from '../../lib/cursEscolar'
 import { cerca } from '../../lib/cercaApp'
+import { doc, getDoc } from 'firebase/firestore'
+import { db } from '../../firebase'
+import { estatBackup, DIES_AVIS_BACKUP } from '../../lib/backupDades'
 
 export default function Inici({ onNavigate, admin, modulsVisibles }) {
   const today = new Date().toLocaleDateString('ca-ES', {
@@ -19,10 +22,32 @@ export default function Inici({ onNavigate, admin, modulsVisibles }) {
   const [restaurant, setRestaurant] = useState(null)
   const [confirmaRestaura, setConfirmaRestaura] = useState({})
   const [missatge, setMissatge] = useState(null)
+  // Quan es va fer l'última còpia. L'avís ja existia, però només dins del
+  // mòdul Backup: calia entrar-hi per veure'l, i si hi entres és perquè ja
+  // hi anaves. Aquí es veu sense buscar-lo.
+  const [ultimBackup, setUltimBackup] = useState(null)
+  const [backupComprovat, setBackupComprovat] = useState(false)
 
   useEffect(() => {
     if (!admin) return
     carregaVersions().then(setVersions).finally(() => setCarregantVersions(false))
+  }, [admin])
+
+  useEffect(() => {
+    // Només l'administrador pot fer còpies i llegir aquesta configuració:
+    // avisar-ne la resta seria demanar-los una cosa que no poden fer.
+    if (!admin) return
+    let viu = true
+    getDoc(doc(db, 'configuracio', 'backup'))
+      .then((snap) => {
+        if (!viu) return
+        setUltimBackup(snap.exists() ? (snap.data().ultimBackup?.toDate?.() ?? null) : null)
+        setBackupComprovat(true)
+      })
+      // Si no es pot comprovar, no es diu res: un avís que surt per un
+      // error de xarxa faria dubtar d'una còpia que potser sí que existeix.
+      .catch(() => { if (viu) setBackupComprovat(false) })
+    return () => { viu = false }
   }, [admin])
 
   async function guardaVersio() {
@@ -71,6 +96,34 @@ export default function Inici({ onNavigate, admin, modulsVisibles }) {
         Aquest és el punt de partida de l'eina de gestió del centre. Fes servir el menú, o els
         botons de sota, per moure't entre els mòduls.
       </p>
+
+      {admin && backupComprovat && (() => {
+        const { dies, antic, maiFet } = estatBackup(ultimBackup)
+        if (!antic) return null
+        return (
+          <div
+            style={{
+              marginTop: 16, padding: '10px 14px', borderRadius: 10,
+              border: '1px solid var(--amber)', background: 'color-mix(in srgb, var(--amber) 12%, transparent)',
+              display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', fontSize: 13,
+            }}
+          >
+            <span>
+              {maiFet
+                ? "Encara no s'ha fet cap còpia de seguretat de les dades."
+                : `Fa ${dies} dies de l'última còpia de seguretat (l'avís salta als ${DIES_AVIS_BACKUP}).`}
+            </span>
+            <button
+              type="button"
+              onClick={() => onNavigate('backup')}
+              className="btn-ghost"
+              style={{ fontSize: 12, padding: '3px 10px' }}
+            >
+              Fes-ne una
+            </button>
+          </div>
+        )
+      })()}
 
       <div style={{ marginTop: 20, maxWidth: 460 }}>
         <input
