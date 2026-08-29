@@ -31,6 +31,16 @@ export const COL·LECCIONS = [
   // Els cursos d'abans de l'app: si es perdessin, caldria tornar a
   // importar els fulls antics un per un.
   { id: 'historicNotaArea', nom: 'Històric de notes per àrea', sobreescriu: true },
+  // L'històric de TEE i VL/CL. Té un botó propi a Backup que el baixa en
+  // el format que espera "Importa l'històric", però també ha de ser al
+  // .zip general: és l'única cosa que NO es pot reconstruir des de l'app
+  // (ve de l'Eina d'avaluació), i si un dia calgués restaurar-ho tot,
+  // sense això es perdria.
+  { id: 'historicProves', nom: 'Històric de proves (TEE i VL/CL)', sobreescriu: true },
+  // Les "versions amb nom" de la llista d'alumnes. Són instantànies que
+  // algú ha desat expressament abans de fer un canvi gros: si es
+  // perdessin, es perdria justament la xarxa de seguretat.
+  { id: 'versions', nom: 'Versions desades', sobreescriu: false },
   { id: 'valoracions', nom: 'Valoracions', sobreescriu: true },
   { id: 'valoracionsConfig', nom: 'Configuració de valoracions', sobreescriu: true },
   { id: 'festesDetall', nom: 'Festes', sobreescriu: true },
