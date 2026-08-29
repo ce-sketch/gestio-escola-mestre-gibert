@@ -177,3 +177,31 @@ export async function restauraDades(dades, { nomes = null, onProgres } = {}) {
 
   return { escrits, omesos, errors }
 }
+
+// ── Quan toca fer-ne una ───────────────────────────────────────────────
+
+/**
+ * Dies a partir dels quals es considera que la còpia s'ha quedat antiga.
+ *
+ * Trenta dies vol dir "un cop al mes com a mínim". No és una còpia
+ * diària: d'això se n'ha d'encarregar la còpia programada de Firestore,
+ * que no depèn que ningú entri a l'app. Aquesta és la que treu les dades
+ * de Google en fitxers que es poden obrir, i per a això té sentit fer-la
+ * als moments que compten (final de trimestre, abans d'un canvi gros).
+ */
+export const DIES_AVIS_BACKUP = 30
+
+/**
+ * Quants dies fa de l'última còpia, i si ja toca fer-ne una altra.
+ *
+ * Es comparteix entre el mòdul Backup i la pantalla d'Inici perquè els
+ * dos diguin el mateix: si cadascun portés el seu llindar, un podria
+ * avisar i l'altre no.
+ *
+ * @param {Date|null} ultimBackup
+ */
+export function estatBackup(ultimBackup, ara = new Date()) {
+  if (!ultimBackup) return { dies: null, antic: true, maiFet: true }
+  const dies = Math.floor((ara.getTime() - ultimBackup.getTime()) / (1000 * 60 * 60 * 24))
+  return { dies, antic: dies > DIES_AVIS_BACKUP, maiFet: false }
+}
