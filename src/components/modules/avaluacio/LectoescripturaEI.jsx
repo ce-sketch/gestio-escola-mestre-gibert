@@ -16,6 +16,7 @@ import {
   ETAPES_TEBEROSKY, NIVELLS_TEBEROSKY, esClasseEI4o5, nivellsBuits, comptaNivells,
   CAPÇALERA_EXPORT_EI, GRUPS_EXPORT_EI, filaAlumneExportEI,
 } from '../../../lib/lectoescripturaEI'
+import { classesActives } from '../../../lib/provesActives'
 
 export default function LectoescripturaEI() {
   const [alumnesTots, setAlumnesTots] = useState([])
@@ -28,15 +29,26 @@ export default function LectoescripturaEI() {
   const [carregantClasse, setCarregantClasse] = useState(false)
   const [desant, setDesant] = useState(false)
   const [generant, setGenerant] = useState(null) // 'excel' | 'pdf' | null
+  // Quines classes passen la prova aquest curs. Es configura a "Quines
+  // proves es passen" i mana per a tothom: si aquí sortissin classes que
+  // no la fan, s'hi podrien introduir dades que després no comptarien
+  // enlloc — ni al resum ni al quadre de comandament.
+  const [config, setConfig] = useState(null)
 
   useEffect(() => {
     async function carrega() {
       try {
-        const snap = await getDocs(query(collection(db, 'alumnes'), where('actiu', '==', true)))
+        const [snap, snapConfig] = await Promise.all([
+          getDocs(query(collection(db, 'alumnes'), where('actiu', '==', true))),
+          getDoc(doc(db, 'provesActives', cursEscolarId)),
+        ])
         const llista = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
         llista.sort((a, b) => (a.numLlista ?? 999) - (b.numLlista ?? 999) || a.nom.localeCompare(b.nom))
         setAlumnesTots(llista)
-        const primera = [...new Set(llista.map((a) => a.curs))].filter(esClasseEI4o5).sort()[0]
+        const cfg = snapConfig.exists() ? snapConfig.data() : null
+        setConfig(cfg)
+        const totes = [...new Set(llista.map((a) => a.curs))].filter(esClasseEI4o5).sort()
+        const primera = classesActives(cfg, 'lectoescriptura', 'curs', totes)[0]
         if (primera) setClasse((c) => c || primera)
       } catch (err) {
         setMissatge({ type: 'error', text: `No s'han pogut carregar els alumnes: ${err.message}` })
@@ -45,13 +57,23 @@ export default function LectoescripturaEI() {
       }
     }
     carrega()
-  }, [])
+  }, [cursEscolarId])
 
   const classes = useMemo(
-    () => [...new Set(alumnesTots.map((a) => a.curs))].filter(esClasseEI4o5).sort(),
-    [alumnesTots]
+    () => classesActives(
+      config, 'lectoescriptura', 'curs',
+      [...new Set(alumnesTots.map((a) => a.curs))].filter(esClasseEI4o5).sort()
+    ),
+    [alumnesTots, config]
   )
   const alumnesClasse = useMemo(() => alumnesTots.filter((a) => a.curs === classe), [alumnesTots, classe])
+
+  // Si la classe que hi havia triada es desmarca a "Quines proves es
+  // passen", el desplegable es quedaria mostrant-la sense que hi sigui a
+  // la llista: es passa a la primera que sí que la faci.
+  useEffect(() => {
+    if (classes.length > 0 && classe && !classes.includes(classe)) setClasse(classes[0])
+  }, [classes, classe])
 
   useEffect(() => {
     if (!classe) return
@@ -157,6 +179,13 @@ export default function LectoescripturaEI() {
           </select>
         </label>
       </div>
+
+      {!carregant && classes.length === 0 && (
+        <p className="nota nota-avis" style={{ marginTop: 14 }}>
+          Cap classe d&apos;I4 o I5 no consta com a que passi la prova aquest curs. Es
+          configura a &quot;Quines proves es passen&quot;, dins de Resums i informes.
+        </p>
+      )}
 
       {desant && <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 8 }}>Desant…</p>}
 

@@ -21,7 +21,7 @@
 // l'exportació dient una altra cosa sense que ningú se n'adonés.
 
 import { useEffect, useMemo, useState } from 'react'
-import { collection, getDocs, query, where } from 'firebase/firestore'
+import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore'
 import { db } from '../../../firebase'
 import { nivellDe, redueixVigents } from '../../../lib/avaluacioCatala'
 import { AREES, TRIMESTRES, areaAplicaAClasse, notaFinalArea } from '../../../lib/notesArea'
@@ -32,6 +32,7 @@ import { taulesNotesClasse } from '../../../lib/notesTaules'
 import { useNotesAreaDades } from './useNotesAreaDades'
 import { fullsTee, fullsLectura } from '../../../lib/resumProvesTaules'
 import { esClasseEI4o5, comptaNivells, fullResumEI } from '../../../lib/lectoescripturaEI'
+import { classesActives } from '../../../lib/provesActives'
 import { slug } from '../../../lib/slug'
 import {
   entradesHistoric, distribucioPerNivell, entradesCosmos, distribucioCosmos,
@@ -61,6 +62,7 @@ export default function Descarregues() {
   const [teeRegistres, setTeeRegistres] = useState([])
   const [lecturaRegistres, setLecturaRegistres] = useState([])
   const [docsEI, setDocsEI] = useState([])
+  const [configProves, setConfigProves] = useState(null)
   const [registresMates, setRegistresMates] = useState([])
   const [errorExtra, setErrorExtra] = useState(null)
 
@@ -68,10 +70,11 @@ export default function Descarregues() {
     let viu = true
     async function carregaExtra() {
       try {
-        const [snapAval, snapEI, snapMates] = await Promise.all([
+        const [snapAval, snapEI, snapMates, snapConfig] = await Promise.all([
           getDocs(query(collection(db, 'avaluacio'), where('cursEscolar', '==', cursEscolarId))),
           getDocs(query(collection(db, 'lectoescripturaEI'), where('cursEscolar', '==', cursEscolarId))),
           getDocs(query(collection(db, 'matematiques'), where('cursEscolar', '==', cursEscolarId))),
+          getDoc(doc(db, 'provesActives', cursEscolarId)),
         ])
         if (!viu) return
         const totes = snapAval.docs.map((d) => ({ id: d.id, ...d.data() }))
@@ -79,6 +82,7 @@ export default function Descarregues() {
         setLecturaRegistres(totes.filter((r) => r.tipus === 'lectura'))
         setDocsEI(snapEI.docs.map((d) => ({ id: d.id, ...d.data() })))
         setRegistresMates(snapMates.docs.map((d) => ({ id: d.id, ...d.data() })))
+        setConfigProves(snapConfig.exists() ? snapConfig.data() : null)
       } catch (err) {
         // No atura la resta: si falla una prova, el document es genera
         // igualment amb el que sí que s'hagi pogut llegir.
@@ -232,7 +236,13 @@ export default function Descarregues() {
 
   /** El resum de lectoescriptura d'Infantil, una fila per classe. */
   function fullsLectoescriptura() {
-    const classes = [...new Set(alumnesTots.map((a) => a.curs))].filter(esClasseEI4o5).sort()
+    // Només les que passen la prova: si no, el document lliurat inclouria
+    // classes a zero que en realitat no la fan, i semblaria que hi
+    // falten dades.
+    const classes = classesActives(
+      configProves, 'lectoescriptura', 'curs',
+      [...new Set(alumnesTots.map((a) => a.curs))].filter(esClasseEI4o5).sort()
+    )
     if (classes.length === 0) return []
     const perClasse = classes.map((classe) => {
       const ids = alumnesTots.filter((a) => a.curs === classe).map((a) => a.id)
