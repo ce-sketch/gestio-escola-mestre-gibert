@@ -275,6 +275,43 @@ describe('fullEvolucioNotaArea', () => {
     expect(files[1]).toEqual(['Català', 50, 100])
   })
 
+  it('sap treure 1r del càlcul', () => {
+    // A 1r encara s'està aprenent a llegir i escriure, i arrossega avall
+    // la mitjana del centre: el centre mira sempre les dues xifres.
+    const amb1r = [{
+      cursEscolar: '2026-27', origen: 'calculat',
+      files: [
+        { trimestre: '3r trimestre', area: 'catala', classe: '1rA', na: 3, as: 1, an: 0, ae: 0, total: 4 },
+        { trimestre: '3r trimestre', area: 'catala', classe: '3rA', na: 0, as: 2, an: 2, ae: 0, total: 4 },
+      ],
+    }]
+    const amb = fullEvolucioNotaArea(amb1r, { trimestre: '3r trimestre' })
+    const sense = fullEvolucioNotaArea(amb1r, { trimestre: '3r trimestre', sensePrimer: true })
+    expect(amb.files[1][1]).toBe(62.5)   // 5 de 8
+    expect(sense.files[1][1]).toBe(100)  // 4 de 4
+  })
+
+  it('els dos fulls es diuen diferent, per no confondre\'ls a la memòria', () => {
+    // Dos fulls amb el mateix nom i xifres diferents és el camí curt cap
+    // a citar la que no toca en un document oficial.
+    const c = [{ cursEscolar: '2026-27', origen: 'calculat', files: [] }]
+    const amb = fullEvolucioNotaArea(c, { trimestre: '3r trimestre' })
+    const sense = fullEvolucioNotaArea(c, { trimestre: '3r trimestre', sensePrimer: true })
+    expect(amb.nom).not.toBe(sense.nom)
+    expect(sense.nom).toMatch(/sense 1r/)
+  })
+
+  it('els noms de full caben al límit d\'Excel per a tots els trimestres', () => {
+    for (const trimestre of ['1r trimestre', '2n trimestre', '3r trimestre']) {
+      for (const sensePrimer of [false, true]) {
+        const { nom } = fullEvolucioNotaArea([], { trimestre, sensePrimer })
+        expect(nom.length, nom).toBeLessThanOrEqual(31)
+        // I sense ordinals inventats del tipus "2nr".
+        expect(nom).not.toMatch(/\dnr|\drr/)
+      }
+    }
+  })
+
   it('deixa buit l\'any que no en tingui dades, en comptes de posar-hi zero', () => {
     const { files } = fullEvolucioNotaArea([
       ...cursos,

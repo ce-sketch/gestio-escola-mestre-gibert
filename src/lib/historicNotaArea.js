@@ -299,5 +299,15 @@ export function fullEvolucioNotaArea(cursos, { trimestre = '3r trimestre', sense
     }),
   ])
 
-  return { nom: `Evolució (${trimestre})`, files }
+  // El nom ha de dir si hi va 1r o no: dos fulls amb el mateix nom i
+  // xifres diferents és el camí curt cap a citar la que no toca en una
+  // memòria. Excel talla els noms de full a 31 caràcters.
+  // Excel talla els noms de full a 31 caràcters, i "Evolució 3r
+  // trimestre (sense 1r)" en fa 33: quedava tallat a mitja paraula.
+  // S'abrevia el trimestre, que ja s'entén.
+  // "1r trimestre" → "1r trim." (l'ordinal ja ve escrit al trimestre:
+  // afegir-n'hi cap lletra donava coses com "2nr").
+  const curt = String(trimestre).replace(/trimestre$/i, 'trim.')
+  const nom = `Evolució ${curt}${sensePrimer ? ' · sense 1r' : ''}`
+  return { nom: nom.slice(0, 31), files }
 }
