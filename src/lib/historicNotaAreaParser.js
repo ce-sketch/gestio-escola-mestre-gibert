@@ -81,6 +81,16 @@ export function trimestreDeFull(nomFull) {
   if (t.includes('1r') || t.includes('1er') || t.includes('primer')) return TRIMESTRES[0]
   if (t.includes('2n') || t.includes('segon')) return TRIMESTRES[1]
   if (t.includes('3r') || t.includes('3er') || t.includes('tercer')) return TRIMESTRES[2]
+  // Un full que es diu "Resum" a seques (sense cap paraula de trimestre)
+  // és el resum FINAL del curs: la mateixa Final que altrament caldria
+  // reconstruir del full alumne per alumne, però ja agregada per franja
+  // i classe — amb el mateix format exacte que els fulls de trimestre.
+  //
+  // És, a més, més fiable que reconstruir-la quan el llibre reparteix
+  // els alumnes en una pestanya per classe (1A, 1B, 2A…): el lector
+  // alumne per alumne només mira la PRIMERA que troba i es perdria la
+  // resta, mentre que aquest full ja ve amb totes les classes juntes.
+  if (t === 'resum') return MOMENT_FINAL
   return null
 }
 
@@ -106,6 +116,14 @@ export async function llegeixResumNotaArea(buffer, nomFitxer = '') {
   if (esPdf(buffer) || /\.pdf$/i.test(nomFitxer)) return llegeixPdf(buffer)
 
   const resum = await llegeixExcel(buffer)
+
+  // Si el llibre ja porta un full "Resum" (sense trimestre) amb la Final
+  // ja agregada per classe, es fa servir directament: és més fiable que
+  // reconstruir-la del full alumne per alumne (vegeu `trimestreDeFull`),
+  // i evita duplicar-la si es calculessin totes dues.
+  if (resum.files.some((f) => f.trimestre === MOMENT_FINAL)) {
+    return resum
+  }
 
   // La nota Final no és als fulls "Resum" —només hi ha recomptes per
   // franja, i d'un recompte no se'n pot recuperar qui era qui—, però sí
@@ -214,11 +232,24 @@ async function llegeixPdf(buffer) {
 
   const avisos = []
   const paginesResum = []
+  const paginesAlumnes = []
   let cursEscolar = null
 
   for (let p = 1; p <= doc.numPages; p++) {
     const files = await filesDeLaPagina(doc, p)
     const plans = files.map((f) => f.map((c) => c.text))
+
+    // Pàgines "alumne per alumne" (una per classe: 1A, 1B…), amb la nota
+    // Final de cada àrea. Es miren ABANS que les de resum perquè aquestes
+    // també tenen noms d'àrea a la capçalera i, sense el tret distintiu
+    // de "Noms", s'hi podrien confondre.
+    const filaAlumnes = files.find(esCapcaleraAlumnes)
+    if (filaAlumnes) {
+      cursEscolar = cursEscolar ?? cursEscolarDeFull(plans)
+      paginesAlumnes.push(files)
+      continue
+    }
+
     const teCapcalera = plans.slice(0, 4).some((l) => /Escola|Curs\s*:/i.test(l.join(' ')))
     const teArees = files.some((f) => areesDeLaFila(f).length >= 2)
     if (!teCapcalera || !teArees) continue
@@ -244,6 +275,22 @@ async function llegeixPdf(buffer) {
     const delFull = llegeixFilesAmbPosicions(files, TRIMESTRES[i], avisos)
     if (delFull.length === 0) avisos.push(`A la pàgina de resum ${i + 1} no hi he trobat cap fila de classe.`)
     resultat.push(...delFull)
+  }
+
+  // La nota Final: de les pàgines "alumne per alumne" si n'hi ha (una per
+  // classe), amb el mateix criteri de posicions que l'Excel — la columna
+  // "F" de cada àrea. Si el PDF no en porta cap (només els resums per
+  // trimestre), no es calcula: no hi ha manera de recuperar-la d'un
+  // recompte ja agregat.
+  if (paginesAlumnes.length > 0) {
+    const finals = llegeixFinalsAlumnesPdf(paginesAlumnes)
+    resultat.push(...finals.files)
+    avisos.push(...finals.avisos)
+  } else {
+    avisos.push(
+      "No hi he trobat cap pàgina \"alumne per alumne\" (una per classe, amb columna F) al PDF, "
+      + "així que la nota Final no s'ha pogut calcular. Els trimestres sí que s'han llegit."
+    )
   }
 
   if (!cursEscolar) {
@@ -396,6 +443,140 @@ function areaPerPosicio(arees, pos) {
     if (d < millorDistancia) { millorDistancia = d; millor = a }
   }
   return millor?.area ?? null
+}
+
+// ── La nota FINAL de les pàgines "alumne per alumne" del PDF ───────────
+//
+// A diferència de l'Excel (un sol full amb tots els alumnes), el PDF sol
+// portar-les repartides en una pàgina per classe: "1A", "1B", "2A"…, amb
+// una columna "F" (Final) després de cada àrea. La capçalera hi porta el
+// nom de l'àrea seguit de la seva "F", ben separades l'una de l'altra en
+// posició horitzontal — el mateix patró de columnes fusionades que
+// `grupsAreaDeCapcalera` fa servir a l'Excel, aquí amb coordenades X en
+// lloc de columnes de full de càlcul.
+//
+// Els noms d'àrea de dues paraules ("e. física") poden arribar partits en
+// dos trossos de text diferents al PDF (un per cada paraula): per això es
+// prova primer amb una paraula sola i, si no encaixa, amb la següent
+// enganxada al darrere.
+//
+// El "GF" (global final de Medi o d'Artística) no porta cap "F" pròpia
+// darrere — és ja un valor final, no un bloc de tres trimestres més
+// final — i aquí es descarta expressament: l'app ja sap calcular-lo tota
+// sola a partir de les àrees que el formen (`calculaAreesCalculades` a
+// `historicNotaArea.js`), així que no cal endevinar de quin GF es tracta
+// (el de Medi o el d'Artística) mirant només la posició.
+
+/** Les distàncies típiques que s'han vist en fitxers reals: ~2-3px entre
+ *  la "F" i el seu número, i >14px entre el número d'una àrea i el de la
+ *  següent. Amb 8px hi ha marge de sobres per no confondre'ls. */
+const DISTANCIA_MAX_COLUMNA = 8
+
+/** Si una fila és la capçalera d'una pàgina "alumne per alumne": porta
+ *  "Noms" (la columna del nom de l'alumne) i almenys dues àrees amb la
+ *  seva "F". Cap altra fila del document hi hauria de coincidir. */
+function esCapcaleraAlumnes(fila) {
+  return fila.some((c) => neteja(c.text) === 'noms') && areesFDeCapcalera(fila).length >= 2
+}
+
+/**
+ * Les parelles àrea + posició de la seva columna "F", d'una fila de
+ * capçalera.
+ *
+ * @returns {Array<{area: string, pos: number}>}
+ */
+export function areesFDeCapcalera(fila) {
+  const resultat = []
+  let pendent = null
+  for (let i = 0; i < fila.length; i++) {
+    const cel = fila[i]
+    if (neteja(cel.text) === 'f') {
+      if (pendent) resultat.push({ area: pendent, pos: cel.pos })
+      pendent = null
+      continue
+    }
+    let area = AREES_FULL[neteja(cel.text)]
+    let consumeixSeguent = false
+    if (!area && i + 1 < fila.length) {
+      const combinat = AREES_FULL[neteja(`${cel.text} ${fila[i + 1].text}`)]
+      if (combinat) { area = combinat; consumeixSeguent = true }
+    }
+    if (area) {
+      pendent = area
+      if (consumeixSeguent) i += 1
+    } else {
+      // Un token que no és ni àrea ni "F" (el "GF", per exemple) tanca
+      // qualsevol àrea pendent sense "F" seva: no se li ha d'assignar
+      // per error la "F" d'una altra àrea que li quedi a prop.
+      pendent = null
+    }
+  }
+  return resultat
+}
+
+/**
+ * Llegeix la nota Final de les pàgines "alumne per alumne" del PDF.
+ *
+ * @param {Array<Array<Array<{pos:number, text:string, num:number|null}>>>} paginesFiles
+ *   una entrada per pàgina, cadascuna amb les seves files ja agrupades
+ *   per `filesDeLaPagina`
+ * @returns {{files: Array, avisos: string[]}}
+ */
+export function llegeixFinalsAlumnesPdf(paginesFiles) {
+  const acumulat = new Map() // clau `area__classe` → recompte
+  const avisos = []
+  let capCapPaginaTrobada = false
+
+  for (const files of paginesFiles) {
+    const filaCap = files.find(esCapcaleraAlumnes)
+    if (!filaCap) continue
+    capCapPaginaTrobada = true
+    const arees = areesFDeCapcalera(filaCap)
+
+    for (const fila of files) {
+      if (fila.length === 0 || !ES_CLASSE.test(fila[0].text)) continue // no és una fila d'alumne
+      const classe = fila[0].text.replace(/\s+/g, '').toUpperCase()
+      const numeros = fila.filter((c) => c.num !== null)
+
+      for (const { area, pos } of arees) {
+        let millor = null
+        let millorDistancia = Infinity
+        for (const n of numeros) {
+          const d = Math.abs(n.pos - pos)
+          if (d < millorDistancia) { millorDistancia = d; millor = n }
+        }
+        // Sense número prou a prop: l'alumne no té nota en aquesta àrea
+        // (per exemple, fa "valors" en lloc de "religió"). No s'inventa.
+        if (!millor || millorDistancia > DISTANCIA_MAX_COLUMNA) continue
+
+        const nivell = nivellDe(millor.num)
+        if (!nivell) continue
+        const franja = idFranjaDeNivell(nivell.id)
+        if (!franja) continue
+
+        const clau = `${area}__${classe}`
+        if (!acumulat.has(clau)) acumulat.set(clau, { na: 0, as: 0, an: 0, ae: 0, total: 0 })
+        const fils = acumulat.get(clau)
+        fils[franja] += 1
+        fils.total += 1
+      }
+    }
+  }
+
+  if (!capCapPaginaTrobada || acumulat.size === 0) {
+    avisos.push(
+      "No hi he trobat cap alumne a les pàgines \"alumne per alumne\", així que la nota Final "
+      + "no s'ha pogut calcular. Els trimestres sí que s'han llegit."
+    )
+    return { files: [], avisos }
+  }
+
+  const files = [...acumulat.entries()].map(([clau, recompte]) => {
+    const [area, classe] = clau.split('__')
+    return { trimestre: MOMENT_FINAL, area, classe, ...recompte }
+  })
+
+  return { files, avisos }
 }
 
 
