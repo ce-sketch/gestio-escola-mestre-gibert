@@ -275,19 +275,30 @@ function MatriuColorsPGA({ files }) {
                       </td>
                       {fila.columnes.map((col) => {
                         const c = colorCella(col.valor)
+                        // Si al cicle hi ha classes que no fan la prova, el
+                        // percentatge només parla de la resta. Sense
+                        // dir-ho, un 100% sembla que cobreixi tot el cicle.
+                        const parcial = col.valor !== null && col.excloses?.length > 0
                         return (
                           <td
                             key={col.id}
+                            title={col.excloses?.length > 0
+                              ? `No fan aquesta prova: ${col.excloses.join(', ')}`
+                              : undefined}
                             style={{
                               padding: '4px 6px', textAlign: 'center', minWidth: 66,
                               borderBottom: '1px solid var(--line)',
                               background: c?.bg ?? 'var(--paper)', color: c?.color ?? 'var(--ink-soft)',
                               fontWeight: c ? 600 : 400,
+                              cursor: col.excloses?.length > 0 ? 'help' : undefined,
                             }}
                           >
                             {/* Un buit vol dir "aquest cicle no fa aquesta
                                 prova", no "0%": per això no es pinta. */}
                             {col.valor === null ? '—' : `${Math.round(col.valor)}%`}
+                            {parcial && (
+                              <span style={{ opacity: 0.7, fontWeight: 400 }} aria-label="parcial">*</span>
+                            )}
                           </td>
                         )
                       })}
@@ -315,14 +326,18 @@ function MatriuColorsPGA({ files }) {
           </span>
         ))}
         <span style={{ color: 'var(--ink-soft)' }}>— = aquest cicle no fa la prova</span>
+        <span style={{ color: 'var(--ink-soft)' }}>
+          * = alguna classe del cicle no la fa (passa-hi el cursor per veure quina)
+        </span>
       </div>
 
       <p style={{ fontSize: 10, color: 'var(--ink-soft)', marginTop: 8 }}>
-        A les proves (lectoescriptura, TEE, VL/CL, notes per àrea i Innovamat) la xifra és
+        A les proves (lectoescriptura, TEE, VL, CL, notes per àrea i Innovamat) la xifra és
         el <strong>percentatge de participació</strong>: 100% vol dir que tots els alumnes que
-        havien de fer la prova l&apos;han feta. L&apos;alumnat de 1r només compta al
-        <strong> tercer trimestre</strong> a TEE i VL/CL (a l&apos;Avaluació Final, en el cas de
-        VL/CL); abans no passa les proves i per això no entra al 100% de Cicle Inicial.
+        havien de fer la prova l&apos;han feta. Qui l&apos;ha de fer es tria a
+        <strong> &quot;Quines proves es passen&quot;</strong> — per exemple, 1r sol quedar fora
+        de les primeres avaluacions, i pot fer la velocitat lectora sense fer la comprensió.
+        Les classes que no la fan no entren al càlcul, i la cel·la ho marca amb un asterisc.
       </p>
     </div>
   )
