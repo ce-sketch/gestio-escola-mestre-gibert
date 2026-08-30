@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest'
 import {
   FRANGES, resumDesDeRegistres, fusionaHistoric, totalCentre,
   percentatgeSuperacio, classesDe, trimestresDe, areesDe, etiquetaArea,
-  fullHistoricNotaArea, fullEvolucioNotaArea,
+  fullHistoricNotaArea, fullEvolucioNotaArea, MOMENT_FINAL, MOMENTS_HISTORIC,
 } from './historicNotaArea'
 
 const nota = (alumneId, curs, area, trimestre, valor, extra = {}) => ({
@@ -20,8 +20,9 @@ describe('resumDesDeRegistres', () => {
       nota('c', '3rA', 'catala', '1r trimestre', 8),
       nota('d', '3rA', 'catala', '1r trimestre', 9),
     ], '2026-27')
-    expect(files).toHaveLength(1)
-    expect(files[0]).toMatchObject({ na: 1, as: 1, an: 1, ae: 1, total: 4 })
+    // Dues files: el trimestre i el moment "Final" (la mitjana).
+    const delTrim = files.find((f) => f.trimestre === '1r trimestre')
+    expect(delTrim).toMatchObject({ na: 1, as: 1, an: 1, ae: 1, total: 4 })
   })
 
   it('només compta la nota vigent de cada alumne', () => {
@@ -40,7 +41,27 @@ describe('resumDesDeRegistres', () => {
       nota('c', '3rA', 'angles', '1r trimestre', 8),
       nota('d', '3rA', 'catala', '2n trimestre', 8),
     ], '2026-27')
-    expect(files).toHaveLength(4)
+    // 4 combinacions de trimestre + les seves finals (3 grups distints
+    // d'àrea/classe: catala-3rA, catala-3rB, angles-3rA).
+    expect(files.filter((f) => f.trimestre !== MOMENT_FINAL)).toHaveLength(4)
+    expect(files.filter((f) => f.trimestre === MOMENT_FINAL)).toHaveLength(3)
+  })
+
+  it('calcula el moment "Final" com la mitjana de l\'alumne, no de les franges', () => {
+    // Un alumne amb 4 i 6 té un 5 (satisfactori), no "mig no assoliment
+    // i mig satisfactori". La mitjana es fa per alumne i DESPRÉS es
+    // classifica.
+    const files = resumDesDeRegistres([
+      nota('a', '3rA', 'catala', '1r trimestre', 4),
+      nota('a', '3rA', 'catala', '3r trimestre', 6),
+    ], '2026-27')
+    const final = files.find((f) => f.trimestre === MOMENT_FINAL)
+    expect(final).toMatchObject({ na: 0, as: 1, an: 0, ae: 0, total: 1 })
+  })
+
+  it('la final surt encara que falti algun trimestre', () => {
+    const files = resumDesDeRegistres([nota('a', '3rA', 'catala', '1r trimestre', 9)], '2026-27')
+    expect(files.find((f) => f.trimestre === MOMENT_FINAL).ae).toBe(1)
   })
 
   it('deixa fora els registres d\'un altre curs escolar', () => {
@@ -165,13 +186,6 @@ describe('totalCentre', () => {
       .toMatchObject({ na: 3, total: 9 })
   })
 
-  it('sap deixar 1r fora', () => {
-    // A 1r encara s'està aprenent a llegir i escriure: el centre mira
-    // sempre les dues xifres.
-    expect(totalCentre(files, { area: 'catala', trimestre: '1r trimestre', sensePrimer: true }))
-      .toMatchObject({ na: 1, total: 5 })
-  })
-
   it('no peta sense files', () => {
     expect(totalCentre([], {}).total).toBe(0)
     expect(totalCentre(null, {}).total).toBe(0)
@@ -227,6 +241,11 @@ describe('classesDe i trimestresDe', () => {
     expect(trimestresDe([{ trimestre: '3r trimestre' }, { trimestre: '1r trimestre' }]))
       .toEqual(['1r trimestre', '3r trimestre'])
   })
+
+  it('posa la mitjana final DARRERE dels tres trimestres', () => {
+    expect(trimestresDe([{ trimestre: MOMENT_FINAL }, { trimestre: '1r trimestre' }]))
+      .toEqual(['1r trimestre', MOMENT_FINAL])
+  })
 })
 
 describe('fullHistoricNotaArea', () => {
@@ -266,39 +285,28 @@ describe('fullEvolucioNotaArea', () => {
   ]
 
   it('posa els cursos del més antic al més recent, per llegir l\'evolució', () => {
-    const { files } = fullEvolucioNotaArea(cursos)
+    const { files } = fullEvolucioNotaArea(cursos, { trimestre: '3r trimestre' })
     expect(files[0]).toEqual(['Àrea', '2025-26', '2026-27'])
   })
 
   it('dona el percentatge de superació de cada any', () => {
-    const { files } = fullEvolucioNotaArea(cursos)
+    const { files } = fullEvolucioNotaArea(cursos, { trimestre: '3r trimestre' })
     expect(files[1]).toEqual(['Català', 50, 100])
   })
 
-  it('sap treure 1r del càlcul', () => {
-    // A 1r encara s'està aprenent a llegir i escriure, i arrossega avall
-    // la mitjana del centre: el centre mira sempre les dues xifres.
-    const amb1r = [{
-      cursEscolar: '2026-27', origen: 'calculat',
-      files: [
-        { trimestre: '3r trimestre', area: 'catala', classe: '1rA', na: 3, as: 1, an: 0, ae: 0, total: 4 },
-        { trimestre: '3r trimestre', area: 'catala', classe: '3rA', na: 0, as: 2, an: 2, ae: 0, total: 4 },
-      ],
-    }]
-    const amb = fullEvolucioNotaArea(amb1r, { trimestre: '3r trimestre' })
-    const sense = fullEvolucioNotaArea(amb1r, { trimestre: '3r trimestre', sensePrimer: true })
-    expect(amb.files[1][1]).toBe(62.5)   // 5 de 8
-    expect(sense.files[1][1]).toBe(100)  // 4 de 4
+  it('per defecte fa servir el moment "Final", que és el que es lliura', () => {
+    expect(fullEvolucioNotaArea([]).nom).toMatch(/Final/i)
   })
 
-  it('els dos fulls es diuen diferent, per no confondre\'ls a la memòria', () => {
-    // Dos fulls amb el mateix nom i xifres diferents és el camí curt cap
-    // a citar la que no toca en un document oficial.
-    const c = [{ cursEscolar: '2026-27', origen: 'calculat', files: [] }]
-    const amb = fullEvolucioNotaArea(c, { trimestre: '3r trimestre' })
-    const sense = fullEvolucioNotaArea(c, { trimestre: '3r trimestre', sensePrimer: true })
-    expect(amb.nom).not.toBe(sense.nom)
-    expect(sense.nom).toMatch(/sense 1r/)
+  it('el moment consta al nom del full, per no confondre\'ls a la memòria', () => {
+    const a = fullEvolucioNotaArea([], { trimestre: '1r trimestre' })
+    const b = fullEvolucioNotaArea([], { trimestre: '3r trimestre' })
+    expect(a.nom).not.toBe(b.nom)
+    for (const t of MOMENTS_HISTORIC) {
+      const { nom } = fullEvolucioNotaArea([], { trimestre: t })
+      expect(nom.length, nom).toBeLessThanOrEqual(31)
+      expect(nom).not.toMatch(/\dnr|\drr/)
+    }
   })
 
   it('els noms de full caben al límit d\'Excel per a tots els trimestres', () => {
@@ -316,7 +324,7 @@ describe('fullEvolucioNotaArea', () => {
     const { files } = fullEvolucioNotaArea([
       ...cursos,
       { cursEscolar: '2024-25', origen: 'importat', files: [] },
-    ])
+    ], { trimestre: '3r trimestre' })
     expect(files[1]).toContain('')
   })
 })

@@ -15,8 +15,26 @@
 // Quan un curs té les dues, mana la calculada: ve de les notes originals
 // i no d'un resum ja agregat.
 
-import { AREES, TRIMESTRES } from './notesArea'
+import { AREES, TRIMESTRES, notaFinalArea } from './notesArea'
 import { redueixVigents, nivellDe } from './avaluacioCatala'
+
+/**
+ * El moment "Final": la mitjana dels tres trimestres.
+ *
+ * És la columna marcada amb "F" a la graella del centre
+ * (`=IF(F3="";"";AVERAGE(D3:F3))`), i és la xifra que es lliura: el
+ * trimestre solt diu com va anar aquell tros de curs, la final diu com
+ * ha acabat l'alumne.
+ *
+ * No es desa com un trimestre més: es calcula de les notes, perquè si es
+ * desés per separat podria quedar desincronitzat amb els trimestres dels
+ * quals surt.
+ */
+export const MOMENT_FINAL = 'Final (mitjana)'
+
+/** Els moments que es poden triar a l'històric: els tres trimestres i la
+ *  mitjana final. */
+export const MOMENTS_HISTORIC = [...TRIMESTRES, MOMENT_FINAL]
 
 /** Les quatre franges, en l'ordre en què surten a tots els documents del
  *  centre (de menys a més). */
@@ -59,8 +77,27 @@ export function resumDesDeRegistres(registres, cursEscolar) {
   // fila nova a la col·lecció i només val la darrera.
   const vigents = redueixVigents(delCurs, (r) => `${r.alumneId}__${r.area}__${r.trimestre}`)
 
-  const acumulat = new Map()
+  // ── El moment "Final" ────────────────────────────────────────────
+  // La mitjana es fa per ALUMNE i després es classifica, no fent la
+  // mitjana de les franges: un alumne amb 4 i 6 té un 5 (satisfactori),
+  // no "la meitat de no assoliment i la meitat de satisfactori".
+  const perAlumneArea = new Map()
   for (const r of vigents) {
+    if (r.nota === null || r.nota === undefined || !r.curs || !r.area) continue
+    const clau = `${r.area}__${r.curs}__${r.alumneId}`
+    if (!perAlumneArea.has(clau)) perAlumneArea.set(clau, [])
+    perAlumneArea.get(clau).push(Number(r.nota))
+  }
+  const finals = []
+  for (const [clau, notes] of perAlumneArea) {
+    const mitjana = notaFinalArea(notes)
+    if (mitjana === null) continue
+    const [area, curs] = clau.split('__')
+    finals.push({ trimestre: MOMENT_FINAL, area, curs, nota: mitjana })
+  }
+
+  const acumulat = new Map()
+  for (const r of [...vigents, ...finals]) {
     // Els registres desen la nota NUMÈRICA; la franja qualitativa surt de
     // `nivellDe()`, els llindars de la qual són configurables al centre.
     // Si algun registre ja portés el nivell fet (formats antics), es
@@ -146,16 +183,13 @@ export function fusionaHistoric(documentsDesats, calculatsPerCurs) {
 }
 
 /**
- * El total del centre d'una àrea i un trimestre, sumant totes les
- * classes. `sensePrimer` deixa 1r fora, com fan els altres resums del
- * centre: a 1r encara s'està aprenent a llegir i escriure.
+ * El total del centre d'una àrea i un moment, sumant totes les classes.
  */
-export function totalCentre(files, { area, trimestre, sensePrimer = false } = {}) {
+export function totalCentre(files, { area, trimestre } = {}) {
   const total = filaBuida()
   for (const f of files ?? []) {
     if (area && f.area !== area) continue
     if (trimestre && f.trimestre !== trimestre) continue
-    if (sensePrimer && /^1/.test(String(f.classe))) continue
     for (const k of ['na', 'as', 'an', 'ae', 'total']) total[k] += f[k] ?? 0
   }
   return total
@@ -200,7 +234,7 @@ export function classesDe(files) {
 /** Els trimestres que surten a un conjunt de files, en l'ordre del curs. */
 export function trimestresDe(files) {
   const hi = new Set((files ?? []).map((f) => f.trimestre))
-  return TRIMESTRES.filter((t) => hi.has(t))
+  return MOMENTS_HISTORIC.filter((t) => hi.has(t))
 }
 
 /** Les àrees que surten a un conjunt de files, en l'ordre de la graella. */
@@ -261,7 +295,7 @@ export function fullHistoricNotaArea(cursos) {
  * percentatge de superació. És la lectura que interessa per a la memòria
  * — si el centre millora o empitjora al llarg dels anys.
  */
-export function fullEvolucioNotaArea(cursos, { trimestre = '3r trimestre', sensePrimer = false } = {}) {
+export function fullEvolucioNotaArea(cursos, { trimestre = MOMENT_FINAL } = {}) {
   cursos = (cursos ?? []).filter((c) => c && Array.isArray(c.files))
   const anys = cursos.map((c) => c.cursEscolar).reverse() // del més antic al més recent
   const capcalera = ['Àrea', ...anys]
@@ -274,7 +308,7 @@ export function fullEvolucioNotaArea(cursos, { trimestre = '3r trimestre', sense
       area.label,
       ...anys.map((any) => {
         const curs = cursos.find((c) => c.cursEscolar === any)
-        const tot = totalCentre(curs?.files, { area: area.id, trimestre, sensePrimer })
+        const tot = totalCentre(curs?.files, { area: area.id, trimestre })
         return percentatgeSuperacio(tot) ?? ''
       }),
     ])
@@ -295,19 +329,15 @@ export function fullEvolucioNotaArea(cursos, { trimestre = '3r trimestre', sense
       // són la mitjana d'àrees que ja hi compten, i comptar-les seria
       // comptar dues vegades els mateixos alumnes.
       const reals = (curs?.files ?? []).filter((f) => !AREES.some((a) => a.calculada && a.id === f.area))
-      return percentatgeSuperacio(totalCentre(reals, { trimestre, sensePrimer })) ?? ''
+      return percentatgeSuperacio(totalCentre(reals, { trimestre })) ?? ''
     }),
   ])
 
-  // El nom ha de dir si hi va 1r o no: dos fulls amb el mateix nom i
-  // xifres diferents és el camí curt cap a citar la que no toca en una
-  // memòria. Excel talla els noms de full a 31 caràcters.
-  // Excel talla els noms de full a 31 caràcters, i "Evolució 3r
-  // trimestre (sense 1r)" en fa 33: quedava tallat a mitja paraula.
-  // S'abrevia el trimestre, que ja s'entén.
-  // "1r trimestre" → "1r trim." (l'ordinal ja ve escrit al trimestre:
-  // afegir-n'hi cap lletra donava coses com "2nr").
+  // Excel talla els noms de full a 31 caràcters, i el moment hi ha de
+  // constar: si no, dos fulls d'evolució de moments diferents es dirien
+  // igual i seria fàcil citar el que no toca en una memòria.
+  // "1r trimestre" → "1r trim." (l'ordinal ja ve escrit: afegir-n'hi
+  // cap lletra donava coses com "2nr").
   const curt = String(trimestre).replace(/trimestre$/i, 'trim.')
-  const nom = `Evolució ${curt}${sensePrimer ? ' · sense 1r' : ''}`
-  return { nom: nom.slice(0, 31), files }
+  return { nom: `Evolució ${curt}`.slice(0, 31), files }
 }
