@@ -5,6 +5,7 @@ import {
   comptaNivells, fullResumEI, CAPÇALERA_RESUM_EI, historicEI, fullHistoricEI,
   classesQueFanLaProva, esConfigEI,
 } from './lectoescripturaEI'
+import { idDelFull } from './lectoescripturaImport'
 
 describe('esClasseEI4o5', () => {
   it('accepta les classes d\'I4 i I5', () => {
@@ -213,5 +214,23 @@ describe('historicEI — el document de configuració', () => {
     ])
     expect(files).toHaveLength(1)
     expect(files[0].classe).toBe('I5A')
+  })
+})
+
+describe('idDelFull (importació de cursos passats)', () => {
+  it('marca els alumnes que vénen d\'un full, no de la fitxa d\'alumnat', () => {
+    // Els alumnes de fa anys ja no consten al centre i no se'ls pot
+    // assignar el seu id real. El prefix ho diu clarament, perquè no es
+    // confonguin amb els actuals.
+    expect(idDelFull('I4A', 'Alfa, Anna')).toMatch(/^full__/)
+  })
+
+  it('el mateix alumne a classes diferents dona ids diferents', () => {
+    expect(idDelFull('I4A', 'Alfa, Anna')).not.toBe(idDelFull('I5A', 'Alfa, Anna'))
+  })
+
+  it('és estable: el mateix nom dona sempre el mateix id', () => {
+    // Si canviés, tornar a pujar el mateix full duplicaria els alumnes.
+    expect(idDelFull('I4A', 'Alfa, Anna')).toBe(idDelFull('I4A', 'Alfa, Anna'))
   })
 })
