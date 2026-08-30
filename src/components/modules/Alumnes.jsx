@@ -8,6 +8,7 @@ import { cursEscolarActual } from '../../lib/cursEscolar'
 import BotoDrive from '../BotoDrive'
 import { carregaXLSX } from '../../lib/carregaLlibreries'
 import { normalitza } from '../../lib/text'
+import { llegeixResumPI, llegeixResumAD } from '../../lib/sicAlumnatIndicadors'
 
 const DEFAULT_CLASSES = ['1r A', '1r B']
 
@@ -26,6 +27,15 @@ const COL_NESE_MOTIU = 9
 // capacitats, per exemple, no donen aquest dret).
 const MOTIU_NESE_REDUCCIO = 'situacions socioeconòmiques'
 
+// El mateix llibre Excel que porta el full "ESFERA" porta també, en
+// pestanyes a part, els resums de PI i NESE que fa servir el SIC
+// automàtic (vegeu sicAlumnatIndicadors.js). Es llegeixen del mateix
+// fitxer que ja es puja aquí perquè ningú hagi de recordar-se de pujar-los
+// per separat — si el fitxer no les porta (exportacions antigues, o un
+// full parcial), simplement queden a false/buit sense petar.
+const FULL_ESFERA_PI = 'ESFERA PI'
+const FULL_ESFERA_AD = 'ESFERA AD'
+
 export default function Alumnes() {
   const [classes, setClasses] = useState(
     DEFAULT_CLASSES.map((curs) => ({ curs, text: '' }))
@@ -36,6 +46,10 @@ export default function Alumnes() {
   const [previsualitzacio, setPrevisualitzacio] = useState(null) // { [curs]: [{nom, numLlista}] }
   const [important, setImportantFitxer] = useState(false)
   const [errorFitxer, setErrorFitxer] = useState(null)
+  // Si el fitxer pujat portava els fulls "ESFERA PI" / "ESFERA AD" — si
+  // no, cal avisar-ho perquè no passi desapercebut que el PI/NESE no
+  // s'ha actualitzat en aquesta pujada.
+  const [fullsPiAdTrobats, setFullsPiAdTrobats] = useState({ pi: true, ad: true })
 
   // Llistat del que hi ha desat de debò. Abans només es veia la
   // previsualització d'una importació, que desapareix en confirmar-la:
@@ -208,6 +222,7 @@ export default function Alumnes() {
     if (!file) return
     setErrorFitxer(null)
     setPrevisualitzacio(null)
+    setFullsPiAdTrobats({ pi: true, ad: true })
 
     const reader = new FileReader()
     reader.onload = (event) => {
@@ -215,6 +230,19 @@ export default function Alumnes() {
         const workbook = XLSX.read(event.target.result, { type: 'binary' })
         const primerFull = workbook.Sheets[workbook.SheetNames[0]]
         const files = XLSX.utils.sheet_to_json(primerFull, { header: 1, raw: false })
+
+        // PI i NESE detallat: pestanyes a part del mateix llibre. Si no hi
+        // són (fitxer parcial o exportació antiga), es continua igualment
+        // amb tothom a false/buit — no bloqueja la importació del llistat
+        // principal, que és la part imprescindible.
+        const fullPI = workbook.Sheets[FULL_ESFERA_PI]
+        const fullAD = workbook.Sheets[FULL_ESFERA_AD]
+        const resumPI = fullPI
+          ? llegeixResumPI(XLSX.utils.sheet_to_json(fullPI, { header: 1, raw: false }))
+          : new Map()
+        const resumAD = fullAD
+          ? llegeixResumAD(XLSX.utils.sheet_to_json(fullAD, { header: 1, raw: false }))
+          : new Map()
 
         const perClasse = {}
         for (const fila of files) {
@@ -229,8 +257,20 @@ export default function Alumnes() {
           const esNese = fila[COL_NESE]?.toString().trim().toLowerCase() === 'sí'
           const neseMotiu = fila[COL_NESE_MOTIU]?.toString().trim() ?? ''
           const neseEconomic = esNese && neseMotiu.toLowerCase().includes(MOTIU_NESE_REDUCCIO)
+          const pi = resumPI.get(idalu)?.pi ?? false
+          const ad = resumAD.get(idalu)
           if (!perClasse[curs]) perClasse[curs] = []
-          perClasse[curs].push({ nom, idalu, neseEconomic })
+          perClasse[curs].push({
+            nom,
+            idalu,
+            neseEconomic,
+            pi,
+            adMotiu: ad?.neseMotiu ?? '',
+            adFlag: ad?.neseFlag ?? false,
+            adTipusA: ad?.tipusANee ?? false,
+            adTipusB: ad?.tipusB ?? false,
+            adTipusC: ad?.tipusC ?? false,
+          })
         }
 
         if (Object.keys(perClasse).length === 0) {
@@ -242,9 +282,21 @@ export default function Alumnes() {
         for (const [curs, files2] of Object.entries(perClasse)) {
           previsualitzat[curs] = files2
             .sort((a, b) => a.nom.localeCompare(b.nom))
-            .map((f, i) => ({ nom: f.nom, idalu: f.idalu, numLlista: i + 1, neseEconomic: f.neseEconomic }))
+            .map((f, i) => ({
+              nom: f.nom,
+              idalu: f.idalu,
+              numLlista: i + 1,
+              neseEconomic: f.neseEconomic,
+              pi: f.pi,
+              adMotiu: f.adMotiu,
+              adFlag: f.adFlag,
+              adTipusA: f.adTipusA,
+              adTipusB: f.adTipusB,
+              adTipusC: f.adTipusC,
+            }))
         }
         setPrevisualitzacio(previsualitzat)
+        setFullsPiAdTrobats({ pi: Boolean(fullPI), ad: Boolean(fullAD) })
       } catch (err) {
         setErrorFitxer(`No s'ha pogut llegir el fitxer: ${err.message}`)
       }
@@ -274,6 +326,9 @@ export default function Alumnes() {
     : 0
   const totalNeseEconomic = previsualitzacio
     ? Object.values(previsualitzacio).reduce((acc, llista) => acc + llista.filter((a) => a.neseEconomic).length, 0)
+    : 0
+  const totalPi = previsualitzacio
+    ? Object.values(previsualitzacio).reduce((acc, llista) => acc + llista.filter((a) => a.pi).length, 0)
     : 0
 
   async function esborraTotsElsAlumnes() {
@@ -447,9 +502,19 @@ export default function Alumnes() {
 
         {previsualitzacio && (
           <div style={{ marginTop: 16 }}>
+            {(!fullsPiAdTrobats.pi || !fullsPiAdTrobats.ad) && (
+              <div className="placeholder-box" style={{ borderStyle: 'solid', borderColor: 'var(--amber-dark)', marginBottom: 12 }}>
+                <strong>Atenció:</strong> aquest fitxer no porta{' '}
+                {!fullsPiAdTrobats.pi && !fullsPiAdTrobats.ad
+                  ? 'els fulls "ESFERA PI" ni "ESFERA AD"'
+                  : !fullsPiAdTrobats.pi ? 'el full "ESFERA PI"' : 'el full "ESFERA AD"'}
+                . El PI i el NESE detallat de tothom quedaran a "No" en aquesta importació — puja el
+                llibre sencer si vols actualitzar-los.
+              </div>
+            )}
             <p style={{ fontSize: 14, fontWeight: 600 }}>
               Trobats {totalAlumnesPrevisualitzats} alumnes en {Object.keys(previsualitzacio).length} classes
-              ({totalNeseEconomic} amb reducció NESE per situació socioeconòmica):
+              ({totalNeseEconomic} amb reducció NESE per situació socioeconòmica, {totalPi} amb PI):
             </p>
             <ul className="roster" style={{ marginTop: 8 }}>
               {Object.entries(previsualitzacio).sort().map(([curs, alumnes]) => (
@@ -458,6 +523,7 @@ export default function Alumnes() {
                   <span style={{ fontSize: 13, color: 'var(--ink-soft)' }}>
                     {alumnes.length} alumnes
                     {alumnes.some((a) => a.neseEconomic) && ` · ${alumnes.filter((a) => a.neseEconomic).length} NESE`}
+                    {alumnes.some((a) => a.pi) && ` · ${alumnes.filter((a) => a.pi).length} PI`}
                   </span>
                 </li>
               ))}
@@ -894,7 +960,10 @@ async function syncTotesLesClasses(perClasse) {
   let desactivats = 0
 
   for (const [curs, alumnes] of Object.entries(perClasse)) {
-    for (const { nom, numLlista, idalu, neseEconomic } of alumnes) {
+    for (const {
+      nom, numLlista, idalu, neseEconomic,
+      pi, adMotiu, adFlag, adTipusA, adTipusB, adTipusC,
+    } of alumnes) {
       const id = idalu ? String(idalu) : (existentsPerNom.get(nom)?.id ?? slug(nom))
       const existent = idalu ? existentsPerId.get(id) : existentsPerNom.get(nom)
 
@@ -902,7 +971,21 @@ async function syncTotesLesClasses(perClasse) {
 
       batch.set(
         doc(alumnesRef, id),
-        { nom, curs, numLlista, idalu: idalu ?? null, neseEconomic: Boolean(neseEconomic), actiu: true, actualitzatEl: serverTimestamp() },
+        {
+          nom, curs, numLlista, idalu: idalu ?? null, neseEconomic: Boolean(neseEconomic), actiu: true,
+          // PI i NESE detallat pel SIC automàtic (vegeu sicAlumnatIndicadors.js).
+          // Si el fitxer pujat no portava els fulls "ESFERA PI"/"ESFERA AD",
+          // aquests venen tots a false/buit — no s'esborra res del que ja hi
+          // hagués abans amb el merge, però tampoc es dona per fet que sigui
+          // correcte: per això la pantalla avisa quan falten aquests fulls.
+          pi: Boolean(pi),
+          adMotiu: adMotiu ?? '',
+          adFlag: Boolean(adFlag),
+          adTipusA: Boolean(adTipusA),
+          adTipusB: Boolean(adTipusB),
+          adTipusC: Boolean(adTipusC),
+          actualitzatEl: serverTimestamp(),
+        },
         { merge: true }
       )
 
