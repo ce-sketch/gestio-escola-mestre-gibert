@@ -350,3 +350,50 @@ describe('areesDe — amb les calculades', () => {
     expect(etiquetaArea('medi_global')).toBe('Medi (global)')
   })
 })
+
+describe('nota final corregida pel mestre', () => {
+  // La mitjana aritmètica no sempre reflecteix on ha arribat l'alumne:
+  // una remuntada clara al tercer trimestre val més que el 4 del primer.
+  // Per això el mestre pot escriure la final, i mana sobre la mitjana.
+  const ambCorreccio = [
+    nota('a', '3rA', 'catala', '1r trimestre', 4),
+    nota('a', '3rA', 'catala', '2n trimestre', 5),
+    nota('a', '3rA', 'catala', '3r trimestre', 7),
+    // 5,3 de mitjana, però el mestre hi posa un 7.
+    { ...nota('a', '3rA', 'catala', 'Final', 7) },
+  ]
+
+  it('la final escrita a mà mana sobre la mitjana', () => {
+    const files = resumDesDeRegistres(ambCorreccio, '2026-27')
+    const final = files.find((f) => f.trimestre === MOMENT_FINAL)
+    // 7 és Assoliment Notable; la mitjana (5,3) hauria estat Satisfactori.
+    expect(final).toMatchObject({ an: 1, as: 0, total: 1 })
+  })
+
+  it('la correcció NO surt com un trimestre més', () => {
+    // Si sortís, la taula tindria una columna "Final" al costat del 1r,
+    // 2n i 3r, a més del moment "Final (mitjana)".
+    const files = resumDesDeRegistres(ambCorreccio, '2026-27')
+    expect(files.map((f) => f.trimestre)).not.toContain('Final')
+  })
+
+  it('sense correcció, segueix sent la mitjana', () => {
+    const files = resumDesDeRegistres(ambCorreccio.slice(0, 3), '2026-27')
+    const final = files.find((f) => f.trimestre === MOMENT_FINAL)
+    expect(final).toMatchObject({ as: 1, an: 0 })
+  })
+
+  it('la correcció compta encara que no hi hagi cap trimestre', () => {
+    // Cas real: un alumne que arriba a mig curs i només se li posa la final.
+    const files = resumDesDeRegistres([nota('z', '3rA', 'catala', 'Final', 8)], '2026-27')
+    expect(files.find((f) => f.trimestre === MOMENT_FINAL).an).toBe(1)
+  })
+
+  it('buidar la correcció torna a la mitjana', () => {
+    // En buidar-la es desa amb nota buida, que tot el que llegeix aquesta
+    // col·lecció tracta com a absent.
+    const buidada = [...ambCorreccio.slice(0, 3), { ...nota('a', '3rA', 'catala', 'Final', null) }]
+    const files = resumDesDeRegistres(buidada, '2026-27')
+    expect(files.find((f) => f.trimestre === MOMENT_FINAL)).toMatchObject({ as: 1 })
+  })
+})

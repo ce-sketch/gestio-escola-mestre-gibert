@@ -15,7 +15,7 @@
 // Quan un curs té les dues, mana la calculada: ve de les notes originals
 // i no d'un resum ja agregat.
 
-import { AREES, TRIMESTRES, notaFinalArea } from './notesArea'
+import { AREES, TRIMESTRES, TRIMESTRE_FINAL, notaFinalArea } from './notesArea'
 import { redueixVigents, nivellDe } from './avaluacioCatala'
 
 /**
@@ -81,23 +81,33 @@ export function resumDesDeRegistres(registres, cursEscolar) {
   // La mitjana es fa per ALUMNE i després es classifica, no fent la
   // mitjana de les franges: un alumne amb 4 i 6 té un 5 (satisfactori),
   // no "la meitat de no assoliment i la meitat de satisfactori".
+  //
+  // I si el mestre ha escrit una final a mà, mana la seva: la mitjana
+  // aritmètica no sempre reflecteix on ha arribat l'alumne. Si l'històric
+  // la ignorés, diria una cosa diferent de la pantalla de notes.
   const perAlumneArea = new Map()
+  const manuals = new Map()
   for (const r of vigents) {
     if (r.nota === null || r.nota === undefined || !r.curs || !r.area) continue
     const clau = `${r.area}__${r.curs}__${r.alumneId}`
+    if (r.trimestre === TRIMESTRE_FINAL) { manuals.set(clau, Number(r.nota)); continue }
     if (!perAlumneArea.has(clau)) perAlumneArea.set(clau, [])
     perAlumneArea.get(clau).push(Number(r.nota))
   }
   const finals = []
-  for (const [clau, notes] of perAlumneArea) {
-    const mitjana = notaFinalArea(notes)
-    if (mitjana === null) continue
+  for (const clau of new Set([...perAlumneArea.keys(), ...manuals.keys()])) {
+    const nota = manuals.has(clau) ? manuals.get(clau) : notaFinalArea(perAlumneArea.get(clau))
+    if (nota === null || nota === undefined) continue
     const [area, curs] = clau.split('__')
-    finals.push({ trimestre: MOMENT_FINAL, area, curs, nota: mitjana })
+    finals.push({ trimestre: MOMENT_FINAL, area, curs, nota })
   }
 
+  // Les notes finals escrites a mà no són un trimestre: no han de sortir
+  // com una columna més al costat del 1r, 2n i 3r.
+  const delsTrimestres = vigents.filter((r) => r.trimestre !== TRIMESTRE_FINAL)
+
   const acumulat = new Map()
-  for (const r of [...vigents, ...finals]) {
+  for (const r of [...delsTrimestres, ...finals]) {
     // Els registres desen la nota NUMÈRICA; la franja qualitativa surt de
     // `nivellDe()`, els llindars de la qual són configurables al centre.
     // Si algun registre ja portés el nivell fet (formats antics), es

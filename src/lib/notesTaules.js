@@ -14,7 +14,7 @@
 // a 13, que en A4 apaïsat es llegeixen còmodament i tenen l'aspecte d'un
 // document oficial.
 
-import { AREES, TRIMESTRES, areaAplicaAClasse, notaFinalArea } from './notesArea'
+import { AREES, TRIMESTRES, areaAplicaAClasse, notaFinalArea, notaFinalAmbCorreccio } from './notesArea'
 
 export const MOMENTS_NOTES = [...TRIMESTRES, 'Final']
 
@@ -31,10 +31,15 @@ export const MOMENTS_NOTES = [...TRIMESTRES, 'Final']
 export function taulesNotesClasse(classe, alumnesClasse, notaDe, { moments = MOMENTS_NOTES } = {}) {
   const areesClasse = AREES.filter((a) => areaAplicaAClasse(a.id, classe))
 
+  // La final respecta la correcció del mestre: si n'hi ha una d'escrita a
+  // mà, mana sobre la mitjana. Les calculades (Artística) no en tenen de
+  // pròpia: surten de la final de les seves àrees, que sí que la poden dur.
+  const finalSimple = (alumneId, areaId) =>
+    notaFinalAmbCorreccio((t) => notaDe(alumneId, areaId, t))
   const notaFinalDe = (alumneId, area) => (
     area.calculada
-      ? notaFinalArea(area.deArees.map((id) => notaFinalArea(TRIMESTRES.map((t) => notaDe(alumneId, id, t)))))
-      : notaFinalArea(TRIMESTRES.map((t) => notaDe(alumneId, area.id, t)))
+      ? notaFinalArea(area.deArees.map((id) => finalSimple(alumneId, id)))
+      : finalSimple(alumneId, area.id)
   )
 
   return moments.map((moment) => {

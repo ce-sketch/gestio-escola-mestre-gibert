@@ -57,6 +57,21 @@ export function areaAplicaAClasse(areaId, classe) {
 export const TRIMESTRES = ['1r trimestre', '2n trimestre', '3r trimestre']
 
 /**
+ * El "trimestre" amb què es desa una nota final posada A MÀ.
+ *
+ * La final normalment és la mitjana dels trimestres, però el mestre l'ha
+ * de poder corregir: la mitjana aritmètica no sempre reflecteix on ha
+ * arribat l'alumne (una remuntada clara al tercer trimestre val més que
+ * el 4 del primer). Quan n'hi ha una d'escrita, mana; si es buida, es
+ * torna a la mitjana.
+ *
+ * Es desa a la mateixa col·lecció i amb la mateixa forma que les altres
+ * notes, canviant només el `trimestre`: així l'històric, els resums i les
+ * exportacions no han de saber que existeix un cas especial.
+ */
+export const TRIMESTRE_FINAL = 'Final'
+
+/**
  * La nota final d'una àrea: la mitjana només dels trimestres on l'alumne
  * ja té nota, no la mitjana forçada dels tres.
  *
@@ -151,4 +166,25 @@ export function interpretaDictatNotesArea(transcripcio) {
   })
 
   return resultat
+}
+
+/**
+ * La nota final d'una àrea per a un alumne, tenint en compte la
+ * correcció del mestre.
+ *
+ * Si hi ha una final escrita a mà, mana; si no, la mitjana dels
+ * trimestres. Existeix perquè aquest criteri es decideix EN UN SOL LLOC:
+ * el calculaven cinc pantalles pel seu compte (notes, resum per àrea,
+ * àrees no superades, descàrregues i l'històric), i n'hi hauria hagut
+ * prou que una se n'oblidés perquè dues pantalles diguessin notes
+ * diferents del mateix alumne.
+ *
+ * @param {(trimestre: string) => number|string|null} notaDe
+ *        com llegir la nota d'un trimestre; rep també TRIMESTRE_FINAL
+ */
+export function notaFinalAmbCorreccio(notaDe) {
+  const manual = notaDe(TRIMESTRE_FINAL)
+  const n = Number(manual)
+  if (manual !== '' && manual !== null && manual !== undefined && Number.isFinite(n)) return n
+  return notaFinalArea(TRIMESTRES.map((t) => notaDe(t)))
 }
