@@ -31,6 +31,8 @@
 import { textNet, numero } from './excelLectura'
 import { carregaExcelJS, carregaPdfjs } from './carregaLlibreries'
 import { TRIMESTRES } from './notesArea'
+import { MOMENT_FINAL } from './historicNotaArea'
+import { nivellDe } from './avaluacioCatala'
 
 /** Com s'anomenen les àrees als fulls antics → l'id que fa servir l'app.
  *  Les claus van sense accents ni espais, per comparar-les amb tolerància. */
@@ -101,9 +103,29 @@ export function cursEscolarDeFull(files) {
  * @returns {Promise<{cursEscolar: string|null, files: Array, avisos: string[], format: 'pdf'|'excel'}>}
  */
 export async function llegeixResumNotaArea(buffer, nomFitxer = '') {
-  return esPdf(buffer) || /\.pdf$/i.test(nomFitxer)
-    ? llegeixPdf(buffer)
-    : llegeixExcel(buffer)
+  if (esPdf(buffer) || /\.pdf$/i.test(nomFitxer)) return llegeixPdf(buffer)
+
+  const resum = await llegeixExcel(buffer)
+
+  // La nota Final no és als fulls "Resum" —només hi ha recomptes per
+  // franja, i d'un recompte no se'n pot recuperar qui era qui—, però sí
+  // al full de notes alumne per alumne. Es llegeix a part i s'hi afegeix.
+  //
+  // Si no hi és, no es para res: els trimestres ja s'han llegit i l'avís
+  // ho diu. Un fitxer que només porti els resums segueix sent útil.
+  try {
+    const finals = await llegeixFinalsPerAlumne(buffer, MOMENT_FINAL)
+    return {
+      ...resum,
+      files: [...resum.files, ...finals.files],
+      avisos: [...resum.avisos, ...finals.avisos],
+    }
+  } catch (err) {
+    return {
+      ...resum,
+      avisos: [...resum.avisos, `No he pogut llegir la nota Final: ${err.message}`],
+    }
+  }
 }
 
 /** Els PDF comencen sempre pels bytes "%PDF". Es mira el CONTINGUT i no
@@ -374,4 +396,147 @@ function areaPerPosicio(arees, pos) {
     if (d < millorDistancia) { millorDistancia = d; millor = a }
   }
   return millor?.area ?? null
+}
+
+
+// ── Les notes per alumne, i la nota FINAL ─────────────────────────────
+//
+// Els fulls "Resum" només donen recomptes agregats per franja, i d'un
+// recompte no se'n pot recuperar qui era qui: la nota Final és la mitjana
+// de CADA alumne classificada després, no la mitjana de les franges.
+//
+// Per sort, els mateixos fitxers porten un full amb tots els alumnes i,
+// per cada àrea, els tres trimestres i una columna "F" amb la final que
+// ja va calcular el centre. D'allà en surt la dada exacta.
+
+
+/** Els números del full vénen amb coma decimal, i els buits com a "-". */
+function nota(cell) {
+  const n = numero(cell)
+  if (n !== null) return n
+  const t = textNet(cell).replace(',', '.')
+  if (!t || t === '-' || t === '—') return null
+  const v = Number(t)
+  return Number.isFinite(v) ? v : null
+}
+
+/**
+ * Els grups d'àrea d'una capçalera: tres columnes iguals seguides d'una
+ * "F".
+ *
+ * Aquest patró és el que distingeix les àrees de les columnes de
+ * recompte que hi ha més a la dreta del mateix full ("CAT1t, CAT2t,
+ * Cat3t, FINAL"): allà les tres primeres NO són iguals entre si, i per
+ * això no s'hi confonen.
+ *
+ * Les cel·les fusionades poden arribar buides segons com s'hagi desat el
+ * fitxer, així que abans s'arrossega el valor anterior cap a la dreta.
+ */
+export function grupsAreaDeCapcalera(textos) {
+  const plens = []
+  let ultim = ''
+  for (const t of textos) {
+    const net = String(t ?? '').trim()
+    if (net) ultim = net
+    plens.push(net || ultim)
+  }
+
+  const grups = []
+  for (let c = 0; c + 3 < plens.length; c++) {
+    const [a, b, d, f] = [plens[c], plens[c + 1], plens[c + 2], plens[c + 3]]
+    if (!a || a !== b || b !== d) continue
+    if (neteja(f) !== 'f') continue
+    const area = AREES_FULL[neteja(a)]
+    if (!area) continue
+    grups.push({ area, colFinal: c + 3 })
+    c += 3
+  }
+  return grups
+}
+
+/**
+ * Llegeix el full de notes per alumne i en treu les files de la nota
+ * FINAL, ja repartides per franja.
+ *
+ * @returns {Array<{trimestre, area, classe, na, as, an, ae, total}>}
+ */
+export async function llegeixFinalsPerAlumne(buffer, momentFinal) {
+  const ExcelJS = await carregaExcelJS()
+  const wb = new ExcelJS.Workbook()
+  await wb.xlsx.load(buffer)
+
+  // clau `area__classe` → recompte
+  const acumulat = new Map()
+  const avisos = []
+  let fullTrobat = null
+
+  for (const ws of wb.worksheets) {
+    const files = []
+    ws.eachRow({ includeEmpty: true }, (row) => {
+      const fila = []
+      for (let c = 1; c <= Math.min(row.cellCount || 60, 120); c++) fila.push(row.getCell(c))
+      files.push(fila)
+    })
+
+    // La capçalera és la fila que dona més grups d'àrea.
+    let grups = []
+    let filaCap = -1
+    for (let i = 0; i < Math.min(files.length, 20); i++) {
+      const trobats = grupsAreaDeCapcalera(files[i].map((c) => textNet(c)))
+      if (trobats.length > grups.length) { grups = trobats; filaCap = i }
+    }
+    if (grups.length < 3) continue
+    fullTrobat = ws.name
+
+    // La columna de classe: la primera que, a les files de sota, tingui
+    // codis de classe. Al full real és la primera de totes.
+    for (let i = filaCap + 1; i < files.length; i++) {
+      const fila = files[i]
+      let classe = null
+      for (let c = 0; c < Math.min(fila.length, 4); c++) {
+        const t = textNet(fila[c]).replace(/\s/g, '').toUpperCase()
+        if (ES_CLASSE.test(t)) { classe = t; break }
+      }
+      if (!classe) continue
+
+      for (const { area, colFinal } of grups) {
+        const valor = nota(fila[colFinal])
+        if (valor === null) continue
+        const nivell = nivellDe(valor)
+        if (!nivell) continue
+        const franja = idFranjaDeNivell(nivell.id)
+        if (!franja) continue
+        const clau = `${area}__${classe}`
+        if (!acumulat.has(clau)) acumulat.set(clau, { na: 0, as: 0, an: 0, ae: 0, total: 0 })
+        const fils = acumulat.get(clau)
+        fils[franja] += 1
+        fils.total += 1
+      }
+    }
+    break // amb un full de notes n'hi ha prou
+  }
+
+  if (acumulat.size === 0) {
+    avisos.push(
+      "No hi he trobat el full amb les notes alumne per alumne, així que la nota Final "
+      + "no s'ha pogut calcular. Els trimestres sí que s'han llegit."
+    )
+    return { files: [], avisos, full: fullTrobat }
+  }
+
+  const files = [...acumulat.entries()].map(([clau, recompte]) => {
+    const [area, classe] = clau.split('__')
+    return { trimestre: momentFinal, area, classe, ...recompte }
+  })
+  return { files, avisos, full: fullTrobat }
+}
+
+/** Els nivells d'`avaluacioCatala` als identificadors de franja d'aquí. */
+function idFranjaDeNivell(nivellId) {
+  const t = String(nivellId ?? '')
+  if (t.includes('excel')) return 'ae'
+  if (t.includes('notable')) return 'an'
+  if (t.includes('satisfactori')) return 'as'
+  if (t.includes('no_assoliment')) return 'na'
+  return null
 }

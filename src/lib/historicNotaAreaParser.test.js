@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 
-import { trimestreDeFull, cursEscolarDeFull, esPdf } from './historicNotaAreaParser'
+import { trimestreDeFull, cursEscolarDeFull, esPdf, grupsAreaDeCapcalera } from './historicNotaAreaParser'
 
 describe('trimestreDeFull', () => {
   it('reconeix els noms de full del centre', () => {
@@ -148,5 +148,48 @@ describe('el total com a comprovació', () => {
     const { files } = await llegeixResumNotaArea(await fullAmb([['1A', 5, 6, 15, 1]]))
     expect(files).toHaveLength(1)
     expect(files[0].total).toBe(27) // recalculat de la suma
+  })
+})
+
+describe('grupsAreaDeCapcalera', () => {
+  // Al full de notes per alumne, cada àrea ocupa tres columnes (els
+  // trimestres) i una quarta "F" amb la final.
+  it('reconeix els grups de tres columnes iguals més una F', () => {
+    const cap = ['Curs', '', 'Noms', 'català', 'català', 'català', 'F', 'castellà', 'castellà', 'castellà', 'F']
+    expect(grupsAreaDeCapcalera(cap)).toEqual([
+      { area: 'catala', colFinal: 6 },
+      { area: 'castella', colFinal: 10 },
+    ])
+  })
+
+  it('NO confon el bloc de recomptes de la dreta amb àrees', () => {
+    // El mateix full porta, més a la dreta, columnes "CAT1t, CAT2t,
+    // Cat3t, FINAL". Si es llegissin com una àrea, els recomptes es
+    // duplicarien i la Final sortiria el doble de gran.
+    const cap = ['CAT1t', 'CAT2t', 'Cat3t', 'FINAL', 'CAST1t', 'CAST2t', 'CAST3t', 'FINAL']
+    expect(grupsAreaDeCapcalera(cap)).toEqual([])
+  })
+
+  it('arrossega les cel·les fusionades, que poden arribar buides', () => {
+    // Segons com s'hagi desat el fitxer, d'un grup fusionat només ve
+    // plena la primera cel·la.
+    const cap = ['Curs', '', 'Noms', 'català', '', '', 'F']
+    expect(grupsAreaDeCapcalera(cap)).toEqual([{ area: 'catala', colFinal: 6 }])
+  })
+
+  it('descarta les àrees que no reconeix', () => {
+    const cap = ['inventada', 'inventada', 'inventada', 'F']
+    expect(grupsAreaDeCapcalera(cap)).toEqual([])
+  })
+
+  it('conserva medi natural i medi social per separat', () => {
+    // Als cursos antics eren dues àrees diferents.
+    const cap = ['m. natural', 'm. natural', 'm. natural', 'F', 'm. social', 'm. social', 'm. social', 'F']
+    expect(grupsAreaDeCapcalera(cap).map((g) => g.area)).toEqual(['medi_natural', 'medi_social'])
+  })
+
+  it('no peta amb una capçalera buida', () => {
+    expect(grupsAreaDeCapcalera([])).toEqual([])
+    expect(grupsAreaDeCapcalera(['', '', ''])).toEqual([])
   })
 })
