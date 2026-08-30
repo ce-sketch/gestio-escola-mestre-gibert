@@ -184,6 +184,25 @@ export function filesProves(dades, { cicleDe, MOMENTS_LECTURA }) {
     return alumnes.filter((a) => cicleDe(a.curs) === cicleId && compta(a.curs, opcions)).length
   }
 
+  /**
+   * Les classes del cicle que NO fan aquesta prova.
+   *
+   * El percentatge d'una cel·la es calcula només sobre les classes que sí
+   * que la fan, i això, sense dir-ho, enganya: si 1r no passa la
+   * comprensió lectora al setembre i 2n sí, la cel·la de Cicle Inicial
+   * marca 100% quan en realitat només parla de la meitat del cicle.
+   *
+   * La matriu treballa per cicles i no pot ensenyar-ho classe per classe,
+   * però sí que pot avisar que la xifra no cobreix el cicle sencer.
+   */
+  function classesExcloses(cicleId, opcions) {
+    return [...new Set(
+      alumnes
+        .filter((a) => cicleDe(a.curs) === cicleId && !compta(a.curs, opcions))
+        .map((a) => a.curs)
+    )].sort((a, b) => String(a).localeCompare(String(b), 'ca', { numeric: true }))
+  }
+
   /** Alumnes diferents amb registre (un alumne amb dos registres compta un). */
   function participants(registres, cicleId, opcions) {
     const vistos = new Set()
@@ -204,8 +223,16 @@ export function filesProves(dades, { cicleDe, MOMENTS_LECTURA }) {
         // un guionet vol dir "aquí no toca" i un zero, "toca i no s'ha
         // fet". El denominador ja hi arriba a zero sol.
         const total = denominador(col.id, opcions)
-        if (total === 0) return { id: col.id, label: col.label, valor: null }
-        return { id: col.id, label: col.label, valor: (participants(registres, col.id, opcions) / total) * 100 }
+        const excloses = classesExcloses(col.id, opcions)
+        if (total === 0) return { id: col.id, label: col.label, valor: null, excloses }
+        return {
+          id: col.id,
+          label: col.label,
+          valor: (participants(registres, col.id, opcions) / total) * 100,
+          // Buit quan el cicle sencer fa la prova: així la marca només
+          // surt on hi ha alguna cosa a explicar.
+          excloses,
+        }
       }),
     }
   }

@@ -295,3 +295,48 @@ describe('filesProves — quines classes passen cada prova', () => {
     expect(cel·la(fila, 'CM')).toBeNull()
   })
 })
+
+describe('filesProves — cicles amb classes excloses', () => {
+  // El cas que ho motiva: 1r no passa la comprensió lectora al setembre
+  // i 2n sí. La cel·la de Cicle Inicial parlarà només de 2n, i sense
+  // dir-ho un 100% semblaria que cobreix tot el cicle.
+  const config = { exclusions: { lecturaCl__inicial: ['1rA'] } }
+  const registres = [
+    { alumneId: '2n-0', curs: '2nA', moment: 'inicial', vl: 70, cl: 7 },
+    { alumneId: '2n-1', curs: '2nA', moment: 'inicial', vl: 70, cl: 7 },
+  ]
+
+  it('diu quines classes del cicle no fan la prova', () => {
+    const fila = filaDe(proves({ lecturaRegistres: registres, configProves: config }), 'CL — Avaluació Inicial')
+    const ci = fila.columnes.find((c) => c.id === 'CI')
+    expect(ci.excloses).toEqual(['1rA'])
+  })
+
+  it('la llista queda buida quan el cicle sencer la fa', () => {
+    // Així la marca només surt on hi ha alguna cosa a explicar.
+    const fila = filaDe(proves({ lecturaRegistres: registres, configProves: config }), 'VL — Avaluació Inicial')
+    expect(fila.columnes.find((c) => c.id === 'CI').excloses).toEqual([])
+  })
+
+  it('el percentatge segueix sent sobre les classes que sí que la fan', () => {
+    const fila = filaDe(proves({ lecturaRegistres: registres, configProves: config }), 'CL — Avaluació Inicial')
+    // 2 de 2 alumnes de 2nA: 1rA no entra al denominador.
+    expect(cel·la(fila, 'CI')).toBe(50) // 2 de 4 alumnes de 2n
+  })
+
+  it('també ho diu quan el cicle sencer queda fora', () => {
+    // Aquí la cel·la ja surt buida, però saber QUINES classes són
+    // estalvia anar a mirar la configuració.
+    const cap = { exclusions: { lecturaCl__inicial: ['1rA', '1rB', '2nA', '2nB'] } }
+    const fila = filaDe(proves({ configProves: cap }), 'CL — Avaluació Inicial')
+    const ci = fila.columnes.find((c) => c.id === 'CI')
+    expect(ci.valor).toBeNull()
+    expect(ci.excloses.length).toBeGreaterThan(0)
+  })
+
+  it('les classes excloses van ordenades per nivell', () => {
+    const cap = { exclusions: { lecturaCl__inicial: ['2nA', '1rA'] } }
+    const fila = filaDe(proves({ configProves: cap }), 'CL — Avaluació Inicial')
+    expect(fila.columnes.find((c) => c.id === 'CI').excloses).toEqual(['1rA', '2nA'])
+  })
+})
