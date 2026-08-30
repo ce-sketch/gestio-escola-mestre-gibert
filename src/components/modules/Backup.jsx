@@ -256,7 +256,12 @@ export default function Backup() {
       const url = URL.createObjectURL(blob)
       const enllac = document.createElement('a')
       enllac.href = url
-      enllac.download = `backup-escola-mestre-gibert-${new Date().toISOString().slice(0, 10)}.zip`
+      // El nom del fitxer també porta l'hora: dues còpies del mateix dia
+      // es dirien igual i el navegador hi afegiria "(1)", que no diu
+      // quina és la bona.
+      const ara = new Date()
+      const segell = `${ara.toISOString().slice(0, 10)}-${String(ara.getHours()).padStart(2, '0')}${String(ara.getMinutes()).padStart(2, '0')}`
+      enllac.download = `backup-escola-mestre-gibert-${segell}.zip`
       enllac.click()
       URL.revokeObjectURL(url)
 
@@ -267,7 +272,7 @@ export default function Backup() {
       // .zip descarregat), amb una instantània dels alumnes perquè es
       // pugui restaurar més endavant si cal.
       await setDoc(doc(collection(db, 'versions')), {
-        nom: nomVersio.trim() || `Còpia del ${new Date().toLocaleDateString('ca-ES')}`,
+        nom: nomVersio.trim() || `Còpia del ${new Date().toLocaleString('ca-ES', { dateStyle: 'short', timeStyle: 'short' })}`,
         cursEscolar: cursEscolarActual(),
         creatEl: serverTimestamp(),
         creatPer: auth.currentUser?.email ?? null,
@@ -399,7 +404,15 @@ export default function Backup() {
         <p className="module-note" style={{ marginTop: 16, fontStyle: 'normal' }}>
           {ultimBackup ? (
             <>
-              Última còpia feta el <strong>{ultimBackup.toLocaleDateString('ca-ES')}</strong>
+              {/* Amb l'hora: si se'n fan dues el mateix dia (per exemple,
+                  abans i després d'una càrrega grossa) només amb la data
+                  no es podia saber si la que hi ha és la d'abans o la de
+                  després. El moment exacte ja es desava; només faltava
+                  ensenyar-lo. */}
+              Última còpia feta el <strong>
+                {ultimBackup.toLocaleDateString('ca-ES')} a les{' '}
+                {ultimBackup.toLocaleTimeString('ca-ES', { hour: '2-digit', minute: '2-digit' })}
+              </strong>
               {avisAntic && (
                 <span style={{ color: 'var(--red)' }}> — fa {diesDesDelBackup} dies, ja toca fer-ne una altra.</span>
               )}
