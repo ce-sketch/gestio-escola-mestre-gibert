@@ -223,8 +223,9 @@ async function llegeixExcel(buffer) {
  * queden fora soles.
  *
  * Els fitxers del centre en solen tenir QUATRE: els tres trimestres i un
- * resum final. Del quart no se'n fa res —l'app treballa amb tres
- * trimestres— però es diu, per si algun any l'ordre fos un altre.
+ * resum final —aquest darrer es fa servir per calcular la Final. Si
+ * n'hi hagués més de quatre, la resta no es desa, però es diu, per si
+ * algun any l'ordre fos un altre.
  */
 async function llegeixPdf(buffer) {
   const pdfjs = await carregaPdfjs()
@@ -263,12 +264,6 @@ async function llegeixPdf(buffer) {
       + '"Nota mitjana d\'àrea", amb els seus fulls de resum per trimestre.'
     )
   }
-  if (paginesResum.length > TRIMESTRES.length) {
-    avisos.push(
-      `El PDF té ${paginesResum.length} pàgines de resum i n'he fet servir les ${TRIMESTRES.length} primeres `
-      + "com a 1r, 2n i 3r trimestre. La resta (normalment el resum final) no s'ha desat."
-    )
-  }
 
   const resultat = []
   for (const [i, files] of paginesResum.slice(0, TRIMESTRES.length).entries()) {
@@ -277,18 +272,35 @@ async function llegeixPdf(buffer) {
     resultat.push(...delFull)
   }
 
-  // La nota Final: de les pàgines "alumne per alumne" si n'hi ha (una per
-  // classe), amb el mateix criteri de posicions que l'Excel — la columna
-  // "F" de cada àrea. Si el PDF no en porta cap (només els resums per
-  // trimestre), no es calcula: no hi ha manera de recuperar-la d'un
-  // recompte ja agregat.
-  if (paginesAlumnes.length > 0) {
+  // La 4a pàgina de resum, quan n'hi ha una: és el resum Final ja fet
+  // pel centre —amb la classificació per franja que ELLS han decidit—,
+  // no una reconstrucció. És més fiable que recalcular-la alumne per
+  // alumne: en un fitxer real (curs 25-26) un alumne de castellà queia
+  // en una franja diferent segons quin dels dos mètodes es feia servir
+  // (el llindar exacte de nota deu variar una mica del que fa servir
+  // `nivellDe()`), i aquesta pàgina és la que talla el dubte.
+  const finalDelResum = paginesResum.length > TRIMESTRES.length
+    ? llegeixFilesAmbPosicions(paginesResum[TRIMESTRES.length], MOMENT_FINAL, avisos)
+    : []
+
+  if (finalDelResum.length > 0) {
+    resultat.push(...finalDelResum)
+    if (paginesResum.length > TRIMESTRES.length + 1) {
+      avisos.push(
+        `El PDF té ${paginesResum.length} pàgines de resum: les 3 primeres com a trimestres, la 4a `
+        + `com a Final. Les ${paginesResum.length - TRIMESTRES.length - 1} restants no s'han desat.`
+      )
+    }
+  } else if (paginesAlumnes.length > 0) {
+    // Sense una 4a pàgina de resum: es reconstrueix de les pàgines
+    // "alumne per alumne" (una per classe), amb el mateix criteri de
+    // posicions que l'Excel — la columna "F" de cada àrea.
     const finals = llegeixFinalsAlumnesPdf(paginesAlumnes)
     resultat.push(...finals.files)
     avisos.push(...finals.avisos)
   } else {
     avisos.push(
-      "No hi he trobat cap pàgina \"alumne per alumne\" (una per classe, amb columna F) al PDF, "
+      "No hi he trobat cap pàgina de resum Final ni cap pàgina \"alumne per alumne\" al PDF, "
       + "així que la nota Final no s'ha pogut calcular. Els trimestres sí que s'han llegit."
     )
   }
