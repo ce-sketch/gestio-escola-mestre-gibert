@@ -234,13 +234,24 @@ export function filesProves(dades, { cicleDe, MOMENTS_LECTURA }) {
       { prova: 'tee', moment: String(t.num) }))
   }
 
-  // --- VL/CL, un per moment ------------------------------------------------
+  // --- Velocitat i comprensió lectora, un per moment -----------------------
   // Educació Infantil no fa VL/CL (el full oficial no té barem per a
   // I3-I5), així que la seva columna queda buida, no a zero.
+  //
+  // Van en files SEPARADES perquè són proves separades: a 1r es pot fer
+  // la velocitat al setembre i deixar la comprensió per al juny. Amb una
+  // sola fila "VL/CL", una classe que hagués fet només la velocitat
+  // sortia verda i no hi havia manera de veure que faltava la comprensió.
   for (const m of MOMENTS_LECTURA) {
-    files.push(fila('Llengua catalana', `VL/CL — ${m.label}`,
-      lecturaRegistres.filter((r) => r.moment === m.id),
+    files.push(fila('Llengua catalana', `VL — ${m.label}`,
+      lecturaRegistres.filter((r) => r.moment === m.id && r.vl !== null && r.vl !== undefined),
       { prova: 'lectura', moment: m.id }))
+  }
+  // La Mitjana no té comprensió per definició: no se'n fa fila.
+  for (const m of MOMENTS_LECTURA.filter((x) => x.teCL)) {
+    files.push(fila('Llengua catalana', `CL — ${m.label}`,
+      lecturaRegistres.filter((r) => r.moment === m.id && r.cl !== null && r.cl !== undefined),
+      { prova: 'lecturaCl', moment: m.id }))
   }
 
   // --- Notes per àrea, un per trimestre ------------------------------------
@@ -257,16 +268,33 @@ export function filesProves(dades, { cicleDe, MOMENTS_LECTURA }) {
   // Les dues proves no es passen al mateix alumnat: el COSMOS a 1r i 2n
   // (Cicle Inicial), el ConMat de 3r a 6è (Mitjà i Superior). Cadascuna
   // deixa buits els cicles que no li toquen.
-  const ambConmat = registresMates.filter((r) => r.conmat).map((r) => ({
-    alumneId: r.alumneId,
-    curs: r.conmat?.final?.classe ?? r.conmat?.inici?.classe ?? null,
-  })).filter((r) => r.alumneId && r.curs)
-  const ambCosmos = registresMates.filter((r) => r.cosmos).map((r) => ({
-    alumneId: r.alumneId, curs: r.cosmos?.classe ?? null,
-  })).filter((r) => r.alumneId && r.curs)
+  //
+  // Una fila per MOMENT, no una de sola. Abans només es mirava el final,
+  // i com que es comptava qualsevol registre, una classe que només
+  // hagués carregat l'informe d'inici sortia verda a la fila del final:
+  // deia que estava feta una prova que no s'havia passat.
+  //
+  // ⚠️ El ConMat desa els moments com a `inici`/`final` i el COSMOS com a
+  // `inicial`/`final`. No s'unifiquen: són els ids amb què ja hi ha les
+  // dades desades.
+  const cosmosDelMoment = (momentId) => registresMates
+    .filter((r) => r.cosmos?.moments?.[momentId]?.completat !== false && r.cosmos?.moments?.[momentId])
+    .map((r) => ({ alumneId: r.alumneId, curs: r.cosmos?.classe ?? null }))
+    .filter((r) => r.alumneId && r.curs)
 
-  files.push(fila('Innovamat', 'COSMOS (1r i 2n)', ambCosmos, { prova: 'cosmos', moment: 'final' }))
-  files.push(fila('Innovamat', 'ConMat (3r a 6è)', ambConmat, { prova: 'conmat', moment: 'final' }))
+  const conmatDelMoment = (momentId) => registresMates
+    .filter((r) => r.conmat?.[momentId])
+    .map((r) => ({ alumneId: r.alumneId, curs: r.conmat[momentId]?.classe ?? null }))
+    .filter((r) => r.alumneId && r.curs)
+
+  for (const m of [{ id: 'inicial', label: 'inici de curs' }, { id: 'final', label: 'final de curs' }]) {
+    files.push(fila('Innovamat', `COSMOS (1r i 2n) — ${m.label}`,
+      cosmosDelMoment(m.id), { prova: 'cosmos', moment: m.id }))
+  }
+  for (const m of [{ id: 'inici', label: 'inici de curs' }, { id: 'final', label: 'final de curs' }]) {
+    files.push(fila('Innovamat', `ConMat (3r a 6è) — ${m.label}`,
+      conmatDelMoment(m.id), { prova: 'conmat', moment: m.id }))
+  }
 
   return files
 }

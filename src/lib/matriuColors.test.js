@@ -12,10 +12,12 @@ const cicleDe = (curs) => {
   if (grau === 5 || grau === 6) return 'CS'
   return null
 }
+// Còpia de rubricaLectura.js. El `teCL` importa: la Mitjana no té
+// comprensió lectora, i per això no en genera fila.
 const MOMENTS_LECTURA = [
-  { id: 'inicial', label: 'Avaluació Inicial' },
-  { id: 'mitjana', label: 'Avaluació Mitjana' },
-  { id: 'final', label: 'Avaluació Final' },
+  { id: 'inicial', label: 'Avaluació Inicial', teCL: true },
+  { id: 'mitjana', label: 'Avaluació Mitjana', teCL: false },
+  { id: 'final', label: 'Avaluació Final', teCL: true },
 ]
 
 /** Un centre petit però amb tots els cicles representats. */
@@ -61,7 +63,11 @@ describe('filesProves — quines entrades hi surten', () => {
     const titols = proves().map((f) => f.titol)
     expect(titols.some((t) => t.startsWith('Lectoescriptura'))).toBe(true)
     expect(titols.filter((t) => t.startsWith('TEE'))).toHaveLength(3)
-    expect(titols.filter((t) => t.startsWith('VL/CL'))).toHaveLength(3)
+    // La velocitat i la comprensió van en files separades: a 1r es pot
+    // fer la VL al setembre i deixar la CL per al juny.
+    expect(titols.filter((t) => t.startsWith('VL —'))).toHaveLength(3)
+    // La CL, només als moments que en tenen (la Mitjana no).
+    expect(titols.filter((t) => t.startsWith('CL —'))).toHaveLength(2)
     expect(titols.filter((t) => t.startsWith('Notes per àrea'))).toHaveLength(3)
     expect(titols.some((t) => t.startsWith('COSMOS'))).toBe(true)
     expect(titols.some((t) => t.startsWith('ConMat'))).toBe(true)
@@ -130,35 +136,46 @@ describe('filesProves — notes per àrea', () => {
 
 describe('filesProves — Innovamat', () => {
   const mates = [
-    { alumneId: '1r-0', cosmos: { classe: '1rA' } },
-    { alumneId: '2n-0', cosmos: { classe: '2nA' } },
+    { alumneId: '1r-0', cosmos: { classe: '1rA', moments: { final: { rendiment: 'Alt' } } } },
+    { alumneId: '2n-0', cosmos: { classe: '2nA', moments: { final: { rendiment: 'Alt' } } } },
     { alumneId: '3r-0', conmat: { final: { classe: '3rA' } } },
     // Un registre sense casar (sense alumneId) no es pot comptar.
     { alumneId: null, conmat: { final: { classe: '3rA' } } },
   ]
 
   it('el COSMOS només compta a Cicle Inicial', () => {
-    const fila = filaDe(proves({ registresMates: mates }), 'COSMOS')
+    const fila = filaDe(proves({ registresMates: mates }), 'COSMOS (1r i 2n) — final')
     expect(cel·la(fila, 'CI')).toBe(25) // 2 de 8
     expect(cel·la(fila, 'CM')).toBeNull()
     expect(cel·la(fila, 'CS')).toBeNull()
   })
 
   it('el ConMat només compta de 3r en amunt', () => {
-    const fila = filaDe(proves({ registresMates: mates }), 'ConMat')
+    const fila = filaDe(proves({ registresMates: mates }), 'ConMat (3r a 6è) — final')
     expect(cel·la(fila, 'CM')).toBe(25) // 1 de 4
     expect(cel·la(fila, 'CI')).toBeNull()
   })
 
-  it('agafa la classe del moment d\'inici si no hi ha final', () => {
+  it('cada moment compta NOMÉS els seus informes', () => {
+    // Abans hi havia una sola fila per prova i es comptava qualsevol
+    // registre: una classe que només hagués carregat l'informe d'inici
+    // sortia verda a la fila del final, dient que estava feta una prova
+    // que no s'havia passat.
     const nomesInici = [{ alumneId: '3r-0', conmat: { inici: { classe: '3rA' } } }]
-    const fila = filaDe(proves({ registresMates: nomesInici }), 'ConMat')
-    expect(cel·la(fila, 'CM')).toBe(25)
+    const proves_ = proves({ registresMates: nomesInici })
+    expect(cel·la(filaDe(proves_, 'ConMat (3r a 6è) — inici'), 'CM')).toBe(25)
+    expect(cel·la(filaDe(proves_, 'ConMat (3r a 6è) — final'), 'CM')).toBe(0)
   })
 
   it('ignora els registres sense alumne casat', () => {
-    const fila = filaDe(proves({ registresMates: mates }), 'ConMat')
+    const fila = filaDe(proves({ registresMates: mates }), 'ConMat (3r a 6è) — final')
     expect(cel·la(fila, 'CM')).toBe(25) // el sense alumneId no hi suma
+  })
+
+  it('hi ha una fila per moment de cada prova', () => {
+    const titols = proves().map((f) => f.titol)
+    expect(titols.filter((t) => t.startsWith('COSMOS'))).toHaveLength(2)
+    expect(titols.filter((t) => t.startsWith('ConMat'))).toHaveLength(2)
   })
 })
 
