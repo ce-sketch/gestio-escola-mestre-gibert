@@ -71,9 +71,24 @@ export const PROVES = [
   },
   {
     id: 'lectura',
-    nom: 'Lectura (VL/CL)',
+    nom: 'Lectura — velocitat (VL)',
     nivells: PRIMARIA,
     moments: MOMENTS_LECTURA.map((m) => ({ id: m.id, label: m.label })),
+  },
+  {
+    // La comprensió va a part de la velocitat perquè no sempre es fan
+    // juntes: a 1r, segons com vagi de maduresa el grup, es pot fer la
+    // VL al setembre i deixar la CL per al juny. Amb una sola prova per
+    // a totes dues no hi havia manera de dir-ho, i o bé es marcava en
+    // vermell una cosa que no tocava fer, o calia fer-la igualment.
+    //
+    // Només l'Avaluació Inicial i la Final: la Mitjana no té CL per
+    // definició (vegeu MOMENTS_LECTURA), i oferir-la aquí faria pensar
+    // que es pot activar.
+    id: 'lecturaCl',
+    nom: 'Lectura — comprensió (CL)',
+    nivells: PRIMARIA,
+    moments: MOMENTS_LECTURA.filter((m) => m.teCL).map((m) => ({ id: m.id, label: m.label })),
   },
   {
     id: 'notaArea',

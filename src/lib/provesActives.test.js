@@ -29,7 +29,7 @@ describe('nivellDeClasse', () => {
 describe('PROVES', () => {
   it('hi ha una entrada per a cada prova del centre', () => {
     expect(PROVES.map((p) => p.id)).toEqual([
-      'lectoescriptura', 'tee', 'lectura', 'notaArea', 'cosmos', 'conmat',
+      'lectoescriptura', 'tee', 'lectura', 'lecturaCl', 'notaArea', 'cosmos', 'conmat',
     ])
   })
 
@@ -178,5 +178,46 @@ describe('resumExclusions', () => {
     const c = { exclusions: { [clauExclusio('cosmos', 'final')]: ['6èA'] } }
     const cosmos = resumExclusions(c, CLASSES).find((r) => r.prova.id === 'cosmos')
     expect(cosmos.ambExclusions).toBe(0)
+  })
+})
+
+describe('CL separada de la VL', () => {
+  // Cas real: a 1r, segons com vagi de maduresa el grup, es fa la
+  // velocitat al setembre i la comprensió es deixa per al juny. Amb una
+  // sola prova per a totes dues no es podia dir.
+  const config = { exclusions: { lecturaCl__inicial: ['1rA', '1rB'] } }
+
+  it('la CL és una prova pròpia, a part de la VL', () => {
+    expect(provaPerId('lecturaCl')).toBeTruthy()
+    expect(provaPerId('lectura')).toBeTruthy()
+  })
+
+  it('desmarcar la CL no toca la VL', () => {
+    expect(passaLaProva(config, 'lecturaCl', 'inicial', '1rA')).toBe(false)
+    expect(passaLaProva(config, 'lectura', 'inicial', '1rA')).toBe(true)
+  })
+
+  it('la mateixa classe pot fer la CL al final i no a l\'inicial', () => {
+    expect(passaLaProva(config, 'lecturaCl', 'inicial', '1rA')).toBe(false)
+    expect(passaLaProva(config, 'lecturaCl', 'final', '1rA')).toBe(true)
+  })
+
+  it('no afecta les altres classes', () => {
+    expect(passaLaProva(config, 'lecturaCl', 'inicial', '3rA')).toBe(true)
+  })
+
+  it('per defecte totes les classes fan la CL', () => {
+    expect(passaLaProva(null, 'lecturaCl', 'inicial', '1rA')).toBe(true)
+  })
+
+  it('la CL no ofereix l\'Avaluació Mitjana, que no en té mai', () => {
+    // Oferir-la faria pensar que es pot activar.
+    const moments = provaPerId('lecturaCl').moments.map((m) => m.id)
+    expect(moments).toEqual(['inicial', 'final'])
+    expect(provaPerId('lectura').moments.map((m) => m.id)).toContain('mitjana')
+  })
+
+  it('totes dues es passen només a primària', () => {
+    expect(provaPerId('lecturaCl').nivells).toEqual(provaPerId('lectura').nivells)
   })
 })
