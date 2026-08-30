@@ -6,6 +6,7 @@ import { CICLES, CRITERIS_TEE, NIVELLS_PER_CICLE, PESOS_PER_CICLE_DEFECTE, cicle
 import { exportaExcel, exportaPDF } from '../../../lib/exportTaula'
 import { interpretaDictatTEE } from '../../../lib/dictatTEE'
 import { cursEscolarActual } from '../../../lib/cursEscolar'
+import { classesActives } from '../../../lib/provesActives'
 import { normalitza } from '../../../lib/text'
 import { esAdmin } from '../../../lib/roles'
 import BotoDrive from '../../BotoDrive'
@@ -27,6 +28,7 @@ export default function TEE() {
   const [curs, setCurs] = useState('')
   const [cursEscolarId, setCursEscolarId] = useState(cursEscolarActual())
   const [trimestre, setTrimestre] = useState('1r trimestre')
+  const [configProves, setConfigProves] = useState(null)
   const [registres, setRegistres] = useState([])
   const [carregantRegistres, setCarregantRegistres] = useState(false)
   const [valors, setValors] = useState({}) // { [alumneId]: { coherencia: 'ae', ..., globalManual: 'an' } }
@@ -42,10 +44,12 @@ export default function TEE() {
   useEffect(() => {
     async function carrega() {
       try {
-        const [snapAlumnes, snapPesos] = await Promise.all([
+        const [snapAlumnes, snapPesos, snapProves] = await Promise.all([
           getDocs(query(collection(db, 'alumnes'), where('actiu', '==', true))),
           getDoc(doc(db, 'configuracio', 'pesosTEE')),
+          getDoc(doc(db, 'provesActives', cursEscolarId)),
         ])
+        setConfigProves(snapProves.exists() ? snapProves.data() : null)
         const llista = snapAlumnes.docs.map((d) => ({ id: d.id, ...d.data() }))
         llista.sort((a, b) => (a.numLlista ?? 999) - (b.numLlista ?? 999) || a.nom.localeCompare(b.nom))
         setAlumnesTots(llista)
@@ -60,9 +64,20 @@ export default function TEE() {
       }
     }
     carrega()
-  }, [])
+  }, [cursEscolarId])
 
-  const cursos = useMemo(() => [...new Set(alumnesTots.map((a) => a.curs))].sort(), [alumnesTots])
+  // Només les classes que passen el TEE aquest trimestre. Sense això
+  // s'hi podien introduir notes de classes que no el fan, i després no
+  // comptaven ni al resum ni al quadre de comandament: feina perduda
+  // sense cap avís. El trimestre entra a la clau perquè 1r sol quedar
+  // fora dels primers.
+  const cursos = useMemo(
+    () => classesActives(
+      configProves, 'tee', (String(trimestre).match(/^(\d)/)?.[1] ?? '1'),
+      [...new Set(alumnesTots.map((a) => a.curs))].sort()
+    ),
+    [alumnesTots, configProves, trimestre]
+  )
   const alumnesClasse = useMemo(() => alumnesTots.filter((a) => a.curs === curs), [alumnesTots, curs])
   const cicle = cicleDe(curs)
   const nivells = NIVELLS_PER_CICLE[cicle]

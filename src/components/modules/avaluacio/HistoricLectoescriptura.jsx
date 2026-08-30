@@ -5,7 +5,7 @@ import {
   ETAPES_TEBEROSKY, NIVELLS_TEBEROSKY, historicEI, fullHistoricEI,
 } from '../../../lib/lectoescripturaEI'
 import { exportaExcel, exportaPDF } from '../../../lib/exportTaula'
-import { llegeixResumEI } from '../../../lib/lectoescripturaImport'
+import { llegeixResumEIDeVaris } from '../../../lib/lectoescripturaImport'
 import { slug } from '../../../lib/slug'
 import BotoDrive from '../../BotoDrive'
 
@@ -58,13 +58,17 @@ export default function HistoricLectoescriptura() {
 
   /** Llegeix la graella d'un curs passat, sense desar res encara. */
   async function pujaFull(e) {
-    const fitxer = e?.target?.files?.[0] ?? e
-    if (!fitxer) return
+    // Cada fitxer és un curs escolar i conserva el seu: no es poden
+    // ajuntar en un de sol perquè el curs forma part de la clau amb què
+    // es desa.
+    const fitxers = e?.target?.files ? [...e.target.files] : [e].filter(Boolean)
+    if (fitxers.length === 0) return
     setLlegint(true)
     setError(null)
     try {
-      const resultat = await llegeixResumEI(await fitxer.arrayBuffer())
-      setProposta({ ...resultat, fitxer: fitxer.name, curs: resultat.cursEscolar ?? '' })
+      const { cursos: llegits, errors } = await llegeixResumEIDeVaris(fitxers)
+      if (errors.length > 0) setError(`No he pogut llegir: ${errors.join(' · ')}`)
+      setProposta(llegits)
     } catch (err) {
       setError(err.message)
       setProposta(null)
@@ -77,25 +81,28 @@ export default function HistoricLectoescriptura() {
    *  d'entrada de dades. Així l'històric no ha de saber d'on ve cada
    *  curs. */
   async function desaProposta() {
-    if (!proposta?.curs?.trim()) {
-      setError('Falta el curs escolar del fitxer.')
+    const sensecurs = (proposta ?? []).filter((p) => !p.curs?.trim())
+    if (sensecurs.length > 0) {
+      setError(`Falta el curs escolar de: ${sensecurs.map((p) => p.fitxer).join(', ')}.`)
       return
     }
     setDesant(true)
     setError(null)
     try {
-      const curs = proposta.curs.trim()
-      await Promise.all(proposta.classes.map((c) => setDoc(
-        doc(db, 'lectoescripturaEI', `${curs}__${slug(c.classe)}`),
-        {
-          classe: c.classe,
-          cursEscolar: curs,
-          alumnes: c.alumnes,
-          importatDe: proposta.fitxer ?? null,
-          actualitzatEl: serverTimestamp(),
-          actualitzatPer: auth.currentUser?.email ?? null,
-        }
-      )))
+      for (const p of proposta) {
+        const curs = p.curs.trim()
+        await Promise.all(p.classes.map((c) => setDoc(
+          doc(db, 'lectoescripturaEI', `${curs}__${slug(c.classe)}`),
+          {
+            classe: c.classe,
+            cursEscolar: curs,
+            alumnes: c.alumnes,
+            importatDe: p.fitxer ?? null,
+            actualitzatEl: serverTimestamp(),
+            actualitzatPer: auth.currentUser?.email ?? null,
+          }
+        )))
+      }
       setProposta(null)
       await carrega()
     } catch (err) {
@@ -151,7 +158,8 @@ export default function HistoricLectoescriptura() {
       <div className="caixa-discreta" style={{ marginTop: 16 }}>
         <strong style={{ fontSize: 14 }}>Afegeix un curs passat</strong>
         <p className="nota">
-          Puja la graella de lectoescriptura d&apos;aquell any (.xlsx). Ha de tenir un full per
+          Puja les graelles de lectoescriptura d&apos;aquells anys (.xlsx); pots triar-ne
+          diverses de cop. Cadascuna ha de tenir un full per
           classe, anomenat com la classe (&quot;I4A&quot;, &quot;I5B&quot;), amb una fila per
           alumne i una columna per nivell.
         </p>
@@ -161,37 +169,45 @@ export default function HistoricLectoescriptura() {
             onError={(text) => setError(text)}
             disabled={llegint}
             tipus="fulls"
-            etiqueta="Tria la graella del Drive"
+            etiqueta="Tria les graelles del Drive"
+            multiple
           />
           <label className="btn-ghost" style={{ display: 'inline-flex', alignItems: 'center', cursor: llegint ? 'wait' : 'pointer' }}>
-            {llegint ? 'Llegint…' : '📤 Puja l\'Excel'}
-            <input type="file" accept=".xlsx,.xlsm" style={{ display: 'none' }} disabled={llegint}
+            {llegint ? 'Llegint…' : '📤 Puja els Excel'}
+            <input type="file" accept=".xlsx,.xlsm" multiple style={{ display: 'none' }} disabled={llegint}
               onChange={(e) => { pujaFull(e); e.target.value = '' }} />
           </label>
         </div>
 
-        {proposta && (
+        {proposta?.length > 0 && (
           <div style={{ marginTop: 14, borderTop: '1px solid var(--line)', paddingTop: 12 }}>
-            <strong style={{ fontSize: 13 }}>
-              {proposta.classes.length} classes de &quot;{proposta.fitxer}&quot;
-              <span style={{ fontWeight: 400, color: 'var(--ink-soft)' }}>
-                {' '}— {proposta.classes.map((c) => `${c.classe} (${c.noms.length})`).join(', ')}
-              </span>
-            </strong>
-            {proposta.avisos.map((a, i) => <p key={i} className="nota nota-avis">{a}</p>)}
-            <label className="field" style={{ maxWidth: 140, marginTop: 8 }}>
-              <span>Curs escolar</span>
-              <input type="text" value={proposta.curs} className="camp camp-petit"
-                onChange={(e) => setProposta({ ...proposta, curs: e.target.value })} />
-            </label>
-            {cursos.includes(proposta.curs) && (
-              <p className="nota nota-avis">
-                El curs {proposta.curs} ja hi és: les classes que coincideixin se substituiran.
-              </p>
-            )}
+            {proposta.map((p, idx) => (
+              <div key={p.fitxer} style={{ marginBottom: 12 }}>
+                <strong style={{ fontSize: 13 }}>
+                  {p.classes.length} classes de &quot;{p.fitxer}&quot;
+                  <span style={{ fontWeight: 400, color: 'var(--ink-soft)' }}>
+                    {' '}— {p.classes.map((c) => `${c.classe} (${c.noms.length})`).join(', ')}
+                  </span>
+                </strong>
+                {p.avisos.map((a, i) => <p key={i} className="nota nota-avis">{a}</p>)}
+                <label className="field" style={{ maxWidth: 140, marginTop: 6 }}>
+                  <span>Curs escolar</span>
+                  <input
+                    type="text" value={p.curs} className="camp camp-petit"
+                    onChange={(e) => setProposta((llista) =>
+                      llista.map((x, i) => (i === idx ? { ...x, curs: e.target.value } : x)))}
+                  />
+                </label>
+                {cursos.includes(p.curs) && (
+                  <p className="nota nota-avis">
+                    El curs {p.curs} ja hi és: les classes que coincideixin se substituiran.
+                  </p>
+                )}
+              </div>
+            ))}
             <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
               <button type="button" onClick={desaProposta} disabled={desant} className="btn-primary" style={{ maxWidth: 220 }}>
-                {desant ? 'Desant…' : 'Desa aquest curs'}
+                {desant ? 'Desant…' : `Desa ${proposta.length === 1 ? 'aquest curs' : `aquests ${proposta.length} cursos`}`}
               </button>
               <button type="button" onClick={() => setProposta(null)} className="btn-ghost">Cancel·la</button>
             </div>

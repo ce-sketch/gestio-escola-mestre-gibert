@@ -1,10 +1,11 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
-import { collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore'
+import { addDoc, collection, doc, getDoc, getDocs, query, serverTimestamp, where } from 'firebase/firestore'
 import { db, auth } from '../../../firebase'
 import { nivellDe, redueixVigents } from '../../../lib/avaluacioCatala'
 import { AREES, TRIMESTRES, TRIMESTRE_FINAL, areaAplicaAClasse, interpretaDictatNotesArea, notaFinalArea, notaFinalAmbCorreccio } from '../../../lib/notesArea'
 import { taulesNotesClasse } from '../../../lib/notesTaules'
 import { cursEscolarActual } from '../../../lib/cursEscolar'
+import { classesActives } from '../../../lib/provesActives'
 import { grauPrimaria } from '../../../lib/rubricaLectura'
 import { exportaExcel, exportaPDF } from '../../../lib/exportTaula'
 
@@ -25,19 +26,22 @@ export default function NotesGenerals() {
   const [classe, setClasse] = useState('')
   const [valors, setValors] = useState({})
   const [desantClau, setDesantClau] = useState(null) // clau "alumneId__areaId" que s'està desant
+  const [configProves, setConfigProves] = useState(null)
   const [dictat, setDictat] = useState(null) // { escoltant, transcripcio, resultat: {numLlista: {areaId: nivellId}} }
 
   useEffect(() => {
     async function carrega() {
       try {
-        const [snapAlumnes, snapNotes] = await Promise.all([
+        const [snapAlumnes, snapNotes, snapProves] = await Promise.all([
           getDocs(query(collection(db, 'alumnes'), where('actiu', '==', true))),
           // Filtrem només per 'tipus' aquí (sense combinar més camps en la
           // consulta) per no necessitar crear cap índex compost nou a
           // Firestore. Amb el volum d'alumnes del centre, filtrar la resta
           // (curs escolar, trimestre, classe...) al navegador va prou bé.
           getDocs(query(collection(db, 'avaluacio'), where('tipus', '==', 'nota_area'))),
+          getDoc(doc(db, 'provesActives', cursEscolarId)),
         ])
+        setConfigProves(snapProves.exists() ? snapProves.data() : null)
         const llista = snapAlumnes.docs.map((d) => ({ id: d.id, ...d.data() }))
         llista.sort((a, b) => (a.numLlista ?? 999) - (b.numLlista ?? 999) || a.nom.localeCompare(b.nom))
         setAlumnesTots(llista)
@@ -53,11 +57,17 @@ export default function NotesGenerals() {
       }
     }
     carrega()
-  }, [])
+  }, [cursEscolarId])
 
+  // Només les classes que posen notes aquest trimestre. Sense això s'hi
+  // podien introduir notes de classes que no en posen, i després no
+  // comptaven ni al resum ni al quadre de comandament.
   const classes = useMemo(
-    () => [...new Set(alumnesTots.map((a) => a.curs))].filter((c) => grauPrimaria(c) !== null).sort(),
-    [alumnesTots]
+    () => classesActives(
+      configProves, 'notaArea', trimestre,
+      [...new Set(alumnesTots.map((a) => a.curs))].filter((c) => grauPrimaria(c) !== null).sort()
+    ),
+    [alumnesTots, configProves, trimestre]
   )
   const alumnesClasse = useMemo(() => alumnesTots.filter((a) => a.curs === classe), [alumnesTots, classe])
   const areesClasse = useMemo(() => AREES.filter((a) => areaAplicaAClasse(a.id, classe)), [classe])

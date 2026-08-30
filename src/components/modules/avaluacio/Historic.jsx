@@ -19,7 +19,7 @@ import { aEscalaComuna } from '../../../lib/rubricaTEE'
 import { clAEscalaComuna, vlAEscalaComuna, grauPrimaria } from '../../../lib/rubricaLectura'
 import { exportaExcel, exportaPDF } from '../../../lib/exportTaula'
 import {
-  llegeixHistoricProves, agrupaVlcl, nomesTee, fusionaRegistres, cursosDe, treuCurs,
+  llegeixHistoricProvesDeVaris, agrupaVlcl, nomesTee, fusionaRegistres, cursosDe, treuCurs,
 } from '../../../lib/historicProvesImport'
 import BotoDrive from '../../BotoDrive'
 import {
@@ -273,16 +273,18 @@ export default function Historic() {
 
   /** Llegeix un full de resultats d'un curs passat, sense desar res encara. */
   async function pujaFull(e) {
-    const fitxer = e?.target?.files?.[0] ?? e
-    if (!fitxer) return
+    // Un fitxer per curs: pujar-los d'un en un és feina de sobres quan
+    // se'n carreguen uns quants anys de cop.
+    const fitxers = e?.target?.files ? [...e.target.files] : [e].filter(Boolean)
+    if (fitxers.length === 0) return
     setLlegint(true)
     setMissatge(null)
     try {
-      const resultat = await llegeixHistoricProves(await fitxer.arrayBuffer())
+      const resultat = await llegeixHistoricProvesDeVaris(fitxers)
       const tee = nomesTee(resultat.registres)
       const vlcl = agrupaVlcl(resultat.registres)
       setProposta({
-        fitxer: fitxer.name, tee, vlcl,
+        fitxer: fitxers.map((f) => f.name).join(', '), tee, vlcl,
         avisos: resultat.avisos, fulls: resultat.fulls,
         cursos: cursosDe([...tee, ...vlcl]),
       })
@@ -419,7 +421,8 @@ export default function Historic() {
       <div className="caixa-discreta" style={{ marginTop: 16 }}>
         <strong style={{ fontSize: 14 }}>Afegeix un curs passat</strong>
         <p className="nota">
-          Puja el full de l&apos;Eina d&apos;avaluació d&apos;aquell any (.xlsx). Se&apos;n
+          Puja els fulls de l&apos;Eina d&apos;avaluació d&apos;aquells anys (.xlsx). Pots
+          triar-ne diversos de cop. Se&apos;n
           llegeixen els fulls &quot;Resultats TEE&quot; i &quot;Resultats VLCL&quot;; la resta
           s&apos;ignoren. Els percentatges es recalculen dels recomptes, que és l&apos;única
           xifra que no es pot recuperar si es perd.
@@ -430,11 +433,12 @@ export default function Historic() {
             onError={(text) => setMissatge({ type: 'error', text })}
             disabled={llegint}
             tipus="fulls"
-            etiqueta="Tria el full del Drive"
+            etiqueta="Tria els fulls del Drive"
+            multiple
           />
           <label className="btn-ghost" style={{ display: 'inline-flex', alignItems: 'center', cursor: llegint ? 'wait' : 'pointer' }}>
-            {llegint ? 'Llegint…' : '📤 Puja l\'Excel'}
-            <input type="file" accept=".xlsx,.xlsm" style={{ display: 'none' }} disabled={llegint}
+            {llegint ? 'Llegint…' : '📤 Puja els Excel'}
+            <input type="file" accept=".xlsx,.xlsm" multiple style={{ display: 'none' }} disabled={llegint}
               onChange={(e) => { pujaFull(e); e.target.value = '' }} />
           </label>
         </div>
