@@ -4,6 +4,7 @@ import { db, auth } from '../../../firebase'
 import { redueixVigents } from '../../../lib/avaluacioCatala'
 import { MOMENTS_LECTURA, nivellVL, nivellCL, LLINDARS_CL_DEFECTE, esClasseAmbLectura } from '../../../lib/rubricaLectura'
 import { cursEscolarActual } from '../../../lib/cursEscolar'
+import { passaLaProva } from '../../../lib/provesActives'
 import { esAdmin } from '../../../lib/roles'
 import { exportaExcel, exportaPDF } from '../../../lib/exportTaula'
 
@@ -28,16 +29,28 @@ export default function Lectura() {
   const [editantLlindars, setEditantLlindars] = useState(false)
   const [llindarsEdicio, setLlindarsEdicio] = useState(null)
   const [desantLlindars, setDesantLlindars] = useState(false)
+  const [configProves, setConfigProves] = useState(null)
 
   const moment = MOMENTS_LECTURA.find((m) => m.id === momentId)
+
+  // Si aquesta classe fa la CL en aquest moment.
+  //
+  // Dues condicions, i totes dues han de complir-se: que el moment en
+  // tingui (l'Avaluació Mitjana no en té mai) i que la classe la faci
+  // segons "Quines proves es passen". Aquesta segona hi és perquè a 1r,
+  // segons com vagi de maduresa el grup, es fa la VL al setembre i la CL
+  // es deixa per al juny.
+  const faCL = Boolean(moment?.teCL) && passaLaProva(configProves, 'lecturaCl', momentId, curs)
 
   useEffect(() => {
     async function carrega() {
       try {
-        const [snapAlumnes, snapLlindars] = await Promise.all([
+        const [snapAlumnes, snapLlindars, snapProves] = await Promise.all([
           getDocs(query(collection(db, 'alumnes'), where('actiu', '==', true))),
           getDoc(doc(db, 'configuracio', 'llindarsCL')),
+          getDoc(doc(db, 'provesActives', cursEscolarId)),
         ])
+        setConfigProves(snapProves.exists() ? snapProves.data() : null)
         // La VL/CL no es fa a Educació Infantil: es filtren les seves
         // classes abans que arribin enlloc, no només al desplegable.
         const llista = snapAlumnes.docs.map((d) => ({ id: d.id, ...d.data() })).filter((a) => esClasseAmbLectura(a.curs))
@@ -52,7 +65,7 @@ export default function Lectura() {
       }
     }
     carrega()
-  }, [])
+  }, [cursEscolarId])
 
   const cursos = useMemo(() => [...new Set(alumnesTots.map((a) => a.curs))].sort(), [alumnesTots])
   const alumnesClasse = useMemo(() => alumnesTots.filter((a) => a.curs === curs), [alumnesTots, curs])
@@ -105,7 +118,7 @@ export default function Lectura() {
 
     const vigent = vigents.find((r) => r.alumneId === alumne.id)
     const vlNou = vl !== '' ? Number(vl) : null
-    const clNou = cl !== '' && moment.teCL ? Number(cl) : null
+    const clNou = cl !== '' && faCL ? Number(cl) : null
     if (vigent && (vigent.vl ?? null) === vlNou && (vigent.cl ?? null) === clNou) {
       // Sense canvis reals respecte al que ja hi havia — no cal escriure res.
       setValors((prev) => { const n = { ...prev }; delete n[alumne.id]; return n })
@@ -181,12 +194,12 @@ export default function Lectura() {
   /** Taula de Lectura de LA CLASSE ACTUAL (VL i CL del moment seleccionat). */
   function taulaClasseActual() {
     const capçalera = ['Núm.', 'Alumne', 'VL (paraules/min)', 'Nivell lector']
-    if (moment.teCL) capçalera.push('CL (respostes correctes)', 'Nivell CL')
+    if (faCL) capçalera.push('CL (respostes correctes)', 'Nivell CL')
     const files = alumnesClasse.map((alumne) => {
       const vl = valorAlumne(alumne.id, 'vl')
       const cl = valorAlumne(alumne.id, 'cl')
       const fila = [alumne.numLlista ?? '', alumne.nom, vl, nivellVL(vl) ?? '']
-      if (moment.teCL) fila.push(cl, moment.teCL ? (nivellCL(cl, curs, llindarsCl) ?? '') : '')
+      if (faCL) fila.push(cl, nivellCL(cl, curs, llindarsCl) ?? '')
       return fila
     })
     return [{ nom: `Lectura ${curs}`, files: [capçalera, ...files] }]
@@ -277,8 +290,17 @@ export default function Lectura() {
 
       {!moment.teCL && (
         <p className="module-note" style={{ marginTop: 12 }}>
-          En aquest moment només s'avalua la Velocitat Lectora — la Comprensió Lectora no
-          es passa a l'Avaluació Mitjana.
+          En aquest moment només s&apos;avalua la Velocitat Lectora — la Comprensió Lectora no
+          es passa a l&apos;Avaluació Mitjana.
+        </p>
+      )}
+
+      {/* Motiu diferent del de dalt: aquí el moment SÍ que té CL, però
+          aquesta classe no la fa. Dir-ho evita pensar que és un error. */}
+      {moment.teCL && !faCL && (
+        <p className="module-note" style={{ marginTop: 12 }}>
+          {curs} no passa la Comprensió Lectora en aquest moment: només s&apos;hi entra la
+          Velocitat Lectora. Es configura a &quot;Quines proves es passen&quot;.
         </p>
       )}
 
@@ -312,8 +334,8 @@ export default function Lectura() {
                 <th style={{ padding: '6px 8px', minWidth: 160 }}>Alumne</th>
                 <th style={{ padding: '6px 8px' }}>VL (paraules/min)</th>
                 <th style={{ padding: '6px 8px' }}>Nivell lector</th>
-                {moment.teCL && <th style={{ padding: '6px 8px' }}>CL (respostes correctes)</th>}
-                {moment.teCL && <th style={{ padding: '6px 8px' }}>Nivell CL</th>}
+                {faCL && <th style={{ padding: '6px 8px' }}>CL (respostes correctes)</th>}
+                {faCL && <th style={{ padding: '6px 8px' }}>Nivell CL</th>}
               </tr>
             </thead>
             <tbody>
@@ -321,7 +343,7 @@ export default function Lectura() {
                 const vl = valorAlumne(alumne.id, 'vl')
                 const nVl = nivellVL(vl)
                 const cl = valorAlumne(alumne.id, 'cl')
-                const nCl = moment.teCL ? nivellCL(cl, curs, llindarsCl) : null
+                const nCl = faCL ? nivellCL(cl, curs, llindarsCl) : null
                 return (
                   <tr key={alumne.id} style={{ borderBottom: '1px solid var(--line)' }}>
                     <td style={{ padding: '6px 8px', color: 'var(--ink-soft)' }}>{alumne.numLlista ?? '—'}</td>
@@ -337,7 +359,7 @@ export default function Lectura() {
                       />
                     </td>
                     <td style={{ padding: '4px 6px', fontWeight: 600, color: 'var(--navy)' }}>{nVl ?? '—'}</td>
-                    {moment.teCL && (
+                    {faCL && (
                       <td style={{ padding: '4px 6px' }}>
                         <input
                           type="number" min="0" step="1"
@@ -349,7 +371,7 @@ export default function Lectura() {
                         />
                       </td>
                     )}
-                    {moment.teCL && (
+                    {faCL && (
                       <td style={{ padding: '4px 6px', fontWeight: 600 }}>{nCl ?? '—'}</td>
                     )}
                   </tr>
