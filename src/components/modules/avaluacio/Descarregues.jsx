@@ -24,7 +24,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore'
 import { db } from '../../../firebase'
 import { nivellDe, redueixVigents } from '../../../lib/avaluacioCatala'
-import { AREES, TRIMESTRES, areaAplicaAClasse, notaFinalArea } from '../../../lib/notesArea'
+import { AREES, TRIMESTRES, areaAplicaAClasse, notaFinalArea, notaFinalAmbCorreccio } from '../../../lib/notesArea'
 import { cursEscolarActual } from '../../../lib/cursEscolar'
 import { grauPrimaria } from '../../../lib/rubricaLectura'
 import { exportaExcel, exportaPDF } from '../../../lib/exportTaula'
@@ -107,7 +107,7 @@ export default function Descarregues() {
   }
 
   function notaFinalAlumneAreaDe(classeAlumne, alumneId, areaId) {
-    return notaFinalArea(TRIMESTRES.map((t) => notaAlumneTrimestreDe(classeAlumne, alumneId, areaId, t)))
+    return notaFinalAmbCorreccio((t) => notaAlumneTrimestreDe(classeAlumne, alumneId, areaId, t))
   }
 
   const totesLesClasses = useMemo(

@@ -9,7 +9,7 @@
 
 import { useMemo, useState } from 'react'
 import { nivellDe, redueixVigents } from '../../../lib/avaluacioCatala'
-import { AREES, TRIMESTRES, notaFinalArea } from '../../../lib/notesArea'
+import { AREES, notaFinalAmbCorreccio } from '../../../lib/notesArea'
 import { cursEscolarActual } from '../../../lib/cursEscolar'
 import { grauPrimaria } from '../../../lib/rubricaLectura'
 import { exportaExcel, exportaPDF } from '../../../lib/exportTaula'
@@ -28,10 +28,10 @@ export default function AreesNoSuperades() {
   )
 
   function notaFinalAlumneAreaDe(classeAlumne, alumneId, areaId) {
-    return notaFinalArea(TRIMESTRES.map((t) => {
+    return notaFinalAmbCorreccio((t) => {
       const existent = vigentsTotes.find((r) => r.curs === classeAlumne && r.alumneId === alumneId && r.area === areaId && r.trimestre === t)
       return existent?.nota ?? ''
-    }))
+    })
   }
 
   const totesLesClasses = useMemo(

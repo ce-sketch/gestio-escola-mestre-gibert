@@ -12,7 +12,7 @@
 
 import { Fragment, useMemo, useState } from 'react'
 import { NIVELLS, nivellDe, redueixVigents } from '../../../lib/avaluacioCatala'
-import { AREES, TRIMESTRES, areaAplicaAClasse, notaFinalArea } from '../../../lib/notesArea'
+import { AREES, TRIMESTRES, areaAplicaAClasse, notaFinalAmbCorreccio } from '../../../lib/notesArea'
 import { cursEscolarActual, NIVELLS_ESCOLARS, nivellEscolarDe } from '../../../lib/cursEscolar'
 import { grauPrimaria } from '../../../lib/rubricaLectura'
 import { exportaExcel, exportaPDF } from '../../../lib/exportTaula'
@@ -49,7 +49,7 @@ export default function ResumPerArea() {
   }
 
   function notaFinalAlumneAreaDe(classeAlumne, alumneId, areaId) {
-    return notaFinalArea(TRIMESTRES.map((t) => notaAlumneTrimestreDe(classeAlumne, alumneId, areaId, t)))
+    return notaFinalAmbCorreccio((t) => notaAlumneTrimestreDe(classeAlumne, alumneId, areaId, t))
   }
 
   function buidaComptes() {

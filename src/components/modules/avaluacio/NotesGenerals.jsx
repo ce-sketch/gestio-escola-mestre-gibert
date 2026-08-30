@@ -2,7 +2,7 @@ import { Fragment, useEffect, useMemo, useState } from 'react'
 import { collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore'
 import { db, auth } from '../../../firebase'
 import { nivellDe, redueixVigents } from '../../../lib/avaluacioCatala'
-import { AREES, TRIMESTRES, areaAplicaAClasse, interpretaDictatNotesArea, notaFinalArea } from '../../../lib/notesArea'
+import { AREES, TRIMESTRES, TRIMESTRE_FINAL, areaAplicaAClasse, interpretaDictatNotesArea, notaFinalArea, notaFinalAmbCorreccio } from '../../../lib/notesArea'
 import { taulesNotesClasse } from '../../../lib/notesTaules'
 import { cursEscolarActual } from '../../../lib/cursEscolar'
 import { grauPrimaria } from '../../../lib/rubricaLectura'
@@ -111,20 +111,42 @@ export default function NotesGenerals() {
     return notaAlumneTrimestreDe(classe, alumneId, areaId, trim)
   }
 
-  /** Nota final de l'àrea: la mitjana dels trimestres que l'alumne ja tingui
-   *  avaluats (no cal esperar que hi siguin els tres). */
+  /** La final escrita a mà, si n'hi ha cap. */
+  function notaFinalManualDe(classeAlumne, alumneId, areaId) {
+    const v = notaAlumneTrimestreDe(classeAlumne, alumneId, areaId, TRIMESTRE_FINAL)
+    return v === '' || v === null || v === undefined ? null : Number(v)
+  }
+
+  /**
+   * Nota final de l'àrea.
+   *
+   * Si el mestre n'hi ha escrit una, mana. Si no, la mitjana dels
+   * trimestres que l'alumne ja tingui avaluats (no cal esperar que hi
+   * siguin els tres).
+   */
   function notaFinalAlumneAreaDe(classeAlumne, alumneId, areaId) {
-    return notaFinalArea(TRIMESTRES.map((t) => notaAlumneTrimestreDe(classeAlumne, alumneId, areaId, t)))
+    return notaFinalAmbCorreccio((t) => notaAlumneTrimestreDe(classeAlumne, alumneId, areaId, t))
   }
 
   function notaFinalAlumneArea(alumneId, areaId) {
     return notaFinalAlumneAreaDe(classe, alumneId, areaId)
   }
 
-  async function desaCella(alumne, area, valorText) {
-    const clau = clauValor(alumne.id, area.id)
+  async function desaCella(alumne, area, valorText, trim = trimestre) {
+    const clau = clauValor(alumne.id, area.id, trim)
+    const actual = vigentsClasse.find((r) =>
+      r.alumneId === alumne.id && r.area === area.id && r.trimestre === trim)?.nota
+
     if (valorText === '') {
-      // Casella buidada: només oblidem l'edició local, no cal escriure res.
+      // Buidar la FINAL vol dir "torna a la mitjana", i això s'ha de
+      // desar: si només s'oblidés l'edició local, la nota escrita a mà
+      // tornaria a sortir en recarregar. Es desa com a nota buida, que
+      // tot el que llegeix aquesta col·lecció ja tracta com a absent.
+      if (trim === TRIMESTRE_FINAL && actual !== null && actual !== undefined) {
+        await escriuNota(alumne, area, null, trim, clau)
+        return
+      }
+      // A la resta de columnes, buidar només oblida l'edició local.
       setValors((prev) => { const n = { ...prev }; delete n[clau]; return n })
       return
     }
@@ -134,11 +156,15 @@ export default function NotesGenerals() {
     // Si el valor no ha canviat respecte al que ja hi havia desat, no cal
     // tornar a escriure res (evita omplir Firestore de registres iguals
     // cada vegada que es passa pel camp sense modificar-lo).
-    const actual = vigentsClasse.find((r) => r.alumneId === alumne.id && r.area === area.id && r.trimestre === trimestre)?.nota
     if (actual === nota) {
       setValors((prev) => { const n = { ...prev }; delete n[clau]; return n })
       return
     }
+    await escriuNota(alumne, area, nota, trim, clau)
+  }
+
+  /** L'escriptura en si, compartida per desar i per buidar la final. */
+  async function escriuNota(alumne, area, nota, trim, clau) {
 
     setDesantClau(clau)
     setMissatge(null)
@@ -150,7 +176,7 @@ export default function NotesGenerals() {
         alumneNom: alumne.nom,
         curs: classe,
         cursEscolar: cursEscolarId,
-        trimestre,
+        trimestre: trim,
         nota,
         creatEl: serverTimestamp(),
         creatPer: auth.currentUser?.email ?? null,
@@ -282,10 +308,15 @@ export default function NotesGenerals() {
 
       <>
           <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 4 }}>
-            Cada àrea mostra els tres trimestres i la nota Final (la mitjana dels trimestres ja
-            avaluats). El selector de Trimestre només diu a quina columna s'escriu una nota nova
-            — la columna en blau és l'editable ara mateix. Vora vermella = nota per sota de 5
-            (No Assoliment), igual que al full de càlcul. <strong>Artística *</strong> no s'omple
+            Cada àrea mostra els tres trimestres i la nota <strong>Final</strong>. El selector
+            de Trimestre només diu a quina columna s&apos;escriu una nota nova — la columna en
+            blau és l&apos;editable ara mateix. Vora vermella = nota per sota de 5 (No
+            Assoliment), igual que al full de càlcul.
+            <br />
+            La <strong>Final</strong> surt de la mitjana dels trimestres ja avaluats
+            (vora <em>discontínua</em>), però la pots <strong>escriure tu</strong> si la mitjana
+            no reflecteix on ha arribat l&apos;alumne: llavors mana la teva (vora contínua).
+            Buida-la per tornar a la mitjana. <strong>Artística *</strong> no s&apos;omple
             directament: la seva Final és la mitjana de les Finals de Plàstica i Música.
           </p>
           <div style={{ display: 'flex', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
@@ -409,9 +440,62 @@ export default function NotesGenerals() {
                               </td>
                             )
                           })}
-                          <td style={{ padding: '4px 6px', textAlign: 'center', fontWeight: 700, color: nivellFinal?.color ?? 'var(--ink-soft)' }}>
-                            {final ?? '—'}
-                          </td>
+                          {(() => {
+                            // Les àrees calculades (Artística) no tenen final
+                            // pròpia: surt de les seves àrees, i deixar-la
+                            // editar faria pensar que es pot desviar-ne.
+                            if (a.calculada) {
+                              return (
+                                <td style={{ padding: '4px 6px', textAlign: 'center', fontWeight: 700, color: nivellFinal?.color ?? 'var(--ink-soft)' }}>
+                                  {final ?? '—'}
+                                </td>
+                              )
+                            }
+                            const manual = notaFinalManualDe(classe, alumne.id, a.id)
+                            const clauF = clauValor(alumne.id, a.id, TRIMESTRE_FINAL)
+                            const desantF = desantClau === clauF
+                            // El camp mostra el que s'estigui editant; si no,
+                            // la nota escrita a mà; i si tampoc, la mitjana,
+                            // perquè es pugui corregir a partir d'ella.
+                            const mostrat = valors[clauF] !== undefined
+                              ? valors[clauF]
+                              : (manual !== null ? String(manual) : (final ?? ''))
+                            return (
+                              <td style={{ padding: '4px 3px', textAlign: 'center' }}>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  max={10}
+                                  step={0.1}
+                                  value={mostrat}
+                                  disabled={desantF}
+                                  title={manual !== null
+                                    ? 'Nota final posada a mà. Buida-la per tornar a la mitjana dels trimestres.'
+                                    : 'Mitjana dels trimestres. Si hi escrius una nota, mana la teva.'}
+                                  onChange={(e) => setValors((prev) => ({ ...prev, [clauF]: e.target.value }))}
+                                  onBlur={(e) => desaCella(alumne, a, e.target.value, TRIMESTRE_FINAL)}
+                                  style={{
+                                    // Vora contínua = posada a mà; discontínua =
+                                    // calculada. Sense distingir-ho, no se sabria
+                                    // si una final ve de la mitjana o d'una
+                                    // decisió de l'equip docent.
+                                    border: `1.5px ${manual !== null ? 'solid' : 'dashed'} ${
+                                      desantF ? 'var(--amber-dark)'
+                                        : nivellFinal?.id === 'no_assoliment' ? 'var(--red)'
+                                          : manual !== null ? 'var(--navy)' : 'var(--line)'}`,
+                                    borderRadius: 6,
+                                    padding: '4px 4px',
+                                    fontSize: 12,
+                                    width: 46,
+                                    fontWeight: 700,
+                                    textAlign: 'center',
+                                    color: nivellFinal?.color ?? 'var(--ink)',
+                                    background: 'transparent',
+                                  }}
+                                />
+                              </td>
+                            )
+                          })()}
                         </Fragment>
                       )
                     })}
