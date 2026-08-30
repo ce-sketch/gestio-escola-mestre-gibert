@@ -84,6 +84,44 @@ export function subprovaDe(text) {
 }
 
 /**
+ * Llegeix DIVERSOS fitxers de cop.
+ *
+ * Els cursos passats són un fitxer per any, i pujar-los d'un en un és
+ * feina de sobres: la resta de càrregues de l'app (informes d'Innovamat,
+ * CSV del COSMOS) ja deixen triar-ne uns quants alhora.
+ *
+ * Si un fitxer peta, els altres es llegeixen igualment i l'error es diu a
+ * part: que un full antic estigui mal format no ha de bloquejar la
+ * càrrega dels que sí que estan bé.
+ */
+export async function llegeixHistoricProvesDeVaris(fitxers, opcions = {}) {
+  const registres = []
+  const avisos = []
+  const fulls = []
+  const errors = []
+
+  for (const fitxer of fitxers ?? []) {
+    try {
+      const r = await llegeixHistoricProves(await fitxer.arrayBuffer(), opcions)
+      registres.push(...r.registres)
+      fulls.push(...r.fulls)
+      avisos.push(...r.avisos.map((a) => `${fitxer.name}: ${a}`))
+    } catch (err) {
+      errors.push(`${fitxer.name}: ${err.message}`)
+    }
+  }
+
+  if (registres.length === 0) {
+    throw new Error(errors.length > 0
+      ? errors.join(' · ')
+      : "No hi he trobat cap fila de resultats a cap dels fitxers.")
+  }
+  if (errors.length > 0) avisos.push(`No he pogut llegir: ${errors.join(' · ')}`)
+
+  return { registres, avisos, fulls: [...new Set(fulls)] }
+}
+
+/**
  * Llegeix un Excel amb els fulls de resultats històrics.
  *
  * @param {ArrayBuffer} buffer

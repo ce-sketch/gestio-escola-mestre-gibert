@@ -55,6 +55,32 @@ export function cursEscolarDe(textos) {
 }
 
 /**
+ * Llegeix DIVERSES graelles de cop, una per curs.
+ *
+ * Cada fitxer és un curs escolar, i cadascun conserva el seu: no es poden
+ * ajuntar en un de sol perquè el curs forma part de la clau amb què es
+ * desa. Si un fitxer peta, els altres es llegeixen igualment.
+ */
+export async function llegeixResumEIDeVaris(fitxers) {
+  const cursos = []
+  const errors = []
+
+  for (const fitxer of fitxers ?? []) {
+    try {
+      const r = await llegeixResumEI(await fitxer.arrayBuffer())
+      cursos.push({ ...r, fitxer: fitxer.name, curs: r.cursEscolar ?? '' })
+    } catch (err) {
+      errors.push(`${fitxer.name}: ${err.message}`)
+    }
+  }
+
+  if (cursos.length === 0) {
+    throw new Error(errors.length > 0 ? errors.join(' · ') : 'No he pogut llegir cap graella.')
+  }
+  return { cursos, errors }
+}
+
+/**
  * Llegeix la graella de lectoescriptura d'un curs.
  *
  * @param {ArrayBuffer} buffer
