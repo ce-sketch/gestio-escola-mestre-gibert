@@ -19,6 +19,10 @@ import { aEscalaComuna } from '../../../lib/rubricaTEE'
 import { clAEscalaComuna, vlAEscalaComuna, grauPrimaria } from '../../../lib/rubricaLectura'
 import { exportaExcel, exportaPDF } from '../../../lib/exportTaula'
 import {
+  llegeixHistoricProves, agrupaVlcl, nomesTee, fusionaRegistres, cursosDe, treuCurs,
+} from '../../../lib/historicProvesImport'
+import BotoDrive from '../../BotoDrive'
+import {
   NIVELLS_HISTORIC, percentatges, avisosHistoric, ordenaPerCurs, cursCurtDe,
 } from '../../../lib/historicProves'
 
@@ -106,6 +110,11 @@ export default function Historic() {
   const [carregant, setCarregant] = useState(true)
   const [missatge, setMissatge] = useState(null)
   const [generant, setGenerant] = useState(null)
+  // Càrrega d'un full d'un curs passat: es previsualitza abans de desar,
+  // com a l'Innovamat i a les notes per àrea.
+  const [proposta, setProposta] = useState(null)
+  const [llegint, setLlegint] = useState(false)
+  const [desant, setDesant] = useState(false)
 
   useEffect(() => {
     if (!potVeure) { setCarregant(false); return }
@@ -262,6 +271,75 @@ export default function Historic() {
     }
   }
 
+  /** Llegeix un full de resultats d'un curs passat, sense desar res encara. */
+  async function pujaFull(e) {
+    const fitxer = e?.target?.files?.[0] ?? e
+    if (!fitxer) return
+    setLlegint(true)
+    setMissatge(null)
+    try {
+      const resultat = await llegeixHistoricProves(await fitxer.arrayBuffer())
+      const tee = nomesTee(resultat.registres)
+      const vlcl = agrupaVlcl(resultat.registres)
+      setProposta({
+        fitxer: fitxer.name, tee, vlcl,
+        avisos: resultat.avisos, fulls: resultat.fulls,
+        cursos: cursosDe([...tee, ...vlcl]),
+      })
+    } catch (err) {
+      setMissatge({ type: 'error', text: err.message })
+      setProposta(null)
+    } finally {
+      setLlegint(false)
+    }
+  }
+
+  /** Desa la proposta. Els cursos que ja hi eren se substitueixen; la
+   *  resta es queden, així tornar a pujar un full corregit no obliga a
+   *  esborrar res abans. */
+  async function desaProposta() {
+    if (!proposta) return
+    setDesant(true)
+    setMissatge(null)
+    try {
+      const tee = fusionaRegistres(historicTee, proposta.tee)
+      const vlcl = fusionaRegistres(historicVlcl, proposta.vlcl)
+      await Promise.all([
+        setDoc(doc(db, 'historicProves', 'tee'), { registres: tee }, { merge: true }),
+        setDoc(doc(db, 'historicProves', 'vlcl'), { registres: vlcl }, { merge: true }),
+      ])
+      setMissatge({
+        type: 'ok',
+        text: `Desat: ${proposta.cursos.join(', ')} (${proposta.tee.length} files de TEE, ${proposta.vlcl.length} de VL/CL).`,
+      })
+      setProposta(null)
+      setImportat((n) => !n)
+    } catch (err) {
+      setMissatge({ type: 'error', text: `No s'ha pogut desar: ${err.message}` })
+    } finally {
+      setDesant(false)
+    }
+  }
+
+  /** Desfà la càrrega d'un curs: se n'emporta el TEE i la VL/CL alhora,
+   *  perquè si en deixés un l'històric quedaria a mitges sense dir-ho. */
+  async function desfesCurs(curs) {
+    setDesant(true)
+    setMissatge(null)
+    try {
+      await Promise.all([
+        setDoc(doc(db, 'historicProves', 'tee'), { registres: treuCurs(historicTee, curs) }, { merge: true }),
+        setDoc(doc(db, 'historicProves', 'vlcl'), { registres: treuCurs(historicVlcl, curs) }, { merge: true }),
+      ])
+      setMissatge({ type: 'ok', text: `S'ha tret el curs ${curs} de l'històric.` })
+      setImportat((n) => !n)
+    } catch (err) {
+      setMissatge({ type: 'error', text: `No s'ha pogut desfer: ${err.message}` })
+    } finally {
+      setDesant(false)
+    }
+  }
+
   async function descarrega(quin, fes) {
     setGenerant(quin)
     try {
@@ -336,6 +414,82 @@ export default function Historic() {
           </label>
         </div>
       )}
+
+      {/* ── Afegir un curs passat ──────────────────────────────────── */}
+      <div className="caixa-discreta" style={{ marginTop: 16 }}>
+        <strong style={{ fontSize: 14 }}>Afegeix un curs passat</strong>
+        <p className="nota">
+          Puja el full de l&apos;Eina d&apos;avaluació d&apos;aquell any (.xlsx). Se&apos;n
+          llegeixen els fulls &quot;Resultats TEE&quot; i &quot;Resultats VLCL&quot;; la resta
+          s&apos;ignoren. Els percentatges es recalculen dels recomptes, que és l&apos;única
+          xifra que no es pot recuperar si es perd.
+        </p>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+          <BotoDrive
+            onFitxer={pujaFull}
+            onError={(text) => setMissatge({ type: 'error', text })}
+            disabled={llegint}
+            tipus="fulls"
+            etiqueta="Tria el full del Drive"
+          />
+          <label className="btn-ghost" style={{ display: 'inline-flex', alignItems: 'center', cursor: llegint ? 'wait' : 'pointer' }}>
+            {llegint ? 'Llegint…' : '📤 Puja l\'Excel'}
+            <input type="file" accept=".xlsx,.xlsm" style={{ display: 'none' }} disabled={llegint}
+              onChange={(e) => { pujaFull(e); e.target.value = '' }} />
+          </label>
+        </div>
+
+        {proposta && (
+          <div style={{ marginTop: 14, borderTop: '1px solid var(--line)', paddingTop: 12 }}>
+            <strong style={{ fontSize: 13 }}>
+              {proposta.cursos.join(', ') || 'cap curs reconegut'}
+              <span style={{ fontWeight: 400, color: 'var(--ink-soft)' }}>
+                {' '}— {proposta.tee.length} files de TEE i {proposta.vlcl.length} de VL/CL,
+                {' '}de &quot;{proposta.fulls.join('&quot;, &quot;')}&quot;
+              </span>
+            </strong>
+            {proposta.avisos.map((a, i) => <p key={i} className="nota nota-avis">{a}</p>)}
+            {proposta.cursos.some((c) => cursosDe([...historicTee, ...historicVlcl]).includes(c)) && (
+              <p className="nota nota-avis">
+                Algun d&apos;aquests cursos ja hi és: se substituirà pel que puges ara.
+              </p>
+            )}
+            <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+              <button type="button" onClick={desaProposta} disabled={desant} className="btn-primary" style={{ maxWidth: 220 }}>
+                {desant ? 'Desant…' : 'Desa aquests cursos'}
+              </button>
+              <button type="button" onClick={() => setProposta(null)} className="btn-ghost">Cancel·la</button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Desfer una càrrega ─────────────────────────────────────── */}
+        {cursosDe([...historicTee, ...historicVlcl]).length > 0 && (
+          <div style={{ marginTop: 14, borderTop: '1px solid var(--line)', paddingTop: 12 }}>
+            <strong style={{ fontSize: 13 }}>Cursos carregats</strong>
+            <p className="nota">
+              Desfer un curs se n&apos;emporta el TEE i la VL/CL alhora. El curs en marxa no hi
+              surt: es calcula sol i no s&apos;ha carregat.
+            </p>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+              {cursosDe([...historicTee, ...historicVlcl]).map((c) => (
+                <span key={c} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, border: '1px solid var(--line)', borderRadius: 6, padding: '3px 8px', fontSize: 12 }}>
+                  {c}
+                  <button
+                    type="button"
+                    onClick={() => desfesCurs(c)}
+                    disabled={desant}
+                    title={`Treu el curs ${c} de l'històric`}
+                    style={{ background: 'none', border: 'none', color: 'var(--red, #b03030)', cursor: 'pointer', fontSize: 13, padding: 0 }}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
 
       {missatge && (
         <p style={{ marginTop: 12, fontSize: 13, color: missatge.type === 'error' ? 'var(--red)' : 'var(--green)' }}>
