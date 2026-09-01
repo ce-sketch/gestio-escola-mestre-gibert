@@ -132,7 +132,18 @@ export default function TEE() {
       const v = override[c.id] !== undefined ? override[c.id] : valorAlumne(alumne.id, c.id)
       if (v) { criteris[c.id] = v; hiHaCriteris = true }
     }
-    if (!hiHaCriteris) return
+
+    const vigent = vigents.find((r) => r.alumneId === alumne.id)
+
+    // Si mai s'havia desat res d'aquest alumne, no cal escriure un
+    // registre buit de franc: ningú l'ha tocat.
+    //
+    // Però si SÍ que n'hi havia un —i ara s'han buidat tots els
+    // criteris—, no es pot sortir sense desar: com que cada canvi és una
+    // fila nova (mai es modifica l'anterior), no desar res deixava el
+    // registre vell com a únic i, per tant, com a "vigent" — la nota
+    // "esborrada" tornava a sortir en recarregar la pantalla.
+    if (!hiHaCriteris && !vigent) return
 
     const notaAuto = calculaNotaAutomatica(cicle, criteris, pesosActuals)
     const nivellAuto = notaAuto !== null ? nivellDeNota(cicle, notaAuto) : null
@@ -140,7 +151,6 @@ export default function TEE() {
     const globalFinal = globalManualId || nivellAuto?.id
 
     // Evitem re-escriure si res ha canviat respecte al que ja hi havia.
-    const vigent = vigents.find((r) => r.alumneId === alumne.id)
     if (vigent && JSON.stringify(vigent.criteris) === JSON.stringify(criteris) && (vigent.global ?? null) === (globalFinal ?? null)) {
       setValors((prev) => { const n = { ...prev }; delete n[alumne.id]; return n })
       return

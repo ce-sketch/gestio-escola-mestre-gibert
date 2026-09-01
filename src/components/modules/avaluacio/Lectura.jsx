@@ -114,9 +114,16 @@ export default function Lectura() {
   async function desaAlumne(alumne) {
     const vl = valorAlumne(alumne.id, 'vl')
     const cl = valorAlumne(alumne.id, 'cl')
-    if (vl === '' && cl === '') return
-
     const vigent = vigents.find((r) => r.alumneId === alumne.id)
+
+    // Si mai s'havia desat res d'aquest alumne, no cal escriure un
+    // registre buit de franc. Però si N'HI HAVIA un i ara s'han buidat
+    // tots dos camps, sí que cal desar-ho: com que cada canvi és una fila
+    // nova (mai es modifica l'anterior), no fer-ho deixava el registre
+    // vell com a únic i, per tant, com a "vigent" — l'esborrat no es
+    // guardava i la nota tornava a sortir en recarregar la pantalla.
+    if (vl === '' && cl === '' && !vigent) return
+
     const vlNou = vl !== '' ? Number(vl) : null
     const clNou = cl !== '' && faCL ? Number(cl) : null
     if (vigent && (vigent.vl ?? null) === vlNou && (vigent.cl ?? null) === clNou) {
