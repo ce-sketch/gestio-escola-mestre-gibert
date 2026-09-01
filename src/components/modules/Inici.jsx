@@ -21,6 +21,7 @@ export default function Inici({ onNavigate, admin, modulsVisibles }) {
   const [desant, setDesant] = useState(false)
   const [restaurant, setRestaurant] = useState(null)
   const [confirmaRestaura, setConfirmaRestaura] = useState({})
+  const [versioTriadaId, setVersioTriadaId] = useState('')
   const [missatge, setMissatge] = useState(null)
   // Quan es va fer l'última còpia. L'avís ja existia, però només dins del
   // mòdul Backup: calia entrar-hi per veure'l, i si hi entres és perquè ja
@@ -30,7 +31,12 @@ export default function Inici({ onNavigate, admin, modulsVisibles }) {
 
   useEffect(() => {
     if (!admin) return
-    carregaVersions().then(setVersions).finally(() => setCarregantVersions(false))
+    carregaVersions().then((v) => {
+      setVersions(v)
+      // La més recent, seleccionada d'entrada: és la que es voldrà mirar
+      // gairebé sempre — mateix criteri que al mòdul Backup.
+      setVersioTriadaId((actual) => actual || v[0]?.id || '')
+    }).finally(() => setCarregantVersions(false))
   }, [admin])
 
   useEffect(() => {
@@ -56,7 +62,9 @@ export default function Inici({ onNavigate, admin, modulsVisibles }) {
     try {
       const n = await desaVersio(nomVersio)
       setNomVersio('')
-      setVersions(await carregaVersions())
+      const v = await carregaVersions()
+      setVersions(v)
+      setVersioTriadaId(v[0]?.id ?? '')
       setMissatge({ type: 'ok', text: `Còpia desada (${n} alumnes).` })
     } catch (err) {
       setMissatge({ type: 'error', text: `No s'ha pogut desar: ${err.message}` })
@@ -215,48 +223,64 @@ export default function Inici({ onNavigate, admin, modulsVisibles }) {
             ) : versions.length === 0 ? (
               <p style={{ fontSize: 13, color: 'var(--ink-soft)' }}>Encara no hi ha cap còpia desada.</p>
             ) : (
-              <ul className="roster" style={{ marginTop: 0 }}>
-                {versions.map((v) => (
-                  <li key={v.id} className="roster-row" style={{ display: 'block', paddingBottom: 8 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-                      <span>
-                        <strong>{v.nom}</strong>
-                        <span style={{ fontSize: 12, color: 'var(--ink-soft)', marginLeft: 8 }}>
-                          {v.comptadors?.alumnes ?? '?'} alumnes
-                          {v.creatEl?.seconds && (
-                            <> · desada el {new Date(v.creatEl.seconds * 1000).toLocaleString('ca-ES', {
-                              day: '2-digit', month: '2-digit', year: 'numeric',
-                              hour: '2-digit', minute: '2-digit',
-                            })}</>
-                          )}
-                        </span>
-                      </span>
-                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <>
+                <label className="field" style={{ maxWidth: 420 }}>
+                  <span>Tria una còpia ({versions.length})</span>
+                  <select
+                    value={versioTriadaId}
+                    onChange={(e) => {
+                      setVersioTriadaId(e.target.value)
+                      setConfirmaRestaura((prev) => ({ ...prev, [e.target.value]: prev[e.target.value] ?? '' }))
+                    }}
+                    style={{ border: '1px solid var(--line)', borderRadius: 8, padding: '10px 12px' }}
+                  >
+                    {versions.map((v) => {
+                      const data = v.creatEl?.seconds ? new Date(v.creatEl.seconds * 1000) : null
+                      return (
+                        <option key={v.id} value={v.id}>
+                          {v.nom} — {data ? data.toLocaleDateString('ca-ES') : '—'}
+                        </option>
+                      )
+                    })}
+                  </select>
+                </label>
+
+                {(() => {
+                  const versioTriada = versions.find((v) => v.id === versioTriadaId)
+                  if (!versioTriada) return null
+                  const data = versioTriada.creatEl?.seconds ? new Date(versioTriada.creatEl.seconds * 1000) : null
+                  return (
+                    <div style={{ marginTop: 10 }}>
+                      <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
+                        {data ? data.toLocaleString('ca-ES') : '—'} · {versioTriada.creatPer ?? 'desconegut'} ·{' '}
+                        {versioTriada.comptadors?.alumnes ?? '?'} alumnes
+                      </div>
+                      <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                         <input
                           type="text"
-                          value={confirmaRestaura[v.id] ?? ''}
-                          onChange={(e) => setConfirmaRestaura((prev) => ({ ...prev, [v.id]: e.target.value }))}
-                          placeholder="RESTAURA"
-                          style={{ border: '1px solid var(--red)', borderRadius: 6, padding: '4px 6px', fontSize: 12, width: 100 }}
+                          value={confirmaRestaura[versioTriada.id] ?? ''}
+                          onChange={(e) => setConfirmaRestaura((prev) => ({ ...prev, [versioTriada.id]: e.target.value }))}
+                          placeholder="Escriu RESTAURA per confirmar"
+                          style={{ border: '1px solid var(--red)', borderRadius: 6, padding: '6px 8px', fontSize: 12, maxWidth: 200 }}
                         />
                         <button
                           type="button"
-                          onClick={() => recuperaVersio(v)}
-                          disabled={confirmaRestaura[v.id] !== 'RESTAURA' || restaurant === v.id}
+                          onClick={() => recuperaVersio(versioTriada)}
+                          disabled={(confirmaRestaura[versioTriada.id] ?? '') !== 'RESTAURA' || restaurant === versioTriada.id}
                           style={{
                             background: 'var(--red)', color: '#fff', border: 'none', borderRadius: 6,
-                            padding: '5px 10px', fontSize: 12, fontWeight: 600,
-                            cursor: confirmaRestaura[v.id] === 'RESTAURA' ? 'pointer' : 'not-allowed',
-                            opacity: confirmaRestaura[v.id] === 'RESTAURA' ? 1 : 0.5,
+                            padding: '6px 12px', fontSize: 12, fontWeight: 600,
+                            cursor: (confirmaRestaura[versioTriada.id] ?? '') === 'RESTAURA' ? 'pointer' : 'not-allowed',
+                            opacity: (confirmaRestaura[versioTriada.id] ?? '') === 'RESTAURA' ? 1 : 0.5,
                           }}
                         >
-                          {restaurant === v.id ? 'Restaurant…' : 'Restaura'}
+                          {restaurant === versioTriada.id ? 'Restaurant…' : "Restaura la llista d'alumnes a aquesta versió"}
                         </button>
                       </div>
                     </div>
-                  </li>
-                ))}
-              </ul>
+                  )
+                })()}
+              </>
             )}
           </div>
         </div>
