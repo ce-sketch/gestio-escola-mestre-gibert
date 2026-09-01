@@ -148,15 +148,19 @@ export default function NotesGenerals() {
       r.alumneId === alumne.id && r.area === area.id && r.trimestre === trim)?.nota
 
     if (valorText === '') {
-      // Buidar la FINAL vol dir "torna a la mitjana", i això s'ha de
-      // desar: si només s'oblidés l'edició local, la nota escrita a mà
-      // tornaria a sortir en recarregar. Es desa com a nota buida, que
-      // tot el que llegeix aquesta col·lecció ja tracta com a absent.
-      if (trim === TRIMESTRE_FINAL && actual !== null && actual !== undefined) {
+      // Buidar una nota vol dir esborrar-la, i això s'ha de desar: si
+      // només s'oblidés l'edició local, la nota que ja hi havia tornaria
+      // a sortir en recarregar (com passava abans amb els trimestres, i
+      // com passava a TEE i Lectura pel mateix motiu: cada canvi és una
+      // fila nova, mai es modifica l'anterior, així que no desar res
+      // deixa el registre vell com a únic i, per tant, com a "vigent").
+      //
+      // Si mai hi havia hagut res desat, no cal escriure un registre
+      // buit de franc.
+      if (actual !== null && actual !== undefined) {
         await escriuNota(alumne, area, null, trim, clau)
         return
       }
-      // A la resta de columnes, buidar només oblida l'edició local.
       setValors((prev) => { const n = { ...prev }; delete n[clau]; return n })
       return
     }
