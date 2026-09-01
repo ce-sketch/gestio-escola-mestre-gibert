@@ -1,31 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { collection, getDocs, query, where } from 'firebase/firestore'
 import { db } from '../../firebase'
-
-// Ordre pedagògic de les classes (P3 → 6è), no alfabètic: "1r" hauria de
-// sortir abans que "2n" tot i que alfabèticament "1" > cap altra xifra no
-// s'hi compara bé amb "P3". Els noms de curs venen tal com els desa
-// Alumnes.jsx en pujar el llistat ("P3 A", "5è A"...).
-const ORDRE_NIVELL = ['p3', 'p4', 'p5', '1r', '2n', '3r', '4t', '5e', '6e']
-
-function normalitzaNivell(s) {
-  return (s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
-}
-
-/** [índex de nivell (99 si no es reconeix), resta del nom (classe A/B/C)] */
-function clauCurs(curs) {
-  const net = (curs ?? '').trim()
-  const m = net.match(/^(\S+)\s*(.*)$/)
-  if (!m) return [99, '']
-  const idx = ORDRE_NIVELL.indexOf(normalitzaNivell(m[1]))
-  return [idx === -1 ? 99 : idx, (m[2] ?? '').toUpperCase()]
-}
-
-function comparaCursos(a, b) {
-  const [ia, la] = clauCurs(a)
-  const [ib, lb] = clauCurs(b)
-  return ia - ib || la.localeCompare(lb)
-}
+import { comparaCursos } from '../../lib/ordreCursos'
 
 /**
  * Mòdul "Atenció a la diversitat". Primera versió: només mostra el que ja
@@ -38,6 +14,7 @@ export default function AtencioDiversitat() {
   const [alumnes, setAlumnes] = useState([])
   const [carregant, setCarregant] = useState(true)
   const [missatge, setMissatge] = useState(null)
+  const [classeFiltrada, setClasseFiltrada] = useState('')
 
   useEffect(() => {
     async function carrega() {
@@ -53,12 +30,22 @@ export default function AtencioDiversitat() {
     carrega()
   }, [])
 
+  const classes = useMemo(
+    () => [...new Set(alumnes.map((a) => a.curs).filter(Boolean))].sort(comparaCursos),
+    [alumnes]
+  )
+
+  const alumnesFiltrats = useMemo(
+    () => (classeFiltrada ? alumnes.filter((a) => a.curs === classeFiltrada) : alumnes),
+    [alumnes, classeFiltrada]
+  )
+
   // Alumnes amb PI, per classe i endreçats per cognom dins de cada una
   // (el nom es desa "Cognom, Nom", així que ordenar pel nom tal qual ja
   // ordena per cognom).
   const ambPi = useMemo(() => {
     const perClasse = {}
-    for (const a of alumnes) {
+    for (const a of alumnesFiltrats) {
       if (!a.pi) continue
       if (!perClasse[a.curs]) perClasse[a.curs] = []
       perClasse[a.curs].push(a)
@@ -67,17 +54,37 @@ export default function AtencioDiversitat() {
       llista.sort((x, y) => (x.nom ?? '').localeCompare(y.nom ?? '', 'ca'))
     }
     return Object.entries(perClasse).sort(([a], [b]) => comparaCursos(a, b))
-  }, [alumnes])
+  }, [alumnesFiltrats])
 
   const totalPi = ambPi.reduce((acc, [, llista]) => acc + llista.length, 0)
 
   // Qualsevol alumne amb alguna dada de l'ESFERA AD (motiu, flag, o algun
   // dels tres tipus), també per classe i cognom.
   const ambAd = useMemo(() => (
-    alumnes
+    alumnesFiltrats
       .filter((a) => a.adMotiu || a.adFlag || a.adTipusA || a.adTipusB || a.adTipusC)
       .sort((a, b) => comparaCursos(a.curs, b.curs) || (a.nom ?? '').localeCompare(b.nom ?? '', 'ca'))
-  ), [alumnes])
+  ), [alumnesFiltrats])
+
+  // Els mateixos comptadors que el full "ESFERA AD" del centre: percentatge
+  // i recompte sobre el total d'alumnes (de la classe filtrada, si n'hi ha
+  // una triada; si no, de tot el centre) — així els números quadren amb
+  // els que ja coneixen del full original.
+  const comptadors = useMemo(() => {
+    const total = alumnesFiltrats.length
+    const compta = (pred) => {
+      const n = alumnesFiltrats.filter(pred).length
+      return { n, pct: total > 0 ? (n / total) * 100 : 0 }
+    }
+    return {
+      total,
+      motiu: compta((a) => Boolean(a.adMotiu)),
+      nese: compta((a) => Boolean(a.adFlag)),
+      tipusA: compta((a) => Boolean(a.adTipusA)),
+      tipusB: compta((a) => Boolean(a.adTipusB)),
+      tipusC: compta((a) => Boolean(a.adTipusC)),
+    }
+  }, [alumnesFiltrats])
 
   if (carregant) return <p>Carregant…</p>
 
@@ -96,6 +103,55 @@ export default function AtencioDiversitat() {
         <p style={{ marginTop: 12, fontSize: 13, color: 'var(--red)' }}>{missatge.text}</p>
       )}
 
+      <label className="field" style={{ marginTop: 16, maxWidth: 240 }}>
+        <span>Filtra per classe</span>
+        <select
+          value={classeFiltrada}
+          onChange={(e) => setClasseFiltrada(e.target.value)}
+          style={{ border: '1px solid var(--line)', borderRadius: 8, padding: '10px 12px' }}
+        >
+          <option value="">Totes les classes</option>
+          {classes.map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
+      </label>
+
+      <div style={{ overflowX: 'auto', marginTop: 20 }}>
+        <table style={{ borderCollapse: 'collapse', fontSize: 13, minWidth: 480 }}>
+          <thead>
+            <tr style={{ background: 'var(--bg-soft, #f5f5f0)', textAlign: 'left' }}>
+              <th style={{ padding: '8px 12px', fontWeight: 700 }}>
+                NESE{classeFiltrada ? ` — ${classeFiltrada}` : ''}
+              </th>
+              <th style={{ padding: '8px 12px' }}>Amb motiu</th>
+              <th style={{ padding: '8px 12px' }}>NESE (flag)</th>
+              <th style={{ padding: '8px 12px' }}>Tipus A NEE</th>
+              <th style={{ padding: '8px 12px' }}>Tipus B</th>
+              <th style={{ padding: '8px 12px' }}>Tipus C</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style={{ borderTop: '1px solid var(--line)', textAlign: 'right' }}>
+              <td style={{ padding: '6px 12px', textAlign: 'left', color: 'var(--ink-soft)' }}>
+                {comptadors.total} alumnes
+              </td>
+              <td style={{ padding: '6px 12px' }}>{comptadors.motiu.pct.toFixed(2)}%</td>
+              <td style={{ padding: '6px 12px' }}>{comptadors.nese.pct.toFixed(2)}%</td>
+              <td style={{ padding: '6px 12px' }}>{comptadors.tipusA.pct.toFixed(2)}%</td>
+              <td style={{ padding: '6px 12px' }}>{comptadors.tipusB.pct.toFixed(2)}%</td>
+              <td style={{ padding: '6px 12px' }}>{comptadors.tipusC.pct.toFixed(2)}%</td>
+            </tr>
+            <tr style={{ textAlign: 'right', fontWeight: 600 }}>
+              <td style={{ padding: '2px 12px' }} />
+              <td style={{ padding: '2px 12px' }}>{comptadors.motiu.n}</td>
+              <td style={{ padding: '2px 12px' }}>{comptadors.nese.n}</td>
+              <td style={{ padding: '2px 12px' }}>{comptadors.tipusA.n}</td>
+              <td style={{ padding: '2px 12px' }}>{comptadors.tipusB.n}</td>
+              <td style={{ padding: '2px 12px' }}>{comptadors.tipusC.n}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
       <div style={{ marginTop: 24 }}>
         <h3 style={{ fontSize: 18 }}>
           Alumnes amb PI <span style={{ fontWeight: 400, color: 'var(--ink-soft)', fontSize: 14 }}>({totalPi})</span>
@@ -103,8 +159,7 @@ export default function AtencioDiversitat() {
 
         {ambPi.length === 0 ? (
           <p className="nota" style={{ marginTop: 8 }}>
-            Cap alumne amb PI. Si n&apos;hi hauria d&apos;haver, comprova que el darrer
-            fitxer pujat a Alumnes portava el full &quot;ESFERA PI&quot;.
+            Cap alumne amb PI{classeFiltrada ? ` a ${classeFiltrada}` : ''}.
           </p>
         ) : (
           ambPi.map(([curs, llista]) => (
@@ -136,8 +191,7 @@ export default function AtencioDiversitat() {
 
         {ambAd.length === 0 ? (
           <p className="nota" style={{ marginTop: 8 }}>
-            Cap alumne amb dades de NESE. Comprova que el darrer fitxer pujat a Alumnes
-            portava el full &quot;ESFERA AD&quot;.
+            Cap alumne amb dades de NESE{classeFiltrada ? ` a ${classeFiltrada}` : ''}.
           </p>
         ) : (
           <div style={{ overflowX: 'auto', marginTop: 8 }}>
