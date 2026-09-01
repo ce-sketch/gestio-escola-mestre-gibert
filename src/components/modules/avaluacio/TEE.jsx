@@ -42,7 +42,7 @@ export default function TEE() {
   const [editantPesos, setEditantPesos] = useState(false)
   const [pesosEdicio, setPesosEdicio] = useState(null)
   const [desantPesos, setDesantPesos] = useState(false)
-  const { actius: actiusDiversitat, toggle: toggleDiversitat } = useActiusDiversitat()
+  const { actius: actiusDiversitat, toggle: toggleDiversitat, activaTots: activaTotsDiversitat, desactivaTots: desactivaTotsDiversitat } = useActiusDiversitat()
 
   useEffect(() => {
     async function carrega() {
@@ -577,7 +577,12 @@ export default function TEE() {
             </button>
           </div>
           <div style={{ overflowX: 'auto', marginTop: 12 }}>
-          <LlegendaDiversitat actius={actiusDiversitat} onToggle={toggleDiversitat} />
+          <LlegendaDiversitat
+            actius={actiusDiversitat}
+            onToggle={toggleDiversitat}
+            onActivaTots={activaTotsDiversitat}
+            onDesactivaTots={desactivaTotsDiversitat}
+          />
           <table style={{ borderCollapse: 'collapse', fontSize: 13, width: '100%' }}>
             <thead>
               <tr style={{ textAlign: 'left', borderBottom: '2px solid var(--line)' }}>

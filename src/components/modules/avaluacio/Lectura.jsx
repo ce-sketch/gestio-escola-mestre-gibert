@@ -32,7 +32,7 @@ export default function Lectura() {
   const [llindarsEdicio, setLlindarsEdicio] = useState(null)
   const [desantLlindars, setDesantLlindars] = useState(false)
   const [configProves, setConfigProves] = useState(null)
-  const { actius: actiusDiversitat, toggle: toggleDiversitat } = useActiusDiversitat()
+  const { actius: actiusDiversitat, toggle: toggleDiversitat, activaTots: activaTotsDiversitat, desactivaTots: desactivaTotsDiversitat } = useActiusDiversitat()
 
   const moment = MOMENTS_LECTURA.find((m) => m.id === momentId)
 
@@ -337,7 +337,12 @@ export default function Lectura() {
             </button>
           </div>
         <div style={{ overflowX: 'auto', marginTop: 12 }}>
-          <LlegendaDiversitat actius={actiusDiversitat} onToggle={toggleDiversitat} />
+          <LlegendaDiversitat
+            actius={actiusDiversitat}
+            onToggle={toggleDiversitat}
+            onActivaTots={activaTotsDiversitat}
+            onDesactivaTots={desactivaTotsDiversitat}
+          />
           <table style={{ borderCollapse: 'collapse', fontSize: 13, width: '100%' }}>
             <thead>
               <tr style={{ textAlign: 'left', borderBottom: '2px solid var(--line)' }}>

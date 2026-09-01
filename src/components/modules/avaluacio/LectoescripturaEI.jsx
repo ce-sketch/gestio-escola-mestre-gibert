@@ -30,7 +30,7 @@ export default function LectoescripturaEI() {
   const [dades, setDades] = useState(null) // { alumnes: { [alumneId]: { [nivellId]: bool } } }
   const [carregantClasse, setCarregantClasse] = useState(false)
   const [desant, setDesant] = useState(false)
-  const { actius: actiusDiversitat, toggle: toggleDiversitat } = useActiusDiversitat()
+  const { actius: actiusDiversitat, toggle: toggleDiversitat, activaTots: activaTotsDiversitat, desactivaTots: desactivaTotsDiversitat } = useActiusDiversitat()
   const [generant, setGenerant] = useState(null) // 'excel' | 'pdf' | null
   // Quines classes passen la prova aquest curs. Es configura a "Quines
   // proves es passen" i mana per a tothom: si aquí sortissin classes que
@@ -219,7 +219,12 @@ export default function LectoescripturaEI() {
         <p style={{ marginTop: 16 }}>Carregant…</p>
       ) : (
         <div className="taula-scroll" style={{ marginTop: 16 }}>
-          <LlegendaDiversitat actius={actiusDiversitat} onToggle={toggleDiversitat} />
+          <LlegendaDiversitat
+            actius={actiusDiversitat}
+            onToggle={toggleDiversitat}
+            onActivaTots={activaTotsDiversitat}
+            onDesactivaTots={desactivaTotsDiversitat}
+          />
           <table style={{ borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
               <tr>
