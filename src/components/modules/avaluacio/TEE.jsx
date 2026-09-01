@@ -11,7 +11,7 @@ import { normalitza } from '../../../lib/text'
 import { esAdmin } from '../../../lib/roles'
 import BotoDrive from '../../BotoDrive'
 import { carregaXLSX } from '../../../lib/carregaLlibreries'
-import { colorDiversitat } from '../../../lib/atencioDiversitat'
+import { colorDiversitat, useActiusDiversitat } from '../../../lib/atencioDiversitat'
 import LlegendaDiversitat from '../../LlegendaDiversitat'
 
 // Paraules clau per reconèixer cada columna de criteri a la capçalera del
@@ -42,6 +42,7 @@ export default function TEE() {
   const [editantPesos, setEditantPesos] = useState(false)
   const [pesosEdicio, setPesosEdicio] = useState(null)
   const [desantPesos, setDesantPesos] = useState(false)
+  const { actius: actiusDiversitat, toggle: toggleDiversitat } = useActiusDiversitat()
 
   useEffect(() => {
     async function carrega() {
@@ -576,7 +577,7 @@ export default function TEE() {
             </button>
           </div>
           <div style={{ overflowX: 'auto', marginTop: 12 }}>
-          <LlegendaDiversitat />
+          <LlegendaDiversitat actius={actiusDiversitat} onToggle={toggleDiversitat} />
           <table style={{ borderCollapse: 'collapse', fontSize: 13, width: '100%' }}>
             <thead>
               <tr style={{ textAlign: 'left', borderBottom: '2px solid var(--line)' }}>
@@ -595,7 +596,7 @@ export default function TEE() {
                 const { nota, nivell } = globalAutoAlumne(alumne.id)
                 const globalManual = valors[alumne.id]?.globalManual
                 return (
-                  <tr key={alumne.id} style={{ borderBottom: '1px solid var(--line)', backgroundColor: colorDiversitat(alumne) ?? undefined }}>
+                  <tr key={alumne.id} style={{ borderBottom: '1px solid var(--line)', backgroundColor: colorDiversitat(alumne, actiusDiversitat) ?? undefined }}>
                     <td style={{ padding: '6px 8px', color: 'var(--ink-soft)' }}>{alumne.numLlista ?? '—'}</td>
                     <td style={{ padding: '6px 8px', fontWeight: 500 }}>{alumne.nom}</td>
                     {CRITERIS_TEE.map((c) => (
