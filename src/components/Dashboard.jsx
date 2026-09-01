@@ -4,6 +4,7 @@ import ModuleErrorBoundary from './ModuleErrorBoundary.jsx'
 
 const Inici = lazy(() => import('./modules/Inici.jsx'))
 const Alumnes = lazy(() => import('./modules/Alumnes.jsx'))
+const AtencioDiversitat = lazy(() => import('./modules/AtencioDiversitat.jsx'))
 const Calendari = lazy(() => import('./modules/Calendari.jsx'))
 const Avaluacio = lazy(() => import('./modules/Avaluacio.jsx'))
 const Assistencia = lazy(() => import('./modules/Assistencia.jsx'))
@@ -19,6 +20,7 @@ const Comprovacions = lazy(() => import('./modules/Comprovacions.jsx'))
 const MODULES = [
   { id: 'inici', label: 'Inici', component: Inici },
   { id: 'alumnes', label: 'Alumnes', component: Alumnes, nomesAdmin: true },
+  { id: 'atenciodiversitat', label: 'Atenció a la diversitat', component: AtencioDiversitat, nomesAdmin: true },
   { id: 'calendari', label: 'Calendari', component: Calendari, nomesAdmin: true },
   { id: 'avaluacio', label: 'Avaluació', component: Avaluacio },
   { id: 'assistencia', label: 'Assistència', component: Assistencia },
