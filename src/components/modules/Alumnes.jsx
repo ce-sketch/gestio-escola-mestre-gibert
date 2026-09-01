@@ -8,7 +8,7 @@ import { cursEscolarActual } from '../../lib/cursEscolar'
 import BotoDrive from '../BotoDrive'
 import { carregaXLSX } from '../../lib/carregaLlibreries'
 import { normalitza } from '../../lib/text'
-import { llegeixResumPI, llegeixResumAD } from '../../lib/sicAlumnatIndicadors'
+import { llegeixResumPI, llegeixResumAD, llegeixResumSIEI } from '../../lib/sicAlumnatIndicadors'
 
 const DEFAULT_CLASSES = ['1r A', '1r B']
 
@@ -50,6 +50,11 @@ export default function Alumnes() {
   // no, cal avisar-ho perquè no passi desapercebut que el PI/NESE no
   // s'ha actualitzat en aquesta pujada.
   const [fullsPiAdTrobats, setFullsPiAdTrobats] = useState({ pi: true, ad: true })
+  // Actualització de SIEI: fitxer a part ("14b. Alumnes NESE"), no del
+  // mateix llibre que ESFERA/ESFERA PI/AD, així que va per la seva pròpia
+  // pujada en lloc d'enganxar-se al flux de dalt.
+  const [pujantSiei, setPujantSiei] = useState(false)
+  const [missatgeSiei, setMissatgeSiei] = useState(null)
 
   // Llistat del que hi ha desat de debò. Abans només es veia la
   // previsualització d'una importació, que desapareix en confirmar-la:
@@ -305,6 +310,65 @@ export default function Alumnes() {
     reader.readAsBinaryString(file)
   }
 
+  /**
+   * Actualitza el flag SIEI a partir del document "14b. Alumnes NESE",
+   * un fitxer a part que no té res a veure amb la resta d'aquesta
+   * pantalla. Només actualitza alumnes que JA existeixen (aquest fitxer
+   * no en té prou dades per crear-ne de nous): els IDALU que hi surten
+   * però no coincideixen amb cap alumne actual es compten i s'avisen,
+   * no es creen fitxes noves a mitges.
+   */
+  async function pujaSiei(file) {
+    if (!file) return
+    setMissatgeSiei(null)
+    setPujantSiei(true)
+    try {
+      const XLSX = await carregaXLSX()
+      const buffer = await file.arrayBuffer()
+      const workbook = XLSX.read(buffer, { type: 'array' })
+      const full = workbook.Sheets['EE ESFERA']
+      if (!full) {
+        setMissatgeSiei({ type: 'error', text: 'Aquest fitxer no porta el full "EE ESFERA".' })
+        return
+      }
+      const resumSiei = llegeixResumSIEI(XLSX.utils.sheet_to_json(full, { header: 1, raw: false }))
+      if (resumSiei.size === 0) {
+        setMissatgeSiei({ type: 'error', text: 'No hi he trobat cap alumne amb IDALU vàlid.' })
+        return
+      }
+
+      const snap = await getDocs(collection(db, 'alumnes'))
+      const existentsIds = new Set(snap.docs.map((d) => d.id))
+
+      let batch = writeBatch(db)
+      let opsEnBatch = 0
+      let actualitzats = 0
+      let noTrobats = 0
+      for (const [idalu, { siei }] of resumSiei) {
+        if (!existentsIds.has(idalu)) { noTrobats += 1; continue }
+        batch.set(doc(db, 'alumnes', idalu), { siei, actualitzatEl: serverTimestamp() }, { merge: true })
+        actualitzats += 1
+        opsEnBatch += 1
+        if (opsEnBatch >= 450) { // marge sota el límit de 500 de Firestore
+          await batch.commit()
+          batch = writeBatch(db)
+          opsEnBatch = 0
+        }
+      }
+      if (opsEnBatch > 0) await batch.commit()
+
+      setMissatgeSiei({
+        type: 'ok',
+        text: `SIEI actualitzat per a ${actualitzats} alumnes.`
+          + (noTrobats > 0 ? ` (${noTrobats} IDALU del fitxer no coincideixen amb cap alumne actual.)` : ''),
+      })
+    } catch (err) {
+      setMissatgeSiei({ type: 'error', text: `No s'ha pogut actualitzar el SIEI: ${err.message}` })
+    } finally {
+      setPujantSiei(false)
+    }
+  }
+
   async function importaFitxer() {
     if (!previsualitzacio) return
     setImportantFitxer(true)
@@ -538,6 +602,34 @@ export default function Alumnes() {
               {important ? 'Important…' : 'Confirma i actualitza totes les classes'}
             </button>
           </div>
+        )}
+      </div>
+
+      <div className="placeholder-box" style={{ borderStyle: 'solid', marginTop: 24 }}>
+        <strong>Actualitza el SIEI</strong>
+        <p style={{ marginTop: 6, fontSize: 13 }}>
+          Fitxer a part, sense res a veure amb la resta d&apos;aquesta pantalla: el document
+          &quot;14b. Alumnes NESE. Curs actual&quot;, full &quot;EE ESFERA&quot;. Només
+          actualitza el SIEI dels alumnes que ja hi ha a la llista — no en crea de nous ni en
+          toca cap altra dada.
+        </p>
+        <label
+          className="btn-ghost"
+          style={{ display: 'inline-block', marginTop: 8, border: '1px solid', borderRadius: 8, padding: '8px 14px', fontSize: 13, cursor: pujantSiei ? 'default' : 'pointer' }}
+        >
+          {pujantSiei ? 'Actualitzant…' : '📂 Tria el fitxer "14b. Alumnes NESE"'}
+          <input
+            type="file"
+            accept=".xlsx,.xls"
+            style={{ display: 'none' }}
+            disabled={pujantSiei}
+            onChange={(e) => { pujaSiei(e.target.files?.[0]); e.target.value = '' }}
+          />
+        </label>
+        {missatgeSiei && (
+          <p style={{ marginTop: 8, fontSize: 13, color: missatgeSiei.type === 'error' ? 'var(--red)' : 'var(--green)' }}>
+            {missatgeSiei.text}
+          </p>
         )}
       </div>
 
