@@ -12,13 +12,14 @@ import { LLEGENDA_DIVERSITAT } from '../lib/atencioDiversitat'
  * paràmetre `actius` de `colorDiversitat`). El component és "controlat":
  * l'estat viu al component que crida `useActiusDiversitat()`, no aquí.
  */
-export default function LlegendaDiversitat({ actius, onToggle }) {
+export default function LlegendaDiversitat({ actius, onToggle, onActivaTots, onDesactivaTots }) {
+  const totsActius = actius.size === LLEGENDA_DIVERSITAT.length
   return (
     <div style={{ marginTop: 10, marginBottom: 4 }}>
       <p className="nota" style={{ marginBottom: 6 }}>
         Atenció a la diversitat — clica un color per amagar-lo o tornar-lo a mostrar a la taula:
       </p>
-      <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 12 }}>
+      <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center', fontSize: 12 }}>
         {LLEGENDA_DIVERSITAT.map((c) => {
           const actiu = actius.has(c.id)
           return (
@@ -43,6 +44,14 @@ export default function LlegendaDiversitat({ actius, onToggle }) {
             </button>
           )
         })}
+        <button
+          type="button"
+          onClick={totsActius ? onDesactivaTots : onActivaTots}
+          className="btn-ghost"
+          style={{ fontSize: 11, padding: '3px 10px', marginLeft: 4 }}
+        >
+          {totsActius ? 'Amaga-ho tot' : 'Mostra-ho tot'}
+        </button>
       </div>
     </div>
   )
