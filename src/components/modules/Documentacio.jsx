@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react'
-import { collection, getDocs, query, where } from 'firebase/firestore'
+import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore'
 import { db } from '../../firebase'
 import { cursEscolarActual } from '../../lib/cursEscolar'
 import { CICLES, NOMS_AFA, FESTES, nomsActius, suggerimentsComissions } from '../../lib/valoracions'
 import { carregaConfigValoracions } from '../../lib/valoracionsConfig'
+import { exportaValoracionsExcel, exportaValoracionsPDF } from '../../lib/valoracionsExport'
+import { normalitzaFesta } from '../../lib/festesDetall'
+import { normalitzaCooperatiu } from '../../lib/aprenentatgeCooperatiu'
 import ValoracioObjectius from './valoracions/ValoracioObjectius'
 import ValoracioFesta from './valoracions/ValoracioFesta'
 import ValoracioActivitats from './valoracions/ValoracioActivitats'
@@ -23,6 +26,8 @@ export default function Documentacio() {
   const [cicleActivitats, setCicleActivitats] = useState('')
   const [nomsExistents, setNomsExistents] = useState([])
   const [configActiva, setConfigActiva] = useState(null)
+  const [descarregant, setDescarregant] = useState(null)
+  const [missatgeDescarrega, setMissatgeDescarrega] = useState(null)
 
   useEffect(() => {
     carregaNomsExistents()
@@ -38,6 +43,59 @@ export default function Documentacio() {
       setNomsExistents([...new Set(snap.docs.map((d) => d.data().nom).filter(Boolean))])
     } catch {
       setNomsExistents([])
+    }
+  }
+
+  /**
+   * Les dades per a la descàrrega només es carreguen quan es demana —a
+   * diferència del Quadre de comandament, aquí no calen per res més (ni
+   * la matriu ni els alumnes ni les proves), i portar-les sempre carregades
+   * només per si de cas algú prem "Descarrega" seria llegir Firestore de
+   * franc la majoria de vegades.
+   */
+  async function carregaPerDescarrega() {
+    const delCurs = (nom) => getDocs(query(collection(db, nom), where('cursEscolar', '==', cursEscolarId)))
+    const [snapVal, snapFestes, snapCoop, snapAct] = await Promise.all([
+      delCurs('valoracions'),
+      delCurs('festesDetall'),
+      getDoc(doc(db, 'aprenentatgeCooperatiu', cursEscolarId)),
+      delCurs('activitatsComplementariesDetall'),
+    ])
+    return {
+      valoracions: snapVal.docs
+        .map((d) => ({ id: d.id, ...d.data() }))
+        .sort((a, b) => (a.nom ?? '').localeCompare(b.nom ?? '', 'ca')),
+      // Les festes desades amb el model vell es reparteixen en carregar-les.
+      festesDetall: snapFestes.docs
+        .map((d) => ({ id: d.id, festa: normalitzaFesta(d.data().festa) }))
+        .filter((f) => f.festa),
+      cooperatiu: snapCoop.exists() ? normalitzaCooperatiu(snapCoop.data()) : null,
+      activitats: snapAct.docs
+        .map((d) => ({ id: d.id, cicle: d.data().cicle ?? '', activitats: d.data().activitats ?? [] }))
+        .sort((a, b) => CICLES.indexOf(a.cicle) - CICLES.indexOf(b.cicle)),
+    }
+  }
+
+  /**
+   * Genera la descàrrega i, sobretot, ensenya què passa —el mateix
+   * plantejament que al Quadre de comandament: abans es cridava la funció
+   * d'exportació directament des de l'onClick i, si petava, el navegador
+   * s'empassava l'error sense cap pista de per què.
+   */
+  async function descarrega(quin, fes) {
+    setDescarregant(quin)
+    setMissatgeDescarrega(null)
+    try {
+      const dades = await carregaPerDescarrega()
+      if (dades.valoracions.length === 0) {
+        throw new Error('No hi ha cap valoració desada en aquest curs escolar.')
+      }
+      await fes(dades)
+      setMissatgeDescarrega({ type: 'ok', text: `Descàrrega generada amb ${dades.valoracions.length} valoracions.` })
+    } catch (err) {
+      setMissatgeDescarrega({ type: 'error', text: `No s'ha pogut generar la descàrrega: ${err.message}` })
+    } finally {
+      setDescarregant(null)
     }
   }
 
@@ -64,7 +122,38 @@ export default function Documentacio() {
               style={{ border: '1px solid var(--line)', borderRadius: 8, padding: '8px 10px', fontWeight: 600 }}
             />
           </label>
+
+          <button
+            type="button"
+            className="btn-ghost"
+            style={{ maxWidth: 320, color: 'var(--navy)', borderColor: 'var(--navy)' }}
+            onClick={() => descarrega('excel', (dades) => exportaValoracionsExcel(
+              dades.valoracions, cursEscolarId,
+              { festesDetall: dades.festesDetall, cooperatiu: dades.cooperatiu, activitats: dades.activitats, config: configActiva }
+            ))}
+            disabled={descarregant !== null}
+          >
+            {descarregant === 'excel' ? 'Generant l\'Excel…' : '📥 Descarrega totes en Excel (amb totes les pestanyes)'}
+          </button>
+          <button
+            type="button"
+            className="btn-ghost"
+            style={{ maxWidth: 220, color: 'var(--navy)', borderColor: 'var(--navy)' }}
+            onClick={() => descarrega('pdf', (dades) => exportaValoracionsPDF(
+              dades.valoracions, cursEscolarId,
+              { festesDetall: dades.festesDetall, cooperatiu: dades.cooperatiu, activitats: dades.activitats, config: configActiva }
+            ))}
+            disabled={descarregant !== null}
+          >
+            {descarregant === 'pdf' ? 'Generant el PDF…' : '📄 Descarrega totes en PDF'}
+          </button>
         </div>
+
+        {missatgeDescarrega && (
+          <p style={{ marginTop: 8, color: missatgeDescarrega.type === 'error' ? 'var(--red)' : 'var(--green, #2a7a3b)' }}>
+            {missatgeDescarrega.text}
+          </p>
+        )}
 
         <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
           <button
