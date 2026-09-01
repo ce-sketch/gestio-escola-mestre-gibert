@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 
-import { llegeixResumPI, llegeixResumAD } from './sicAlumnatIndicadors'
+import { llegeixResumPI, llegeixResumAD, llegeixResumSIEI } from './sicAlumnatIndicadors'
 
 // Files tal com surten de XLSX.utils.sheet_to_json(full, { header: 1,
 // raw: false }) sobre el full "ESFERA PI" real (curs 2026-27, mostra).
@@ -69,5 +69,32 @@ describe('llegeixResumAD', () => {
   it('torna un Map buit si no hi ha files', () => {
     expect(llegeixResumAD([]).size).toBe(0)
     expect(llegeixResumAD(undefined).size).toBe(0)
+  })
+})
+
+// Files reals del full "EE ESFERA" del document "14b. Alumnes NESE.
+// Curs actual. Obj 1.xlsx" — un document A PART, no del mateix llibre
+// que ESFERA/ESFERA PI/AD. La columna IDALU hi és la C (índex 2) i la
+// SIEI la I (índex 8); les dues primeres files reals no porten SIEI
+// (cel·la buida), la tercera sí (1).
+const FILA_EE_CAPCALERA = ['FF', 'Nº', 'ident Alumne', 'Alumne', 'Nivell', 'Tutors', 'PI', undefined, 'SIEI']
+const FILA_EE_SENSE_SIEI = [undefined, '1', '19569942343', 'Ivakhova Mamedova, Milana', '2n A', 'Calenzo Farriols, Noemí', 'No']
+const FILA_EE_AMB_SIEI = [undefined, '3', '19101542141', 'Gómez Rico, Amélie', '1r A', 'Soriano Barbeira, Lidia', 'Sí', undefined, '1']
+
+describe('llegeixResumSIEI', () => {
+  it('llegeix el flag de SIEI per IDALU', () => {
+    const mapa = llegeixResumSIEI([FILA_EE_CAPCALERA, FILA_EE_SENSE_SIEI, FILA_EE_AMB_SIEI])
+    expect(mapa.get('19569942343')).toEqual({ siei: false })
+    expect(mapa.get('19101542141')).toEqual({ siei: true })
+  })
+
+  it('ignora files sense IDALU vàlid', () => {
+    const mapa = llegeixResumSIEI([FILA_EE_CAPCALERA])
+    expect(mapa.size).toBe(0)
+  })
+
+  it('torna un Map buit si no hi ha files', () => {
+    expect(llegeixResumSIEI([]).size).toBe(0)
+    expect(llegeixResumSIEI(undefined).size).toBe(0)
   })
 })

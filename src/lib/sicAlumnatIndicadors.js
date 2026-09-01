@@ -85,6 +85,32 @@ const AD_COL_TIPUS_A_NEE = 6
 const AD_COL_TIPUS_B = 7
 const AD_COL_TIPUS_C = 8
 
+// Columnes del full "EE ESFERA", d'un document A PART ("14b. Alumnes
+// NESE. Curs actual…"), no del mateix llibre que ESFERA/ESFERA PI/AD.
+// Porta el flag de SIEI que no hi ha enlloc més — i que calia distingir
+// del "TIPUS A NEE" de l'ESFERA AD: un alumne amb reconeixement de
+// necessitats especials pot ser-ho DINS del SIEI o FORA (el propi full
+// ho diu literalment: "Tipus A (No SIEI)" com a criteri de detecció),
+// i per la llegenda de colors calen els dos per separat.
+const SIEI_COL_IDALU = 2 // "ident Alumne"
+const SIEI_COL_SIEI = 8 // "SIEI"
+
+/**
+ * Llegeix el full "EE ESFERA" i torna un Map IDALU → { siei }.
+ *
+ * `files` és el resultat de `XLSX.utils.sheet_to_json(full, { header: 1,
+ * raw: false })` sobre el full "EE ESFERA".
+ */
+export function llegeixResumSIEI(files) {
+  const mapa = new Map()
+  for (const fila of files ?? []) {
+    const idalu = idaluNet(fila?.[SIEI_COL_IDALU])
+    if (!idalu) continue
+    mapa.set(idalu, { siei: siNoOBooleaABoolean(fila?.[SIEI_COL_SIEI]) })
+  }
+  return mapa
+}
+
 /**
  * Llegeix el full "ESFERA AD" i torna un Map IDALU → { curs, neseMotiu,
  * neseFlag, tipusANee, tipusB, tipusC }.
