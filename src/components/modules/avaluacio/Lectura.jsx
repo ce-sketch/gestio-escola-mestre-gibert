@@ -7,6 +7,8 @@ import { cursEscolarActual } from '../../../lib/cursEscolar'
 import { passaLaProva } from '../../../lib/provesActives'
 import { esAdmin } from '../../../lib/roles'
 import { exportaExcel, exportaPDF } from '../../../lib/exportTaula'
+import { colorDiversitat } from '../../../lib/atencioDiversitat'
+import LlegendaDiversitat from '../../LlegendaDiversitat'
 
 const GRUPS_LLINDAR = [
   { id: 'grau1', label: '1r' },
@@ -334,6 +336,7 @@ export default function Lectura() {
             </button>
           </div>
         <div style={{ overflowX: 'auto', marginTop: 12 }}>
+          <LlegendaDiversitat />
           <table style={{ borderCollapse: 'collapse', fontSize: 13, width: '100%' }}>
             <thead>
               <tr style={{ textAlign: 'left', borderBottom: '2px solid var(--line)' }}>
@@ -352,7 +355,7 @@ export default function Lectura() {
                 const cl = valorAlumne(alumne.id, 'cl')
                 const nCl = faCL ? nivellCL(cl, curs, llindarsCl) : null
                 return (
-                  <tr key={alumne.id} style={{ borderBottom: '1px solid var(--line)' }}>
+                  <tr key={alumne.id} style={{ borderBottom: '1px solid var(--line)', backgroundColor: colorDiversitat(alumne) ?? undefined }}>
                     <td style={{ padding: '6px 8px', color: 'var(--ink-soft)' }}>{alumne.numLlista ?? '—'}</td>
                     <td style={{ padding: '6px 8px', fontWeight: 500 }}>{alumne.nom}</td>
                     <td style={{ padding: '4px 6px' }}>

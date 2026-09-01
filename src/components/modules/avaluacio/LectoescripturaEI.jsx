@@ -12,6 +12,8 @@ import { db, auth } from '../../../firebase'
 import { cursEscolarActual } from '../../../lib/cursEscolar'
 import { slug } from '../../../lib/slug'
 import { exportaExcel, exportaPDF } from '../../../lib/exportTaula'
+import { colorDiversitat } from '../../../lib/atencioDiversitat'
+import LlegendaDiversitat from '../../LlegendaDiversitat'
 import {
   ETAPES_TEBEROSKY, NIVELLS_TEBEROSKY, esClasseEI4o5, nivellsBuits, comptaNivells,
   CAPÇALERA_EXPORT_EI, GRUPS_EXPORT_EI, filaAlumneExportEI,
@@ -216,6 +218,7 @@ export default function LectoescripturaEI() {
         <p style={{ marginTop: 16 }}>Carregant…</p>
       ) : (
         <div className="taula-scroll" style={{ marginTop: 16 }}>
+          <LlegendaDiversitat />
           <table style={{ borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
               <tr>
@@ -268,9 +271,10 @@ export default function LectoescripturaEI() {
             <tbody>
               {alumnesClasse.map((alumne) => {
                 const marcats = dades.alumnes[alumne.id] ?? {}
+                const color = colorDiversitat(alumne)
                 return (
-                  <tr key={alumne.id} style={{ borderBottom: '1px solid var(--line)' }}>
-                    <td style={{ padding: '4px 8px', fontWeight: 500, position: 'sticky', left: 0, background: 'var(--bg)' }}>{alumne.nom}</td>
+                  <tr key={alumne.id} style={{ borderBottom: '1px solid var(--line)', backgroundColor: color ?? undefined }}>
+                    <td style={{ padding: '4px 8px', fontWeight: 500, position: 'sticky', left: 0, background: color ?? 'var(--bg)' }}>{alumne.nom}</td>
                     {NIVELLS_TEBEROSKY.map((n, i) => {
                       const anterior = NIVELLS_TEBEROSKY[i - 1]
                       const canviaEtapa = n.etapa !== anterior?.etapa

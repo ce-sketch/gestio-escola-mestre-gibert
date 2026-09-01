@@ -11,6 +11,8 @@ import { normalitza } from '../../../lib/text'
 import { esAdmin } from '../../../lib/roles'
 import BotoDrive from '../../BotoDrive'
 import { carregaXLSX } from '../../../lib/carregaLlibreries'
+import { colorDiversitat } from '../../../lib/atencioDiversitat'
+import LlegendaDiversitat from '../../LlegendaDiversitat'
 
 // Paraules clau per reconèixer cada columna de criteri a la capçalera del
 // fitxer Excel pujat, siguin quin siguin l'ordre o els espais exactes.
@@ -574,6 +576,7 @@ export default function TEE() {
             </button>
           </div>
           <div style={{ overflowX: 'auto', marginTop: 12 }}>
+          <LlegendaDiversitat />
           <table style={{ borderCollapse: 'collapse', fontSize: 13, width: '100%' }}>
             <thead>
               <tr style={{ textAlign: 'left', borderBottom: '2px solid var(--line)' }}>
@@ -592,7 +595,7 @@ export default function TEE() {
                 const { nota, nivell } = globalAutoAlumne(alumne.id)
                 const globalManual = valors[alumne.id]?.globalManual
                 return (
-                  <tr key={alumne.id} style={{ borderBottom: '1px solid var(--line)' }}>
+                  <tr key={alumne.id} style={{ borderBottom: '1px solid var(--line)', backgroundColor: colorDiversitat(alumne) ?? undefined }}>
                     <td style={{ padding: '6px 8px', color: 'var(--ink-soft)' }}>{alumne.numLlista ?? '—'}</td>
                     <td style={{ padding: '6px 8px', fontWeight: 500 }}>{alumne.nom}</td>
                     {CRITERIS_TEE.map((c) => (
