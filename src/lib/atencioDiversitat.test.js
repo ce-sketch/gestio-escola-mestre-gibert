@@ -26,6 +26,16 @@ describe('criteriDiversitat', () => {
     expect(criteriDiversitat(null)).toBeNull()
     expect(criteriDiversitat(undefined)).toBeNull()
   })
+
+  it('amb "actius", ignora els criteris desactivats', () => {
+    const a = { siei: true, pi: true }
+    // Amb tots dos actius, SIEI mana (és el primer de la llegenda).
+    expect(criteriDiversitat(a, new Set(['siei', 'pi'])).id).toBe('siei')
+    // Desactivant SIEI, passa a manar el següent que compleixi: PI.
+    expect(criteriDiversitat(a, new Set(['pi'])).id).toBe('pi')
+    // Sense cap dels dos actius, no en compleix cap.
+    expect(criteriDiversitat(a, new Set(['nouvingut']))).toBeNull()
+  })
 })
 
 describe('colorDiversitat', () => {
