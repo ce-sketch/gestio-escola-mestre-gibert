@@ -16,7 +16,7 @@ import { DESTINACIONS, cerca } from './cercaApp'
  * registrat com a `matriu` però buscat com a `matriuGeneral`.
  */
 const IDS_MODULS = [
-  'inici', 'alumnes', 'calendari', 'avaluacio', 'assistencia', 'absentisme',
+  'inici', 'alumnes', 'atenciodiversitat', 'calendari', 'avaluacio', 'assistencia', 'absentisme',
   'documentacio', 'economia', 'pgac', 'sic', 'matriu', 'backup', 'comprovacions',
 ]
 

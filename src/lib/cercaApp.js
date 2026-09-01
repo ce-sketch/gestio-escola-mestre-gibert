@@ -65,6 +65,10 @@ export const DESTINACIONS = [
   { modul: 'alumnes', nom: 'Zona perillosa: esborrar dades de proves', on: 'Alumnes',
     paraules: ['esborrar', 'netejar', 'dades de proves', 'zona perillosa'] },
 
+  // ── Atenció a la diversitat ───────────────────────────────────────
+  { modul: 'atenciodiversitat', nom: 'Alumnes amb PI', on: 'Atenció a la diversitat',
+    paraules: ['pi', 'pla individualitzat', 'atenció a la diversitat', 'nese', 'esfera ad'] },
+
   // ── La resta ───────────────────────────────────────────────────────
   { modul: 'assistencia', nom: "Passar llista", on: 'Assistència',
     paraules: ['assistència', 'passar llista', 'faltes', 'retards', 'absències'] },
