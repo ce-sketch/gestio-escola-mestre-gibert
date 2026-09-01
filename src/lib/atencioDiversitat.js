@@ -41,9 +41,10 @@ export function colorDiversitat(alumne, actius = null) {
 }
 
 /** Quins criteris de la llegenda estan actius (es pinten) o no, amb un
- *  `toggle` per activar/desactivar-ne un des del clic a la llegenda.
- *  Tots actius per defecte. Cada pantalla en fa servir la seva pròpia
- *  instància (no és un estat compartit entre TEE/Lectura/Lectoescriptura). */
+ *  `toggle` per activar/desactivar-ne un des del clic a la llegenda, i
+ *  `activaTots`/`desactivaTots` per fer-ho amb tots de cop. Tots actius
+ *  per defecte. Cada pantalla en fa servir la seva pròpia instància (no
+ *  és un estat compartit entre TEE/Lectura/Lectoescriptura). */
 export function useActiusDiversitat() {
   const [actius, setActius] = useState(() => new Set(LLEGENDA_DIVERSITAT.map((c) => c.id)))
   function toggle(id) {
@@ -54,5 +55,11 @@ export function useActiusDiversitat() {
       return nou
     })
   }
-  return { actius, toggle }
+  function activaTots() {
+    setActius(new Set(LLEGENDA_DIVERSITAT.map((c) => c.id)))
+  }
+  function desactivaTots() {
+    setActius(new Set())
+  }
+  return { actius, toggle, activaTots, desactivaTots }
 }
