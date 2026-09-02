@@ -34,10 +34,10 @@ export default function AtencioDiversitat() {
   const [missatge, setMissatge] = useState(null)
   const [classeFiltrada, setClasseFiltrada] = useState('')
   const [areaPiFiltrada, setAreaPiFiltrada] = useState('')
-  const [piObert, setPiObert] = useState(true)
-  const [adObert, setAdObert] = useState(true)
-  const [sieiObert, setSieiObert] = useState(true)
-  const [eeObert, setEeObert] = useState(true)
+  const [piObert, setPiObert] = useState(false)
+  const [adObert, setAdObert] = useState(false)
+  const [sieiObert, setSieiObert] = useState(false)
+  const [eeObert, setEeObert] = useState(false)
   const [descarregant, setDescarregant] = useState(null)
   const [missatgeDescarrega, setMissatgeDescarrega] = useState(null)
 
@@ -148,6 +148,31 @@ export default function AtencioDiversitat() {
       a.adTipusA ? 'Sí' : 'No', a.adTipusB ? 'Sí' : 'No', a.adTipusC ? 'Sí' : 'No',
     ])
     return [capcalera, ...cos]
+  }
+
+  /** El full de resum (percentatges i totals) de l'ESFERA AD — els
+   *  mateixos comptadors que ja es veuen a la pantalla, perquè la
+   *  descàrrega no en sigui només la llista sense el context. */
+  function fullResumAd() {
+    return [
+      ['Indicador', 'Percentatge', 'Alumnes'],
+      ['Total alumnes', '', comptadors.total],
+      ['Amb motiu', `${comptadors.motiu.pct.toFixed(2)}%`, comptadors.motiu.n],
+      ['NESE (flag)', `${comptadors.nese.pct.toFixed(2)}%`, comptadors.nese.n],
+      ['Tipus A NEE', `${comptadors.tipusA.pct.toFixed(2)}%`, comptadors.tipusA.n],
+      ['Tipus B', `${comptadors.tipusB.pct.toFixed(2)}%`, comptadors.tipusB.n],
+      ['Tipus C', `${comptadors.tipusC.pct.toFixed(2)}%`, comptadors.tipusC.n],
+    ]
+  }
+
+  /** El full de resum (recompte per cicle) del PI — el mateix que ja es
+   *  veu a la pantalla. */
+  function fullResumPi() {
+    return [
+      ['Cicle', 'Alumnes amb PI'],
+      ...Object.entries(CICLES).map(([id, label]) => [label, comptadorsCicle[id]]),
+      ['Total', totalPiSenseFiltreArea],
+    ]
   }
 
   async function descarrega(quin, fes) {
@@ -548,8 +573,8 @@ export default function AtencioDiversitat() {
         </p>
         <BotonsDescarrega
           id="ad"
-          onExcel={() => exportaExcel('Esfera AD - NESE', { ...dadesBase, fulls: [{ nom: 'Esfera AD', files: fullAd() }] })}
-          onPdf={() => exportaPDF('Esfera AD - NESE', { ...dadesBase, fulls: [{ nom: 'Esfera AD', files: fullAd() }] })}
+          onExcel={() => exportaExcel('Esfera AD - NESE', { ...dadesBase, fulls: [{ nom: 'Resum', files: fullResumAd() }, { nom: 'Esfera AD', files: fullAd() }] })}
+          onPdf={() => exportaPDF('Esfera AD - NESE', { ...dadesBase, fulls: [{ nom: 'Resum', files: fullResumAd() }, { nom: 'Esfera AD', files: fullAd() }] })}
         />
 
         {adObert && (
@@ -614,6 +639,7 @@ export default function AtencioDiversitat() {
           onExcel={() => exportaExcel('Alumnes amb PI', {
             ...dadesBase,
             fulls: [
+              { nom: 'Resum', files: fullResumPi() },
               { nom: 'PI Infantil', files: fullPi(ambPiInfantil, AREES_INFANTIL_IDS) },
               { nom: 'PI Primària', files: fullPi(ambPiPrimaria, AREES_PRIMARIA_IDS) },
             ],
@@ -621,6 +647,7 @@ export default function AtencioDiversitat() {
           onPdf={() => exportaPDF('Alumnes amb PI', {
             ...dadesBase,
             fulls: [
+              { nom: 'Resum', files: fullResumPi() },
               { nom: 'PI Infantil', files: fullPi(ambPiInfantil, AREES_INFANTIL_IDS) },
               { nom: 'PI Primària', files: fullPi(ambPiPrimaria, AREES_PRIMARIA_IDS) },
             ],
