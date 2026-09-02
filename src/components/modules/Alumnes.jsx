@@ -8,7 +8,7 @@ import { cursEscolarActual } from '../../lib/cursEscolar'
 import BotoDrive from '../BotoDrive'
 import { carregaXLSX } from '../../lib/carregaLlibreries'
 import { normalitza } from '../../lib/text'
-import { llegeixResumPI, llegeixResumAD, llegeixResumSIEI } from '../../lib/sicAlumnatIndicadors'
+import { llegeixResumAD, llegeixResumSIEI } from '../../lib/sicAlumnatIndicadors'
 
 const DEFAULT_CLASSES = ['1r A', '1r B']
 
@@ -19,6 +19,7 @@ const DEFAULT_CLASSES = ['1r A', '1r B']
 const COL_IDALU = 0
 const COL_NOM = 4
 const COL_CURS = 6
+const COL_PI = 7 // "Curriculum - Afectat per un Pl?" — el PI, al mateix full principal
 const COL_NESE = 8
 const COL_NESE_MOTIU = 9
 
@@ -27,13 +28,17 @@ const COL_NESE_MOTIU = 9
 // capacitats, per exemple, no donen aquest dret).
 const MOTIU_NESE_REDUCCIO = 'situacions socioeconòmiques'
 
-// El mateix llibre Excel que porta el full "ESFERA" porta també, en
-// pestanyes a part, els resums de PI i NESE que fa servir el SIC
-// automàtic (vegeu sicAlumnatIndicadors.js). Es llegeixen del mateix
-// fitxer que ja es puja aquí perquè ningú hagi de recordar-se de pujar-los
-// per separat — si el fitxer no les porta (exportacions antigues, o un
-// full parcial), simplement queden a false/buit sense petar.
-const FULL_ESFERA_PI = 'ESFERA PI'
+// El mateix llibre Excel que porta el full "ESFERA" porta també, en una
+// pestanya a part, el resum de NESE que fa servir el SIC automàtic
+// (vegeu sicAlumnatIndicadors.js). Es llegeix del mateix fitxer que ja
+// es puja aquí perquè ningú hagi de recordar-se de pujar-lo per separat
+// — si el fitxer no el porta (exportacions antigues, o un full parcial),
+// simplement queda a false/buit sense petar.
+//
+// El PI, en canvi, ja ve al mateix full "ESFERA" (columna "Curriculum -
+// Afectat per un Pl?"): no calia cap pestanya a part per ell — la
+// pestanya "ESFERA PI" del llibre és un resum agregat pensat per a altres
+// usos, no la font original.
 const FULL_ESFERA_AD = 'ESFERA AD'
 
 export default function Alumnes() {
@@ -46,10 +51,10 @@ export default function Alumnes() {
   const [previsualitzacio, setPrevisualitzacio] = useState(null) // { [curs]: [{nom, numLlista}] }
   const [important, setImportantFitxer] = useState(false)
   const [errorFitxer, setErrorFitxer] = useState(null)
-  // Si el fitxer pujat portava els fulls "ESFERA PI" / "ESFERA AD" — si
-  // no, cal avisar-ho perquè no passi desapercebut que el PI/NESE no
-  // s'ha actualitzat en aquesta pujada.
-  const [fullsPiAdTrobats, setFullsPiAdTrobats] = useState({ pi: true, ad: true })
+  // Si el fitxer pujat portava el full "ESFERA AD" — si no, cal avisar-ho
+  // perquè no passi desapercebut que el NESE detallat no s'ha actualitzat
+  // en aquesta pujada. El PI no en depèn (ve del full principal).
+  const [fullAdTrobat, setFullAdTrobat] = useState(true)
   // Actualització de SIEI: fitxer a part ("14b. Alumnes NESE"), no del
   // mateix llibre que ESFERA/ESFERA PI/AD, així que va per la seva pròpia
   // pujada en lloc d'enganxar-se al flux de dalt.
@@ -227,7 +232,7 @@ export default function Alumnes() {
     if (!file) return
     setErrorFitxer(null)
     setPrevisualitzacio(null)
-    setFullsPiAdTrobats({ pi: true, ad: true })
+    setFullAdTrobat(true)
 
     const reader = new FileReader()
     reader.onload = (event) => {
@@ -236,15 +241,13 @@ export default function Alumnes() {
         const primerFull = workbook.Sheets[workbook.SheetNames[0]]
         const files = XLSX.utils.sheet_to_json(primerFull, { header: 1, raw: false })
 
-        // PI i NESE detallat: pestanyes a part del mateix llibre. Si no hi
-        // són (fitxer parcial o exportació antiga), es continua igualment
-        // amb tothom a false/buit — no bloqueja la importació del llistat
-        // principal, que és la part imprescindible.
-        const fullPI = workbook.Sheets[FULL_ESFERA_PI]
+        // NESE detallat: pestanya a part del mateix llibre ("ESFERA AD").
+        // Si no hi és (fitxer parcial o exportació antiga), es continua
+        // igualment amb tothom a false/buit — no bloqueja la importació
+        // del llistat principal, que és la part imprescindible. El PI, en
+        // canvi, ja ve al mateix full principal (columna "Curriculum -
+        // Afectat per un Pl?"): no calia cap pestanya a part per ell.
         const fullAD = workbook.Sheets[FULL_ESFERA_AD]
-        const resumPI = fullPI
-          ? llegeixResumPI(XLSX.utils.sheet_to_json(fullPI, { header: 1, raw: false }))
-          : new Map()
         const resumAD = fullAD
           ? llegeixResumAD(XLSX.utils.sheet_to_json(fullAD, { header: 1, raw: false }))
           : new Map()
@@ -262,7 +265,7 @@ export default function Alumnes() {
           const esNese = fila[COL_NESE]?.toString().trim().toLowerCase() === 'sí'
           const neseMotiu = fila[COL_NESE_MOTIU]?.toString().trim() ?? ''
           const neseEconomic = esNese && neseMotiu.toLowerCase().includes(MOTIU_NESE_REDUCCIO)
-          const pi = resumPI.get(idalu)?.pi ?? false
+          const pi = fila[COL_PI]?.toString().trim().toLowerCase() === 'sí'
           const ad = resumAD.get(idalu)
           if (!perClasse[curs]) perClasse[curs] = []
           perClasse[curs].push({
@@ -301,7 +304,7 @@ export default function Alumnes() {
             }))
         }
         setPrevisualitzacio(previsualitzat)
-        setFullsPiAdTrobats({ pi: Boolean(fullPI), ad: Boolean(fullAD) })
+        setFullAdTrobat(Boolean(fullAD))
       } catch (err) {
         setErrorFitxer(`No s'ha pogut llegir el fitxer: ${err.message}`)
       }
@@ -566,14 +569,12 @@ export default function Alumnes() {
 
         {previsualitzacio && (
           <div style={{ marginTop: 16 }}>
-            {(!fullsPiAdTrobats.pi || !fullsPiAdTrobats.ad) && (
+            {!fullAdTrobat && (
               <div className="placeholder-box" style={{ borderStyle: 'solid', borderColor: 'var(--amber-dark)', marginBottom: 12 }}>
-                <strong>Atenció:</strong> aquest fitxer no porta{' '}
-                {!fullsPiAdTrobats.pi && !fullsPiAdTrobats.ad
-                  ? 'els fulls "ESFERA PI" ni "ESFERA AD"'
-                  : !fullsPiAdTrobats.pi ? 'el full "ESFERA PI"' : 'el full "ESFERA AD"'}
-                . El PI i el NESE detallat de tothom quedaran a "No" en aquesta importació — puja el
-                llibre sencer si vols actualitzar-los.
+                <strong>Atenció:</strong> aquest fitxer no porta el full &quot;ESFERA AD&quot;.
+                El NESE detallat de tothom quedarà a &quot;No&quot; en aquesta importació — puja el
+                llibre sencer si vols actualitzar-lo. (El PI no es veu afectat: ve del full
+                principal.)
               </div>
             )}
             <p style={{ fontSize: 14, fontWeight: 600 }}>
