@@ -15,6 +15,8 @@ export default function AtencioDiversitat() {
   const [carregant, setCarregant] = useState(true)
   const [missatge, setMissatge] = useState(null)
   const [classeFiltrada, setClasseFiltrada] = useState('')
+  const [piObert, setPiObert] = useState(true)
+  const [adObert, setAdObert] = useState(true)
 
   useEffect(() => {
     async function carrega() {
@@ -153,75 +155,102 @@ export default function AtencioDiversitat() {
       </div>
 
       <div style={{ marginTop: 24 }}>
-        <h3 style={{ fontSize: 18 }}>
-          Alumnes amb PI <span style={{ fontWeight: 400, color: 'var(--ink-soft)', fontSize: 14 }}>({totalPi})</span>
-        </h3>
+        <button
+          type="button"
+          onClick={() => setPiObert((v) => !v)}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6, background: 'transparent',
+            border: 'none', padding: 0, cursor: 'pointer', font: 'inherit', color: 'inherit',
+          }}
+        >
+          <span style={{ fontSize: 12, color: 'var(--ink-soft)', width: 14 }}>{piObert ? '▾' : '▸'}</span>
+          <h3 style={{ fontSize: 18, margin: 0 }}>
+            Alumnes amb PI <span style={{ fontWeight: 400, color: 'var(--ink-soft)', fontSize: 14 }}>({totalPi})</span>
+          </h3>
+        </button>
 
-        {ambPi.length === 0 ? (
-          <p className="nota" style={{ marginTop: 8 }}>
-            Cap alumne amb PI{classeFiltrada ? ` a ${classeFiltrada}` : ''}.
-          </p>
-        ) : (
-          ambPi.map(([curs, llista]) => (
-            <div key={curs} style={{ marginTop: 16 }}>
-              <p style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>
-                {curs} <span style={{ fontWeight: 400, color: 'var(--ink-soft)' }}>({llista.length})</span>
-              </p>
-              <ul className="roster">
-                {llista.map((a) => (
-                  <li key={a.id} className="roster-row">
-                    <span className="roster-name">{a.nom}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))
+        {piObert && (
+          ambPi.length === 0 ? (
+            <p className="nota" style={{ marginTop: 8 }}>
+              Cap alumne amb PI{classeFiltrada ? ` a ${classeFiltrada}` : ''}. Si n&apos;hi hauria
+              d&apos;haver, comprova que el darrer fitxer pujat a Alumnes portava el full
+              &quot;ESFERA PI&quot; — si falta, la pantalla de pujada n&apos;avisa amb un requadre
+              taronja abans de desar.
+            </p>
+          ) : (
+            ambPi.map(([curs, llista]) => (
+              <div key={curs} style={{ marginTop: 16 }}>
+                <p style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>
+                  {curs} <span style={{ fontWeight: 400, color: 'var(--ink-soft)' }}>({llista.length})</span>
+                </p>
+                <ul className="roster">
+                  {llista.map((a) => (
+                    <li key={a.id} className="roster-row">
+                      <span className="roster-name">{a.nom}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))
+          )
         )}
       </div>
 
       <div style={{ marginTop: 32, borderTop: '1px solid var(--line)', paddingTop: 20 }}>
-        <h3 style={{ fontSize: 18 }}>
-          Esfera AD — NESE <span style={{ fontWeight: 400, color: 'var(--ink-soft)', fontSize: 14 }}>({ambAd.length})</span>
-        </h3>
+        <button
+          type="button"
+          onClick={() => setAdObert((v) => !v)}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6, background: 'transparent',
+            border: 'none', padding: 0, cursor: 'pointer', font: 'inherit', color: 'inherit',
+          }}
+        >
+          <span style={{ fontSize: 12, color: 'var(--ink-soft)', width: 14 }}>{adObert ? '▾' : '▸'}</span>
+          <h3 style={{ fontSize: 18, margin: 0 }}>
+            Esfera AD — NESE <span style={{ fontWeight: 400, color: 'var(--ink-soft)', fontSize: 14 }}>({ambAd.length})</span>
+          </h3>
+        </button>
         <p className="nota" style={{ marginTop: 4 }}>
           &quot;NESE&quot; és el flag de la columna F del full (0/1); &quot;Motiu&quot; ve de
           la columna E, en text lliure — no sempre coincideixen (vegeu
           sicAlumnatIndicadors.js).
         </p>
 
-        {ambAd.length === 0 ? (
-          <p className="nota" style={{ marginTop: 8 }}>
-            Cap alumne amb dades de NESE{classeFiltrada ? ` a ${classeFiltrada}` : ''}.
-          </p>
-        ) : (
-          <div style={{ overflowX: 'auto', marginTop: 8 }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-              <thead>
-                <tr style={{ borderBottom: '2px solid var(--line)', textAlign: 'left' }}>
-                  <th style={{ padding: '6px 8px' }}>Classe</th>
-                  <th style={{ padding: '6px 8px' }}>Alumne</th>
-                  <th style={{ padding: '6px 8px' }}>Motiu</th>
-                  <th style={{ padding: '6px 8px' }}>NESE</th>
-                  <th style={{ padding: '6px 8px' }}>Tipus A</th>
-                  <th style={{ padding: '6px 8px' }}>Tipus B</th>
-                  <th style={{ padding: '6px 8px' }}>Tipus C</th>
-                </tr>
-              </thead>
-              <tbody>
-                {ambAd.map((a) => (
-                  <tr key={a.id} style={{ borderBottom: '1px solid var(--line)' }}>
-                    <td style={{ padding: '6px 8px' }}>{a.curs}</td>
-                    <td style={{ padding: '6px 8px' }}>{a.nom}</td>
-                    <td style={{ padding: '6px 8px' }}>{a.adMotiu || '—'}</td>
-                    <td style={{ padding: '6px 8px' }}>{a.adFlag ? 'Sí' : '—'}</td>
-                    <td style={{ padding: '6px 8px' }}>{a.adTipusA ? 'Sí' : '—'}</td>
-                    <td style={{ padding: '6px 8px' }}>{a.adTipusB ? 'Sí' : '—'}</td>
-                    <td style={{ padding: '6px 8px' }}>{a.adTipusC ? 'Sí' : '—'}</td>
+        {adObert && (
+          ambAd.length === 0 ? (
+            <p className="nota" style={{ marginTop: 8 }}>
+              Cap alumne amb dades de NESE{classeFiltrada ? ` a ${classeFiltrada}` : ''}.
+            </p>
+          ) : (
+            <div style={{ overflowX: 'auto', marginTop: 8 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead>
+                  <tr style={{ borderBottom: '2px solid var(--line)', textAlign: 'left' }}>
+                    <th style={{ padding: '6px 8px' }}>Classe</th>
+                    <th style={{ padding: '6px 8px' }}>Alumne</th>
+                    <th style={{ padding: '6px 8px' }}>Motiu</th>
+                    <th style={{ padding: '6px 8px' }}>NESE</th>
+                    <th style={{ padding: '6px 8px' }}>Tipus A</th>
+                    <th style={{ padding: '6px 8px' }}>Tipus B</th>
+                    <th style={{ padding: '6px 8px' }}>Tipus C</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {ambAd.map((a) => (
+                    <tr key={a.id} style={{ borderBottom: '1px solid var(--line)' }}>
+                      <td style={{ padding: '6px 8px' }}>{a.curs}</td>
+                      <td style={{ padding: '6px 8px' }}>{a.nom}</td>
+                      <td style={{ padding: '6px 8px' }}>{a.adMotiu || '—'}</td>
+                      <td style={{ padding: '6px 8px' }}>{a.adFlag ? 'Sí' : '—'}</td>
+                      <td style={{ padding: '6px 8px' }}>{a.adTipusA ? 'Sí' : '—'}</td>
+                      <td style={{ padding: '6px 8px' }}>{a.adTipusB ? 'Sí' : '—'}</td>
+                      <td style={{ padding: '6px 8px' }}>{a.adTipusC ? 'Sí' : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
         )}
       </div>
     </div>
