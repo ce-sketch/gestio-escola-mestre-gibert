@@ -653,19 +653,21 @@ export default function Alumnes() {
           l&apos;EE (tothom que hi surt llistat) i el SIEI (la seva columna pròpia) dels
           alumnes que ja hi ha a la llista — no en crea de nous ni en toca cap altra dada.
         </p>
-        <label
-          className="btn-ghost"
-          style={{ display: 'inline-block', marginTop: 8, border: '1px solid', borderRadius: 8, padding: '8px 14px', fontSize: 13, cursor: pujantSiei ? 'default' : 'pointer' }}
-        >
-          {pujantSiei ? 'Actualitzant…' : '📂 Tria el fitxer "14b. Alumnes NESE"'}
-          <input
-            type="file"
-            accept=".xlsx,.xls"
-            style={{ display: 'none' }}
-            disabled={pujantSiei}
-            onChange={(e) => { pujaSiei(e.target.files?.[0]); e.target.value = '' }}
-          />
-        </label>
+        <BotoDrive
+          onFitxer={(e) => pujaSiei(e.target.files?.[0])}
+          tipus="fulls"
+          etiqueta='Tria el fitxer "14b. Alumnes NESE" del Drive'
+          onError={(text) => setMissatgeSiei({ type: 'error', text })}
+          disabled={pujantSiei}
+        />
+        <input
+          type="file"
+          accept=".xlsx,.xls"
+          style={{ marginTop: 8 }}
+          disabled={pujantSiei}
+          onChange={(e) => { pujaSiei(e.target.files?.[0]); e.target.value = '' }}
+        />
+        {pujantSiei && <p style={{ marginTop: 8, fontSize: 13, color: 'var(--ink-soft)' }}>Actualitzant…</p>}
         {missatgeSiei && (
           <p style={{ marginTop: 8, fontSize: 13, color: missatgeSiei.type === 'error' ? 'var(--red)' : 'var(--green)' }}>
             {missatgeSiei.text}
