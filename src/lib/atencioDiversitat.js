@@ -4,18 +4,24 @@ import { useState } from 'react'
 // pantalles d'entrada de notes (TEE, VL/CL, Lectoescriptura) — que un
 // alumne surti destacat no depèn de res que es calculi aquí, sinó
 // directament dels camps que ja es desen a cada alumne en pujar el
-// llistat (`pi`, `adTipusA`, `adTipusC`) i el SIEI (`siei`, del document
-// a part "14b. Alumnes NESE").
+// llistat (`pi`, `adFlag`, `adTipusA`, `adTipusC`) i el SIEI (`siei`,
+// del document a part "14b. Alumnes NESE").
 //
 // Un alumne pot complir més d'un criteri alhora (per exemple, tenir PI i
 // ser Nouvingut): com que a la taula només hi cap un color per fila, es
 // fa servir l'ordre de la llegenda com a prioritat — el primer criteri
-// que compleixi és el que es veu. "TCA" es deixa pendent (encara no se
-// sap d'on ha de sortir la dada) i no hi entra.
+// que compleixi és el que es veu.
+//
+// TCA (Trastorn que Condiciona l'Aprenentatge): la columna F de l'ESFERA
+// AD (`adFlag`, el flag general de NESE) inclou més casos que la G
+// (`adTipusA`, el Tipus A NEE) — coses com altes capacitats o dislèxies
+// hi compten com a NESE però no arriben a Tipus A. Aquesta diferència
+// (té el flag F però no el G) és exactament el TCA.
 export const LLEGENDA_DIVERSITAT = [
   { id: 'siei', label: 'Alumnat SIEI', color: '#FF0000', compleix: (a) => Boolean(a?.siei) },
   { id: 'neeA', label: 'Alumnat amb reconeixement NEE A, no SIEI', color: '#C0504D', compleix: (a) => Boolean(a?.adTipusA) && !a?.siei },
   { id: 'pi', label: 'Alumnat amb PI', color: '#FF00FF', compleix: (a) => Boolean(a?.pi) },
+  { id: 'tca', label: "Alumnat amb TCA", color: '#FFA500', compleix: (a) => Boolean(a?.adFlag) && !a?.adTipusA },
   { id: 'nouvingut', label: 'Nouvingut', color: '#00FF00', compleix: (a) => Boolean(a?.adTipusC) },
 ]
 
