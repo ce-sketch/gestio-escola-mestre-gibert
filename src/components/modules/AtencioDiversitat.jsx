@@ -49,26 +49,19 @@ export default function AtencioDiversitat() {
     [alumnes, classeFiltrada]
   )
 
-  // Alumnes amb PI, per classe i endreçats per cognom dins de cada una
+  // Alumnes amb PI, en una llista plana ordenada per classe i cognom
   // (el nom es desa "Cognom, Nom", així que ordenar pel nom tal qual ja
-  // ordena per cognom). El filtre d'àrea només afecta aquest bloc: l'AD
-  // no té àrees.
+  // ordena per cognom) — es mostren en taula, amb una columna per àrea,
+  // igual que la taula d'Esfera AD. El filtre d'àrea només afecta aquest
+  // bloc: l'AD no té àrees.
   const ambPi = useMemo(() => {
     const campFiltre = areaPiFiltrada ? campArea(areaPiFiltrada) : null
-    const perClasse = {}
-    for (const a of alumnesFiltrats) {
-      if (!a.pi) continue
-      if (campFiltre && !a[campFiltre]) continue
-      if (!perClasse[a.curs]) perClasse[a.curs] = []
-      perClasse[a.curs].push(a)
-    }
-    for (const llista of Object.values(perClasse)) {
-      llista.sort((x, y) => (x.nom ?? '').localeCompare(y.nom ?? '', 'ca'))
-    }
-    return Object.entries(perClasse).sort(([a], [b]) => comparaCursos(a, b))
+    return alumnesFiltrats
+      .filter((a) => a.pi && (!campFiltre || a[campFiltre]))
+      .sort((a, b) => comparaCursos(a.curs, b.curs) || (a.nom ?? '').localeCompare(b.nom ?? '', 'ca'))
   }, [alumnesFiltrats, areaPiFiltrada])
 
-  const totalPi = ambPi.reduce((acc, [, llista]) => acc + llista.length, 0)
+  const totalPi = ambPi.length
 
   // Qualsevol alumne amb alguna dada de l'ESFERA AD (motiu, flag, o algun
   // dels tres tipus), també per classe i cognom.
@@ -199,20 +192,38 @@ export default function AtencioDiversitat() {
                 : `Cap alumne amb PI${classeFiltrada ? ` a ${classeFiltrada}` : ''}. Si n'hi hauria d'haver, comprova que el darrer fitxer pujat a Alumnes portava el full "ESFERA PI" — si falta, la pantalla de pujada n'avisa amb un requadre taronja abans de desar.`}
             </p>
           ) : (
-            ambPi.map(([curs, llista]) => (
-              <div key={curs} style={{ marginTop: 16 }}>
-                <p style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>
-                  {curs} <span style={{ fontWeight: 400, color: 'var(--ink-soft)' }}>({llista.length})</span>
-                </p>
-                <ul className="roster">
-                  {llista.map((a) => (
-                    <li key={a.id} className="roster-row">
-                      <span className="roster-name">{a.nom}</span>
-                    </li>
+            <div style={{ overflowX: 'auto', marginTop: 8 }}>
+              <table style={{ borderCollapse: 'collapse', fontSize: 13, minWidth: 640 }}>
+                <thead>
+                  <tr style={{ background: 'var(--bg-soft, #f5f5f0)', textAlign: 'left' }}>
+                    <th style={{ padding: '6px 8px' }}>Classe</th>
+                    <th style={{ padding: '6px 8px' }}>Alumne</th>
+                    {PI_AREES.map((a) => (
+                      <th key={a.id} style={{ padding: '6px 8px', fontWeight: 600 }}>{a.label}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {ambPi.map((a) => (
+                    <tr key={a.id} style={{ borderBottom: '1px solid var(--line)' }}>
+                      <td style={{ padding: '6px 8px' }}>{a.curs}</td>
+                      <td style={{ padding: '6px 8px' }}>{a.nom}</td>
+                      {PI_AREES.map((area) => {
+                        const hiEs = Boolean(a[campArea(area.id)])
+                        return (
+                          <td
+                            key={area.id}
+                            style={{ padding: '6px 8px', background: hiEs ? 'var(--green-soft, #d6f5df)' : undefined, fontWeight: hiEs ? 600 : 400 }}
+                          >
+                            {hiEs ? 'Sí' : 'No'}
+                          </td>
+                        )
+                      })}
+                    </tr>
                   ))}
-                </ul>
-              </div>
-            ))
+                </tbody>
+              </table>
+            </div>
           )
         )}
       </div>
