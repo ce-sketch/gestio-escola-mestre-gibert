@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 
-import { llegeixResumPI, llegeixResumAD, llegeixResumSIEI, llegeixResumPIPerArea } from './sicAlumnatIndicadors'
+import { llegeixResumPI, llegeixResumAD, llegeixResumSIEI, llegeixResumPIPerArea, PI_AREES } from './sicAlumnatIndicadors'
 
 // Files tal com surten de XLSX.utils.sheet_to_json(full, { header: 1,
 // raw: false }) sobre el full "ESFERA PI" real (curs 2026-27, mostra).
@@ -107,16 +107,49 @@ const FILA_PIAREA_TOTALS_CLASSE = ['1 A', undefined, 8, 4, 28, 31, 32, 19, 0, 10
 const FILA_PIAREA_SUBCAPCALERA = ['Identificador de l’alumne/a', 23, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined]
 const FILA_PIAREA_SENSE_CAP_AREA = [20821843338, 'Ahmed , Amal Adeel', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No', undefined]
 const FILA_PIAREA_AMB_EFISICA = [19776792459, 'José Carné, Dana', 'Sí', 'No', 'No', 'No', 'No', 'No', 'No', 'No', undefined]
+// Fila real d'un bloc d'Infantil (I4 A): les columnes de Primària (2-10)
+// buides, i les d'Infantil (11-14) amb valors — aquest alumne té "Anglès".
+const FILA_PIAREA_INFANTIL_AMB_ANGLES = [
+  22730684057, 'Álvarez Almirón, Leo', undefined, undefined, undefined, undefined, undefined,
+  undefined, undefined, undefined, undefined, 'No', 'No', 'Sí', 'No',
+]
+const FILA_PIAREA_INFANTIL_SENSE_CAP_AREA = [
+  20134522817, 'Barceló Aledo, Isona', undefined, undefined, undefined, undefined, undefined,
+  undefined, undefined, undefined, undefined, 'No', 'No', 'No', 'No',
+]
 
 describe('llegeixResumPIPerArea', () => {
-  it('llegeix les 9 àrees per alumne', () => {
+  it('llegeix les 9 àrees de Primària per alumne', () => {
     const mapa = llegeixResumPIPerArea([FILA_PIAREA_SENSE_CAP_AREA, FILA_PIAREA_AMB_EFISICA])
-    expect(mapa.get('20821843338').arees).toEqual({
+    expect(mapa.get('20821843338').arees).toMatchObject({
       efisica: false, artistica: false, matematiques: false, castella: false,
       catala: false, angles: false, religio: false, medi: false, valors: false,
     })
     expect(mapa.get('19776792459').arees.efisica).toBe(true)
     expect(mapa.get('19776792459').arees.matematiques).toBe(false)
+  })
+
+  it('llegeix les àrees pròpies d\'Infantil, a columnes diferents de Primària', () => {
+    const mapa = llegeixResumPIPerArea([FILA_PIAREA_INFANTIL_AMB_ANGLES, FILA_PIAREA_INFANTIL_SENSE_CAP_AREA])
+    const amb = mapa.get('22730684057').arees
+    expect(amb.angles).toBe(true) // ve del bloc d'Infantil, no del de Primària
+    expect(amb.descobertaEntorn).toBe(false)
+    expect(amb.descobertaMateix).toBe(false)
+    expect(amb.efisica).toBe(false) // les columnes de Primària hi eren buides
+
+    const sense = mapa.get('20134522817').arees
+    expect(sense.angles).toBe(false)
+  })
+
+  it('un alumne de Primària amb Anglès no el perd per l\'OR amb Infantil', () => {
+    // Un alumne de Primària té l'Anglès a la columna 7; les columnes
+    // d'Infantil (11-14) li queden buides. L'OR entre tots dos blocs no
+    // ha de convertir aquest "Sí" real en "No".
+    const filaPrimariaAmbAngles = [
+      19776792459, 'José Carné, Dana', 'No', 'No', 'No', 'No', 'No', 'Sí', 'No', 'No', undefined,
+    ]
+    const mapa = llegeixResumPIPerArea([filaPrimariaAmbAngles])
+    expect(mapa.get('19776792459').arees.angles).toBe(true)
   })
 
   it('ignora la fila de totals de classe ("1 A"), que no és cap alumne', () => {
@@ -140,5 +173,17 @@ describe('llegeixResumPIPerArea', () => {
   it('torna un Map buit si no hi ha files', () => {
     expect(llegeixResumPIPerArea([]).size).toBe(0)
     expect(llegeixResumPIPerArea(undefined).size).toBe(0)
+  })
+})
+
+describe('PI_AREES', () => {
+  it('inclou les 9 àrees de Primària i les 3 pròpies d\'Infantil, sense repetir "Anglès"', () => {
+    const ids = PI_AREES.map((a) => a.id)
+    expect(ids).toHaveLength(12)
+    expect(new Set(ids).size).toBe(12) // cap id repetit
+    expect(ids).toContain('angles')
+    expect(ids).toContain('descobertaEntorn')
+    expect(ids).toContain('comunicacioLlenguatges')
+    expect(ids).toContain('descobertaMateix')
   })
 })

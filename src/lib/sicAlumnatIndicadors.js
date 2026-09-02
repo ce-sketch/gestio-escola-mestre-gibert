@@ -87,28 +87,64 @@ export function llegeixResumPI(files) {
 // totes les classes — a "ESFERA PI" cada full de classe font les porta
 // en un ordre diferent, així que sumar-les tal qual barrejaria àrees.
 // Per això aquest és el full fiable per al desglossament per àrea.
+//
+// Infantil (I3/I4/I5) té les seves pròpies àrees, a columnes diferents de
+// les de Primària — un alumne d'Infantil només té valors reals al bloc
+// de columnes d'Infantil, i les de Primària li queden buides (i a
+// l'inrevés per Primària). L'"Anglès" es comparteix entre tots dos
+// blocs, ja que és la mateixa àrea a efectes pràctics.
+//
+// ⚠️ El bloc "I3 B" concret d'aquest curs no porta IDALU a les seves
+// files (buit al fitxer origen, no un error del lector): aquests ~22
+// alumnes es queden sense desglossament per àrea fins que el centre ho
+// arregli al full.
 const PI_AREA_COL_IDALU = 0
 const PI_AREA_COL_NOM = 1
 // Un IDALU real en té 11 dígits; les files de totals de classe (p. ex.
 // "1 A" a la columna A) també passen el filtre de "només dígits" un cop
 // netejades ("1"), així que cal un mínim de llargada per descartar-les.
 const PI_AREA_IDALU_LLARGADA_MINIMA = 8
+
+const PI_AREES_COLS_PRIMARIA = [
+  { id: 'efisica', col: 2 },
+  { id: 'artistica', col: 3 },
+  { id: 'matematiques', col: 4 },
+  { id: 'castella', col: 5 },
+  { id: 'catala', col: 6 },
+  { id: 'angles', col: 7 },
+  { id: 'religio', col: 8 },
+  { id: 'medi', col: 9 },
+  { id: 'valors', col: 10 },
+]
+const PI_AREES_COLS_INFANTIL = [
+  { id: 'descobertaEntorn', col: 11 },
+  { id: 'comunicacioLlenguatges', col: 12 },
+  { id: 'angles', col: 13 }, // la mateixa "angles" que a Primària
+  { id: 'descobertaMateix', col: 14 },
+]
+
+/** Totes les àrees de PI (Primària + Infantil, sense repetir "Anglès"),
+ *  amb l'etiqueta per mostrar a la UI — per a filtres i columnes de
+ *  taula. */
 export const PI_AREES = [
-  { id: 'efisica', label: 'Educació física', col: 2 },
-  { id: 'artistica', label: 'Educació artística', col: 3 },
-  { id: 'matematiques', label: 'Matemàtiques', col: 4 },
-  { id: 'castella', label: 'Llengua castellana', col: 5 },
-  { id: 'catala', label: 'Llengua catalana', col: 6 },
-  { id: 'angles', label: 'Anglès', col: 7 },
-  { id: 'religio', label: 'Religió', col: 8 },
-  { id: 'medi', label: 'Coneixement del medi', col: 9 },
-  { id: 'valors', label: 'Valors socials i cívics', col: 10 },
+  { id: 'efisica', label: 'Educació física' },
+  { id: 'artistica', label: 'Educació artística' },
+  { id: 'matematiques', label: 'Matemàtiques' },
+  { id: 'castella', label: 'Llengua castellana' },
+  { id: 'catala', label: 'Llengua catalana' },
+  { id: 'angles', label: 'Anglès' },
+  { id: 'religio', label: 'Religió' },
+  { id: 'medi', label: 'Coneixement del medi' },
+  { id: 'valors', label: 'Valors socials i cívics' },
+  { id: 'descobertaEntorn', label: "Descoberta de l'entorn" },
+  { id: 'comunicacioLlenguatges', label: 'Comunicació i llenguatges' },
+  { id: 'descobertaMateix', label: "Descoberta d'un mateix i dels altres" },
 ]
 
 /**
  * Llegeix el full "ESFERA PI (1)" i torna un Map IDALU → { arees }, amb
- * `arees` un objecte `{ efisica: bool, artistica: bool, ... }` — un booleà
- * per cada element de `PI_AREES`.
+ * `arees` un objecte `{ efisica: bool, ..., descobertaEntorn: bool, ... }`
+ * — un booleà per cada element de `PI_AREES`.
  *
  * `files` és el resultat de `XLSX.utils.sheet_to_json(full, { header: 1,
  * raw: false })` sobre el full "ESFERA PI (1)".
@@ -123,8 +159,16 @@ export function llegeixResumPIPerArea(files) {
     // IDALU vàlid).
     if (!idalu || idalu.length < PI_AREA_IDALU_LLARGADA_MINIMA || !nom) continue
     const arees = {}
-    for (const { id, col } of PI_AREES) {
+    // Primer Primària, després Infantil amb OR: un alumne només té
+    // valors reals en un dels dos blocs de columnes, l'altre li queda
+    // buit — l'OR evita que el bloc buit trepitgi el valor real de
+    // l'altre (rellevant sobretot per "angles", compartida entre tots
+    // dos).
+    for (const { id, col } of PI_AREES_COLS_PRIMARIA) {
       arees[id] = siNoOBooleaABoolean(fila?.[col])
+    }
+    for (const { id, col } of PI_AREES_COLS_INFANTIL) {
+      arees[id] = Boolean(arees[id]) || siNoOBooleaABoolean(fila?.[col])
     }
     mapa.set(idalu, { arees })
   }
