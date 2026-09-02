@@ -7,7 +7,8 @@ import { taulesNotesClasse } from '../../../lib/notesTaules'
 import { cursEscolarActual } from '../../../lib/cursEscolar'
 import { classesActives } from '../../../lib/provesActives'
 import { grauPrimaria } from '../../../lib/rubricaLectura'
-import { taulaPonderacioLlengua } from '../../../lib/ponderacioLlengua'
+import { taulaPonderacioLlengua, carregaPonderacioLlengua, desaPonderacioLlengua, grupNivell } from '../../../lib/ponderacioLlengua'
+import { esAdmin } from '../../../lib/roles'
 import { exportaExcel, exportaPDF } from '../../../lib/exportTaula'
 
 /**
@@ -29,6 +30,10 @@ export default function NotesGenerals() {
   const [desantClau, setDesantClau] = useState(null) // clau "alumneId__areaId" que s'està desant
   const [configProves, setConfigProves] = useState(null)
   const [dictat, setDictat] = useState(null) // { escoltant, transcripcio, resultat: {numLlista: {areaId: nivellId}} }
+  const [ponderacio, setPonderacio] = useState(null) // config de Firestore, o PONDERACIO_DEFECTE si no n'hi ha
+  const [editantPonderacio, setEditantPonderacio] = useState(false)
+  const [ponderacioEdicio, setPonderacioEdicio] = useState(null) // còpia editable mentre s'edita
+  const [desantPonderacio, setDesantPonderacio] = useState(false)
 
   useEffect(() => {
     async function carrega() {
@@ -59,6 +64,10 @@ export default function NotesGenerals() {
     }
     carrega()
   }, [cursEscolarId])
+
+  useEffect(() => {
+    carregaPonderacioLlengua().then(setPonderacio).catch(() => setPonderacio(null))
+  }, [])
 
   // Només les classes que posen notes aquest trimestre. Sense això s'hi
   // podien introduir notes de classes que no en posen, i després no
@@ -282,6 +291,41 @@ export default function NotesGenerals() {
     return [{ nom: `Notes ${classe}`, files: [capçalera, ...files], grups }]
   }
 
+  /** Comença a editar la ponderació del nivell de la classe oberta —
+   *  només l'administrador hi arriba (el botó que ho crida ja només surt
+   *  per a ell), però es comprova igualment per si algú hi arribés d'una
+   *  altra manera. */
+  function comencaEdicioPonderacio() {
+    const grup = grupNivell(classe)
+    if (!grup) return
+    const taulaActual = taulaPonderacioLlengua(classe, ponderacio)
+    // Còpia profunda: mentre s'edita, no es toca res del que ja es
+    // mostra (si es cancel·la, no ha de quedar cap rastre del canvi).
+    setPonderacioEdicio(taulaActual.periodes.map((p) => ({ ...p })))
+    setEditantPonderacio(true)
+  }
+
+  function canviaCellaPonderacio(index, camp, valor) {
+    setPonderacioEdicio((prev) => prev.map((p, i) => (i === index ? { ...p, [camp]: valor } : p)))
+  }
+
+  async function desaEdicioPonderacio() {
+    const grup = grupNivell(classe)
+    if (!grup) return
+    setDesantPonderacio(true)
+    try {
+      const nova = { ...(ponderacio ?? {}), [grup]: { periodes: ponderacioEdicio } }
+      await desaPonderacioLlengua(nova)
+      setPonderacio(nova)
+      setEditantPonderacio(false)
+      setMissatge({ type: 'ok', text: 'Ponderació desada.' })
+    } catch (err) {
+      setMissatge({ type: 'error', text: `No s'ha pogut desar la ponderació: ${err.message}` })
+    } finally {
+      setDesantPonderacio(false)
+    }
+  }
+
   /**
    * Un full per cada classe de primària, amb la mateixa forma que
    * `taulaClasseActual`. Cada classe pot tenir àrees diferents (p. ex.
@@ -363,43 +407,124 @@ export default function NotesGenerals() {
           </p>
 
           {(() => {
-            const taula = taulaPonderacioLlengua(classe)
+            const taula = taulaPonderacioLlengua(classe, ponderacio)
             if (!taula) return null
+            const potEditar = esAdmin(auth.currentUser)
             return (
-              <div className="caixa" style={{ marginTop: 16, maxWidth: 520 }}>
-                <p style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>
-                  Ponderació qualificació de l&apos;àmbit lingüístic
-                </p>
-                <p className="nota" style={{ marginBottom: 8 }}>
-                  Català i castellà, {classe}. Encara no calcula la nota — de moment és només
-                  informativa (properament s&apos;hi podrà editar, i lligar-la amb TEE/CL/VL).
-                </p>
-                <div style={{ overflowX: 'auto' }}>
-                  <table style={{ borderCollapse: 'collapse', fontSize: 12 }}>
-                    <thead>
-                      <tr style={{ background: 'var(--bg-soft, #f5f5f0)', textAlign: 'left' }}>
-                        <th style={{ padding: '4px 10px' }} />
-                        {taula.periodes.map((p) => (
-                          <th key={p.id} style={{ padding: '4px 10px', fontWeight: 600 }}>{p.id}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr style={{ borderTop: '1px solid var(--line)' }}>
-                        <td style={{ padding: '4px 10px', fontWeight: 500 }}>Comunicació oral</td>
-                        {taula.periodes.map((p) => <td key={p.id} style={{ padding: '4px 10px' }}>{p.comunicacioOral}</td>)}
-                      </tr>
-                      <tr style={{ borderTop: '1px solid var(--line)' }}>
-                        <td style={{ padding: '4px 10px', fontWeight: 500 }}>Expressió escrita</td>
-                        {taula.periodes.map((p) => <td key={p.id} style={{ padding: '4px 10px' }}>{p.expressioEscrita}</td>)}
-                      </tr>
-                      <tr style={{ borderTop: '1px solid var(--line)' }}>
-                        <td style={{ padding: '4px 10px', fontWeight: 500 }}>Comprensió lectora</td>
-                        {taula.periodes.map((p) => <td key={p.id} style={{ padding: '4px 10px' }}>{p.comprensioLectora}</td>)}
-                      </tr>
-                    </tbody>
-                  </table>
+              <div className="caixa" style={{ marginTop: 16, maxWidth: 560 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+                  <div>
+                    <p style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>
+                      Ponderació qualificació de l&apos;àmbit lingüístic
+                    </p>
+                    <p className="nota" style={{ marginBottom: 8 }}>
+                      Català i castellà, {classe}. Encara no calcula la nota — de moment és només
+                      informativa (pendent de lligar-la amb TEE/CL/VL).
+                    </p>
+                  </div>
+                  {potEditar && !editantPonderacio && (
+                    <button
+                      type="button"
+                      className="btn-ghost"
+                      style={{ fontSize: 12, padding: '4px 10px', color: 'var(--navy)', borderColor: 'var(--navy)', whiteSpace: 'nowrap' }}
+                      onClick={comencaEdicioPonderacio}
+                    >
+                      Edita
+                    </button>
+                  )}
                 </div>
+
+                {editantPonderacio ? (
+                  <>
+                    <div style={{ overflowX: 'auto' }}>
+                      <table style={{ borderCollapse: 'collapse', fontSize: 12 }}>
+                        <thead>
+                          <tr style={{ background: 'var(--bg-soft, #f5f5f0)', textAlign: 'left' }}>
+                            <th style={{ padding: '4px 10px' }} />
+                            {ponderacioEdicio.map((p, i) => (
+                              <th key={i} style={{ padding: '4px 10px', fontWeight: 600 }}>
+                                <input
+                                  type="text"
+                                  value={p.id}
+                                  onChange={(e) => canviaCellaPonderacio(i, 'id', e.target.value)}
+                                  style={{ width: 110, fontSize: 12, fontWeight: 600, border: '1px solid var(--line)', borderRadius: 4, padding: '2px 4px' }}
+                                />
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {[
+                            ['comunicacioOral', 'Comunicació oral'],
+                            ['expressioEscrita', 'Expressió escrita'],
+                            ['comprensioLectora', 'Comprensió lectora'],
+                          ].map(([camp, etiqueta]) => (
+                            <tr key={camp} style={{ borderTop: '1px solid var(--line)' }}>
+                              <td style={{ padding: '4px 10px', fontWeight: 500 }}>{etiqueta}</td>
+                              {ponderacioEdicio.map((p, i) => (
+                                <td key={i} style={{ padding: '4px 10px' }}>
+                                  <input
+                                    type="text"
+                                    value={p[camp]}
+                                    onChange={(e) => canviaCellaPonderacio(i, camp, e.target.value)}
+                                    style={{ width: 110, fontSize: 12, border: '1px solid var(--line)', borderRadius: 4, padding: '2px 4px' }}
+                                  />
+                                </td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                      <button
+                        type="button"
+                        className="btn-ghost"
+                        style={{ fontSize: 12, padding: '5px 12px', color: 'var(--navy)', borderColor: 'var(--navy)' }}
+                        onClick={desaEdicioPonderacio}
+                        disabled={desantPonderacio}
+                      >
+                        {desantPonderacio ? 'Desant…' : 'Desa'}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-ghost"
+                        style={{ fontSize: 12, padding: '5px 12px' }}
+                        onClick={() => setEditantPonderacio(false)}
+                        disabled={desantPonderacio}
+                      >
+                        Cancel·la
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ borderCollapse: 'collapse', fontSize: 12 }}>
+                      <thead>
+                        <tr style={{ background: 'var(--bg-soft, #f5f5f0)', textAlign: 'left' }}>
+                          <th style={{ padding: '4px 10px' }} />
+                          {taula.periodes.map((p) => (
+                            <th key={p.id} style={{ padding: '4px 10px', fontWeight: 600 }}>{p.id}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr style={{ borderTop: '1px solid var(--line)' }}>
+                          <td style={{ padding: '4px 10px', fontWeight: 500 }}>Comunicació oral</td>
+                          {taula.periodes.map((p) => <td key={p.id} style={{ padding: '4px 10px' }}>{p.comunicacioOral}</td>)}
+                        </tr>
+                        <tr style={{ borderTop: '1px solid var(--line)' }}>
+                          <td style={{ padding: '4px 10px', fontWeight: 500 }}>Expressió escrita</td>
+                          {taula.periodes.map((p) => <td key={p.id} style={{ padding: '4px 10px' }}>{p.expressioEscrita}</td>)}
+                        </tr>
+                        <tr style={{ borderTop: '1px solid var(--line)' }}>
+                          <td style={{ padding: '4px 10px', fontWeight: 500 }}>Comprensió lectora</td>
+                          {taula.periodes.map((p) => <td key={p.id} style={{ padding: '4px 10px' }}>{p.comprensioLectora}</td>)}
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             )
           })()}
