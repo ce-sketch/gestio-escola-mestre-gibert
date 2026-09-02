@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { collection, getDocs, query, where } from 'firebase/firestore'
-import { db } from '../../firebase'
+import { addDoc, collection, doc, getDocs, limit, orderBy, query, serverTimestamp, updateDoc, where } from 'firebase/firestore'
+import { db, auth } from '../../firebase'
 import { comparaCursos } from '../../lib/ordreCursos'
 import { PI_AREES } from '../../lib/sicAlumnatIndicadors'
 import { CICLES, cicleDe } from '../../lib/rubricaTEE'
@@ -36,14 +36,20 @@ export default function AtencioDiversitat() {
   const [areaPiFiltrada, setAreaPiFiltrada] = useState('')
   const [piObert, setPiObert] = useState(true)
   const [adObert, setAdObert] = useState(true)
+  const [sieiObert, setSieiObert] = useState(true)
+  const [eeObert, setEeObert] = useState(true)
   const [descarregant, setDescarregant] = useState(null)
   const [missatgeDescarrega, setMissatgeDescarrega] = useState(null)
+
+  async function carregaAlumnes() {
+    const snap = await getDocs(query(collection(db, 'alumnes'), where('actiu', '==', true)))
+    setAlumnes(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+  }
 
   useEffect(() => {
     async function carrega() {
       try {
-        const snap = await getDocs(query(collection(db, 'alumnes'), where('actiu', '==', true)))
-        setAlumnes(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+        await carregaAlumnes()
       } catch (err) {
         setMissatge({ type: 'error', text: `No s'han pogut carregar els alumnes: ${err.message}` })
       } finally {
@@ -230,6 +236,243 @@ export default function AtencioDiversitat() {
               </tbody>
             </table>
           </div>
+        )}
+      </div>
+    )
+  }
+
+  /**
+   * Dona d'alta o de baixa un alumne per a SIEI o EE. Actualitza el camp
+   * a `alumnes` (el mateix `siei` que ja fa servir la llegenda de colors
+   * de TEE/Lectura — així una alta manual també hi surt destacada), i
+   * deixa constància a `diversitatHistoric`, que mai s'esborra: una baixa
+   * no fa desaparèixer que l'alumne hi va ser d'alta, ni quan.
+   *
+   * ⚠️ Si algú torna a pujar el fitxer SIEI ("14b. Alumnes NESE") a
+   * Alumnes, el camp `siei` es torna a sobreescriure amb el que digui
+   * aquell fitxer — una alta o baixa feta aquí manualment es podria
+   * perdre en la propera pujada. És un compromís conegut, no un bug.
+   */
+  async function canviaEstat(alumne, tipus, accio) {
+    const camp = tipus === 'SIEI' ? 'siei' : 'ee'
+    await updateDoc(doc(db, 'alumnes', alumne.id), { [camp]: accio === 'alta' })
+    await addDoc(collection(db, 'diversitatHistoric'), {
+      alumneId: alumne.id,
+      nom: alumne.nom,
+      curs: alumne.curs,
+      tipus,
+      accio,
+      data: serverTimestamp(),
+      fetPer: auth.currentUser?.email ?? null,
+    })
+    await carregaAlumnes()
+  }
+
+  /** Bloc d'alta/baixa manual per a SIEI o EE: la llista dels qui hi són
+   *  ara, un selector de classe + alumne per donar-ne d'alta un de nou, i
+   *  un històric consultable (mai s'hi esborra res). */
+  function BlocGestioManual({ tipus, camp, titol, obert, setObert }) {
+    const [classeAlta, setClasseAlta] = useState('')
+    const [alumneAltaId, setAlumneAltaId] = useState('')
+    const [donant, setDonant] = useState(null) // id de l'alumne en procés d'alta/baixa
+    const [error, setError] = useState(null)
+    const [historicObert, setHistoricObert] = useState(false)
+    const [historic, setHistoric] = useState(null) // null = encara no carregat
+
+    const actius = useMemo(
+      () => alumnes
+        .filter((a) => a[camp])
+        .sort((a, b) => comparaCursos(a.curs, b.curs) || (a.nom ?? '').localeCompare(b.nom ?? '', 'ca')),
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      [alumnes]
+    )
+    const candidats = useMemo(
+      () => alumnes
+        .filter((a) => a.curs === classeAlta && !a[camp])
+        .sort((a, b) => (a.nom ?? '').localeCompare(b.nom ?? '', 'ca')),
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      [alumnes, classeAlta]
+    )
+
+    async function donaAlta() {
+      const alumne = alumnes.find((a) => a.id === alumneAltaId)
+      if (!alumne) return
+      setError(null)
+      setDonant(alumne.id)
+      try {
+        await canviaEstat(alumne, tipus, 'alta')
+        setClasseAlta('')
+        setAlumneAltaId('')
+      } catch (err) {
+        setError(`No s'ha pogut donar d'alta: ${err.message}`)
+      } finally {
+        setDonant(null)
+      }
+    }
+
+    async function donaBaixa(alumne) {
+      setError(null)
+      setDonant(alumne.id)
+      try {
+        await canviaEstat(alumne, tipus, 'baixa')
+      } catch (err) {
+        setError(`No s'ha pogut donar de baixa: ${err.message}`)
+      } finally {
+        setDonant(null)
+      }
+    }
+
+    async function obreHistoric() {
+      const nouEstat = !historicObert
+      setHistoricObert(nouEstat)
+      if (nouEstat && historic === null) {
+        try {
+          const snap = await getDocs(query(
+            collection(db, 'diversitatHistoric'),
+            where('tipus', '==', tipus),
+            orderBy('data', 'desc'),
+            limit(100)
+          ))
+          setHistoric(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+        } catch (err) {
+          setError(`No s'ha pogut carregar l'històric: ${err.message}`)
+        }
+      }
+    }
+
+    return (
+      <div className="caixa" style={{ marginTop: 16 }}>
+        <button
+          type="button"
+          onClick={() => setObert((v) => !v)}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6, background: 'transparent',
+            border: 'none', padding: 0, cursor: 'pointer', font: 'inherit', color: 'inherit',
+          }}
+        >
+          <span style={{ fontSize: 12, color: 'var(--ink-soft)', width: 14 }}>{obert ? '▾' : '▸'}</span>
+          <h3 style={{ fontSize: 18, margin: 0 }}>
+            {titol} <span style={{ fontWeight: 400, color: 'var(--ink-soft)', fontSize: 14 }}>({actius.length})</span>
+          </h3>
+        </button>
+
+        {obert && (
+          <>
+            {error && <p style={{ color: 'var(--red)', fontSize: 12, marginTop: 8 }}>{error}</p>}
+
+            <div className="caixa-discreta" style={{ marginTop: 12 }}>
+              <p style={{ fontWeight: 600, fontSize: 13, marginBottom: 8 }}>Dona d&apos;alta un alumne</p>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                <label className="field" style={{ maxWidth: 200 }}>
+                  <span>Classe</span>
+                  <select
+                    value={classeAlta}
+                    onChange={(e) => { setClasseAlta(e.target.value); setAlumneAltaId('') }}
+                    style={{ border: '1px solid var(--line)', borderRadius: 8, padding: '8px 10px' }}
+                  >
+                    <option value="">Tria una classe</option>
+                    {classes.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </label>
+                <label className="field" style={{ maxWidth: 260 }}>
+                  <span>Alumne</span>
+                  <select
+                    value={alumneAltaId}
+                    onChange={(e) => setAlumneAltaId(e.target.value)}
+                    disabled={!classeAlta}
+                    style={{ border: '1px solid var(--line)', borderRadius: 8, padding: '8px 10px' }}
+                  >
+                    <option value="">
+                      {classeAlta ? (candidats.length ? 'Tria un alumne' : `Ja hi són tots a ${titol}`) : 'Primer tria la classe'}
+                    </option>
+                    {candidats.map((a) => <option key={a.id} value={a.id}>{a.nom}</option>)}
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  className="btn-ghost"
+                  style={{ padding: '8px 16px', color: 'var(--navy)', borderColor: 'var(--navy)' }}
+                  onClick={donaAlta}
+                  disabled={!alumneAltaId || donant !== null}
+                >
+                  {donant === alumneAltaId ? 'Donant d\'alta…' : 'Dona d\'alta'}
+                </button>
+              </div>
+            </div>
+
+            {actius.length === 0 ? (
+              <p className="nota" style={{ marginTop: 12 }}>Cap alumne d&apos;alta a {titol} ara mateix.</p>
+            ) : (
+              <ul className="roster" style={{ marginTop: 12 }}>
+                {actius.map((a) => (
+                  <li key={a.id} className="roster-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>
+                      <span className="roster-name">{a.nom}</span>
+                      <span style={{ fontSize: 12, color: 'var(--ink-soft)', marginLeft: 8 }}>{a.curs}</span>
+                    </span>
+                    <button
+                      type="button"
+                      className="btn-ghost"
+                      style={{ fontSize: 12, padding: '4px 10px', color: 'var(--red)', borderColor: 'var(--red)' }}
+                      onClick={() => donaBaixa(a)}
+                      disabled={donant !== null}
+                    >
+                      {donant === a.id ? 'Donant de baixa…' : 'Dona de baixa'}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <button
+              type="button"
+              onClick={obreHistoric}
+              style={{
+                marginTop: 14, background: 'transparent', border: 'none', padding: 0,
+                cursor: 'pointer', fontSize: 13, color: 'var(--navy)', textDecoration: 'underline',
+              }}
+            >
+              {historicObert ? 'Amaga' : 'Mostra'} l&apos;històric d&apos;altes i baixes
+            </button>
+
+            {historicObert && (
+              historic === null ? (
+                <p className="nota" style={{ marginTop: 8 }}>Carregant…</p>
+              ) : historic.length === 0 ? (
+                <p className="nota" style={{ marginTop: 8 }}>Encara no hi ha cap moviment desat.</p>
+              ) : (
+                <div style={{ overflowX: 'auto', marginTop: 8 }}>
+                  <table style={{ borderCollapse: 'collapse', fontSize: 12, minWidth: 420 }}>
+                    <thead>
+                      <tr style={{ borderBottom: '2px solid var(--line)', textAlign: 'left' }}>
+                        <th style={{ padding: '4px 8px' }}>Data</th>
+                        <th style={{ padding: '4px 8px' }}>Alumne</th>
+                        <th style={{ padding: '4px 8px' }}>Classe</th>
+                        <th style={{ padding: '4px 8px' }}>Acció</th>
+                        <th style={{ padding: '4px 8px' }}>Fet per</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {historic.map((h) => {
+                        const data = h.data?.seconds ? new Date(h.data.seconds * 1000) : null
+                        return (
+                          <tr key={h.id} style={{ borderBottom: '1px solid var(--line)' }}>
+                            <td style={{ padding: '4px 8px' }}>{data ? data.toLocaleString('ca-ES') : '—'}</td>
+                            <td style={{ padding: '4px 8px' }}>{h.nom}</td>
+                            <td style={{ padding: '4px 8px' }}>{h.curs}</td>
+                            <td style={{ padding: '4px 8px', color: h.accio === 'alta' ? 'var(--green)' : 'var(--red)', fontWeight: 600 }}>
+                              {h.accio === 'alta' ? 'Alta' : 'Baixa'}
+                            </td>
+                            <td style={{ padding: '4px 8px' }}>{h.fetPer ?? '—'}</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )
+            )}
+          </>
         )}
       </div>
     )
@@ -439,6 +682,9 @@ export default function AtencioDiversitat() {
           </>
         )}
       </div>
+
+      <BlocGestioManual tipus="SIEI" camp="siei" titol="Alumnat SIEI" obert={sieiObert} setObert={setSieiObert} />
+      <BlocGestioManual tipus="EE" camp="ee" titol="Alumnat d'Educació Especial (EE)" obert={eeObert} setObert={setEeObert} />
     </div>
   )
 }
