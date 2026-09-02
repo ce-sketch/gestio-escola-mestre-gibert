@@ -212,6 +212,26 @@ export function llegeixResumSIEI(files) {
 }
 
 /**
+ * Llegeix el full "EE ESFERA" i torna un Map IDALU → { ee: true } per a
+ * TOTS els alumnes que hi surten llistats — el propi full es diu
+ * literalment "ALUMNAT ATÈS A EE", així que sortir-hi ÉS el criteri: no
+ * cal mirar cap columna concreta (el SIEI n'és un subconjunt, no un
+ * alumne diferent).
+ *
+ * `files` és el resultat de `XLSX.utils.sheet_to_json(full, { header: 1,
+ * raw: false })` sobre el full "EE ESFERA".
+ */
+export function llegeixResumEE(files) {
+  const mapa = new Map()
+  for (const fila of files ?? []) {
+    const idalu = idaluNet(fila?.[SIEI_COL_IDALU])
+    if (!idalu) continue
+    mapa.set(idalu, { ee: true })
+  }
+  return mapa
+}
+
+/**
  * Llegeix el full "ESFERA AD" i torna un Map IDALU → { curs, neseMotiu,
  * neseFlag, tipusANee, tipusB, tipusC }.
  *

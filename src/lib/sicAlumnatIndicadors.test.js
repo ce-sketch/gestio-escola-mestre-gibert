@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 
-import { llegeixResumPI, llegeixResumAD, llegeixResumSIEI, llegeixResumPIPerArea, PI_AREES } from './sicAlumnatIndicadors'
+import { llegeixResumPI, llegeixResumAD, llegeixResumSIEI, llegeixResumEE, llegeixResumPIPerArea, PI_AREES } from './sicAlumnatIndicadors'
 
 // Files tal com surten de XLSX.utils.sheet_to_json(full, { header: 1,
 // raw: false }) sobre el full "ESFERA PI" real (curs 2026-27, mostra).
@@ -96,6 +96,24 @@ describe('llegeixResumSIEI', () => {
   it('torna un Map buit si no hi ha files', () => {
     expect(llegeixResumSIEI([]).size).toBe(0)
     expect(llegeixResumSIEI(undefined).size).toBe(0)
+  })
+})
+
+describe('llegeixResumEE', () => {
+  it('marca ee:true a tothom que surt llistat, tingui SIEI o no', () => {
+    const mapa = llegeixResumEE([FILA_EE_CAPCALERA, FILA_EE_SENSE_SIEI, FILA_EE_AMB_SIEI])
+    expect(mapa.get('19569942343')).toEqual({ ee: true }) // sense SIEI, però igualment EE
+    expect(mapa.get('19101542141')).toEqual({ ee: true })
+  })
+
+  it('ignora files sense IDALU vàlid', () => {
+    const mapa = llegeixResumEE([FILA_EE_CAPCALERA])
+    expect(mapa.size).toBe(0)
+  })
+
+  it('torna un Map buit si no hi ha files', () => {
+    expect(llegeixResumEE([]).size).toBe(0)
+    expect(llegeixResumEE(undefined).size).toBe(0)
   })
 })
 
