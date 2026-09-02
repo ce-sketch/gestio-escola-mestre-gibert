@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 
-import { llegeixResumPI, llegeixResumAD, llegeixResumSIEI } from './sicAlumnatIndicadors'
+import { llegeixResumPI, llegeixResumAD, llegeixResumSIEI, llegeixResumPIPerArea } from './sicAlumnatIndicadors'
 
 // Files tal com surten de XLSX.utils.sheet_to_json(full, { header: 1,
 // raw: false }) sobre el full "ESFERA PI" real (curs 2026-27, mostra).
@@ -96,5 +96,49 @@ describe('llegeixResumSIEI', () => {
   it('torna un Map buit si no hi ha files', () => {
     expect(llegeixResumSIEI([]).size).toBe(0)
     expect(llegeixResumSIEI(undefined).size).toBe(0)
+  })
+})
+
+// Files reals del full "ESFERA PI (1)": un bloc de classe (la fila de
+// totals "1 A", que NO és cap alumne), la fila "Identificador de
+// l'alumne/a" (tampoc cap alumne), i dues files d'alumne real — una amb
+// totes les àrees a "No" i una amb "efisica" a "Sí".
+const FILA_PIAREA_TOTALS_CLASSE = ['1 A', undefined, 8, 4, 28, 31, 32, 19, 0, 10, 0]
+const FILA_PIAREA_SUBCAPCALERA = ['Identificador de l’alumne/a', 23, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined]
+const FILA_PIAREA_SENSE_CAP_AREA = [20821843338, 'Ahmed , Amal Adeel', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No', undefined]
+const FILA_PIAREA_AMB_EFISICA = [19776792459, 'José Carné, Dana', 'Sí', 'No', 'No', 'No', 'No', 'No', 'No', 'No', undefined]
+
+describe('llegeixResumPIPerArea', () => {
+  it('llegeix les 9 àrees per alumne', () => {
+    const mapa = llegeixResumPIPerArea([FILA_PIAREA_SENSE_CAP_AREA, FILA_PIAREA_AMB_EFISICA])
+    expect(mapa.get('20821843338').arees).toEqual({
+      efisica: false, artistica: false, matematiques: false, castella: false,
+      catala: false, angles: false, religio: false, medi: false, valors: false,
+    })
+    expect(mapa.get('19776792459').arees.efisica).toBe(true)
+    expect(mapa.get('19776792459').arees.matematiques).toBe(false)
+  })
+
+  it('ignora la fila de totals de classe ("1 A"), que no és cap alumne', () => {
+    const mapa = llegeixResumPIPerArea([FILA_PIAREA_TOTALS_CLASSE])
+    expect(mapa.size).toBe(0)
+  })
+
+  it('ignora la fila "Identificador de l\'alumne/a"', () => {
+    const mapa = llegeixResumPIPerArea([FILA_PIAREA_SUBCAPCALERA])
+    expect(mapa.size).toBe(0)
+  })
+
+  it('un bloc de classe sencer (totals + subcapçalera + alumnes) només compta els alumnes', () => {
+    const mapa = llegeixResumPIPerArea([
+      FILA_PIAREA_TOTALS_CLASSE, FILA_PIAREA_SUBCAPCALERA,
+      FILA_PIAREA_SENSE_CAP_AREA, FILA_PIAREA_AMB_EFISICA,
+    ])
+    expect(mapa.size).toBe(2)
+  })
+
+  it('torna un Map buit si no hi ha files', () => {
+    expect(llegeixResumPIPerArea([]).size).toBe(0)
+    expect(llegeixResumPIPerArea(undefined).size).toBe(0)
   })
 })

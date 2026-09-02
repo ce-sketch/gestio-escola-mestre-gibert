@@ -52,6 +52,12 @@ function siNoOBooleaABoolean(cel) {
 
 // Columnes del full "ESFERA PI" (0-indexades: la A és buida i per tant
 // no compta amb res).
+//
+// ⚠️ NO es fa servir per al flag general de PI (que ara es llegeix
+// directament del full "ESFERA" principal, columna "Curriculum - Afectat
+// per un Pl?" — vegeu Alumnes.jsx). Es manté aquí per si mai cal, però
+// `llegeixResumPIPerArea()` (més avall) és la font fiable per al
+// desglossament per àrea.
 const PI_COL_IDALU = 1
 const PI_COL_CURS = 4 // la "Curs" llegible (p. ex. "5è A"), no el codi
 const PI_COL_PI = 5
@@ -74,6 +80,56 @@ export function llegeixResumPI(files) {
   return mapa
 }
 
+// Columnes del full "ESFERA PI (1)" (0-indexades). A diferència
+// d'"ESFERA PI", aquest full ve organitzat en blocs per classe (una fila
+// de totals de classe, una fila "Identificador de l'alumne/a", i després
+// una fila per alumne) però amb les ÀREES SEMPRE EN EL MATEIX ORDRE a
+// totes les classes — a "ESFERA PI" cada full de classe font les porta
+// en un ordre diferent, així que sumar-les tal qual barrejaria àrees.
+// Per això aquest és el full fiable per al desglossament per àrea.
+const PI_AREA_COL_IDALU = 0
+const PI_AREA_COL_NOM = 1
+// Un IDALU real en té 11 dígits; les files de totals de classe (p. ex.
+// "1 A" a la columna A) també passen el filtre de "només dígits" un cop
+// netejades ("1"), així que cal un mínim de llargada per descartar-les.
+const PI_AREA_IDALU_LLARGADA_MINIMA = 8
+export const PI_AREES = [
+  { id: 'efisica', label: 'Educació física', col: 2 },
+  { id: 'artistica', label: 'Educació artística', col: 3 },
+  { id: 'matematiques', label: 'Matemàtiques', col: 4 },
+  { id: 'castella', label: 'Llengua castellana', col: 5 },
+  { id: 'catala', label: 'Llengua catalana', col: 6 },
+  { id: 'angles', label: 'Anglès', col: 7 },
+  { id: 'religio', label: 'Religió', col: 8 },
+  { id: 'medi', label: 'Coneixement del medi', col: 9 },
+  { id: 'valors', label: 'Valors socials i cívics', col: 10 },
+]
+
+/**
+ * Llegeix el full "ESFERA PI (1)" i torna un Map IDALU → { arees }, amb
+ * `arees` un objecte `{ efisica: bool, artistica: bool, ... }` — un booleà
+ * per cada element de `PI_AREES`.
+ *
+ * `files` és el resultat de `XLSX.utils.sheet_to_json(full, { header: 1,
+ * raw: false })` sobre el full "ESFERA PI (1)".
+ */
+export function llegeixResumPIPerArea(files) {
+  const mapa = new Map()
+  for (const fila of files ?? []) {
+    const idalu = idaluNet(fila?.[PI_AREA_COL_IDALU])
+    const nom = String(fila?.[PI_AREA_COL_NOM] ?? '').trim()
+    // Descarta soles les files de totals de classe ("1 A", un IDALU curt
+    // un cop netejat) i la fila "Identificador de l'alumne/a" (sense
+    // IDALU vàlid).
+    if (!idalu || idalu.length < PI_AREA_IDALU_LLARGADA_MINIMA || !nom) continue
+    const arees = {}
+    for (const { id, col } of PI_AREES) {
+      arees[id] = siNoOBooleaABoolean(fila?.[col])
+    }
+    mapa.set(idalu, { arees })
+  }
+  return mapa
+}
 // Columnes del full "ESFERA AD" (0-indexades). Hi ha DUES columnes que es
 // diuen totes dues "NESE" a la capçalera (una amb el motiu en text, l'altra
 // amb el flag): cal llegir-les per posició, no pel nom.
