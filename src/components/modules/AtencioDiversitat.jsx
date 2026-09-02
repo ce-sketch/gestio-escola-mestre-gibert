@@ -172,17 +172,30 @@ export default function AtencioDiversitat() {
           </h3>
         </button>
 
-        <label className="field" style={{ marginTop: 8, maxWidth: 240 }}>
-          <span>Filtra per àrea del PI</span>
-          <select
-            value={areaPiFiltrada}
-            onChange={(e) => setAreaPiFiltrada(e.target.value)}
-            style={{ border: '1px solid var(--line)', borderRadius: 8, padding: '10px 12px' }}
-          >
-            <option value="">Totes les àrees</option>
-            {PI_AREES.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
-          </select>
-        </label>
+        <div style={{ display: 'flex', gap: 16, marginTop: 8, flexWrap: 'wrap' }}>
+          <label className="field" style={{ maxWidth: 240 }}>
+            <span>Filtra per classe</span>
+            <select
+              value={classeFiltrada}
+              onChange={(e) => setClasseFiltrada(e.target.value)}
+              style={{ border: '1px solid var(--line)', borderRadius: 8, padding: '10px 12px' }}
+            >
+              <option value="">Totes les classes</option>
+              {classes.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </label>
+          <label className="field" style={{ maxWidth: 240 }}>
+            <span>Filtra per àrea del PI</span>
+            <select
+              value={areaPiFiltrada}
+              onChange={(e) => setAreaPiFiltrada(e.target.value)}
+              style={{ border: '1px solid var(--line)', borderRadius: 8, padding: '10px 12px' }}
+            >
+              <option value="">Totes les àrees</option>
+              {PI_AREES.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
+            </select>
+          </label>
+        </div>
 
         {piObert && (
           ambPi.length === 0 ? (
