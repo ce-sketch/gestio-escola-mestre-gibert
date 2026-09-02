@@ -1,5 +1,5 @@
 import { useState, lazy, Suspense } from 'react'
-import { esAdmin } from '../lib/roles'
+import { esAdmin, esEE } from '../lib/roles'
 import ModuleErrorBoundary from './ModuleErrorBoundary.jsx'
 
 const Inici = lazy(() => import('./modules/Inici.jsx'))
@@ -20,7 +20,7 @@ const Comprovacions = lazy(() => import('./modules/Comprovacions.jsx'))
 const MODULES = [
   { id: 'inici', label: 'Inici', component: Inici },
   { id: 'alumnes', label: 'Alumnes', component: Alumnes, nomesAdmin: true },
-  { id: 'atenciodiversitat', label: 'Atenció a la diversitat', component: AtencioDiversitat, nomesAdmin: true },
+  { id: 'atenciodiversitat', label: 'Atenció a la diversitat', component: AtencioDiversitat, visible: (user) => esAdmin(user) || esEE(user) },
   { id: 'calendari', label: 'Calendari', component: Calendari, nomesAdmin: true },
   { id: 'avaluacio', label: 'Avaluació', component: Avaluacio },
   { id: 'assistencia', label: 'Assistència', component: Assistencia },
@@ -38,7 +38,7 @@ export default function Dashboard({ user, onSignOut }) {
   const [activeId, setActiveId] = useState('inici')
   const [navOpen, setNavOpen] = useState(false)
   const admin = esAdmin(user)
-  const modulsVisibles = MODULES.filter((m) => !m.nomesAdmin || admin)
+  const modulsVisibles = MODULES.filter((m) => (m.visible ? m.visible(user) : (!m.nomesAdmin || admin)))
 
   const ActiveModule = modulsVisibles.find((m) => m.id === activeId)?.component ?? Inici
 
