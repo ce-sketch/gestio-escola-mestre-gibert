@@ -8,7 +8,7 @@ import { cursEscolarActual } from '../../lib/cursEscolar'
 import BotoDrive from '../BotoDrive'
 import { carregaXLSX } from '../../lib/carregaLlibreries'
 import { normalitza } from '../../lib/text'
-import { llegeixResumAD, llegeixResumSIEI, llegeixResumPIPerArea, PI_AREES } from '../../lib/sicAlumnatIndicadors'
+import { llegeixResumAD, llegeixResumSIEI, llegeixResumEE, llegeixResumPIPerArea, PI_AREES } from '../../lib/sicAlumnatIndicadors'
 
 const DEFAULT_CLASSES = ['1r A', '1r B']
 
@@ -338,9 +338,12 @@ export default function Alumnes() {
   }
 
   /**
-   * Actualitza el flag SIEI a partir del document "14b. Alumnes NESE",
-   * un fitxer a part que no té res a veure amb la resta d'aquesta
-   * pantalla. Només actualitza alumnes que JA existeixen (aquest fitxer
+   * Actualitza els flags SIEI i EE a partir del document "14b. Alumnes
+   * NESE", un fitxer a part que no té res a veure amb la resta d'aquesta
+   * pantalla. Tots dos surten del mateix full ("EE ESFERA"): "EE" és
+   * senzillament sortir-hi llistat (el full es diu literalment "ALUMNAT
+   * ATÈS A EE"), "SIEI" és un subconjunt marcat amb la seva pròpia
+   * columna. Només actualitza alumnes que JA existeixen (aquest fitxer
    * no en té prou dades per crear-ne de nous): els IDALU que hi surten
    * però no coincideixen amb cap alumne actual es compten i s'avisen,
    * no es creen fitxes noves a mitges.
@@ -358,8 +361,10 @@ export default function Alumnes() {
         setMissatgeSiei({ type: 'error', text: 'Aquest fitxer no porta el full "EE ESFERA".' })
         return
       }
-      const resumSiei = llegeixResumSIEI(XLSX.utils.sheet_to_json(full, { header: 1, raw: false }))
-      if (resumSiei.size === 0) {
+      const files = XLSX.utils.sheet_to_json(full, { header: 1, raw: false })
+      const resumSiei = llegeixResumSIEI(files)
+      const resumEe = llegeixResumEE(files)
+      if (resumEe.size === 0) {
         setMissatgeSiei({ type: 'error', text: 'No hi he trobat cap alumne amb IDALU vàlid.' })
         return
       }
@@ -371,9 +376,13 @@ export default function Alumnes() {
       let opsEnBatch = 0
       let actualitzats = 0
       let noTrobats = 0
-      for (const [idalu, { siei }] of resumSiei) {
+      for (const [idalu] of resumEe) {
         if (!existentsIds.has(idalu)) { noTrobats += 1; continue }
-        batch.set(doc(db, 'alumnes', idalu), { siei, actualitzatEl: serverTimestamp() }, { merge: true })
+        batch.set(
+          doc(db, 'alumnes', idalu),
+          { ee: true, siei: resumSiei.get(idalu)?.siei ?? false, actualitzatEl: serverTimestamp() },
+          { merge: true }
+        )
         actualitzats += 1
         opsEnBatch += 1
         if (opsEnBatch >= 450) { // marge sota el límit de 500 de Firestore
@@ -386,11 +395,11 @@ export default function Alumnes() {
 
       setMissatgeSiei({
         type: 'ok',
-        text: `SIEI actualitzat per a ${actualitzats} alumnes.`
+        text: `SIEI i EE actualitzats per a ${actualitzats} alumnes.`
           + (noTrobats > 0 ? ` (${noTrobats} IDALU del fitxer no coincideixen amb cap alumne actual.)` : ''),
       })
     } catch (err) {
-      setMissatgeSiei({ type: 'error', text: `No s'ha pogut actualitzar el SIEI: ${err.message}` })
+      setMissatgeSiei({ type: 'error', text: `No s'ha pogut actualitzar el SIEI/EE: ${err.message}` })
     } finally {
       setPujantSiei(false)
     }
@@ -637,12 +646,12 @@ export default function Alumnes() {
       </div>
 
       <div className="placeholder-box" style={{ borderStyle: 'solid', marginTop: 24 }}>
-        <strong>Actualitza el SIEI</strong>
+        <strong>Actualitza el SIEI i l&apos;EE</strong>
         <p style={{ marginTop: 6, fontSize: 13 }}>
           Fitxer a part, sense res a veure amb la resta d&apos;aquesta pantalla: el document
-          &quot;14b. Alumnes NESE. Curs actual&quot;, full &quot;EE ESFERA&quot;. Només
-          actualitza el SIEI dels alumnes que ja hi ha a la llista — no en crea de nous ni en
-          toca cap altra dada.
+          &quot;14b. Alumnes NESE. Curs actual&quot;, full &quot;EE ESFERA&quot;. Actualitza
+          l&apos;EE (tothom que hi surt llistat) i el SIEI (la seva columna pròpia) dels
+          alumnes que ja hi ha a la llista — no en crea de nous ni en toca cap altra dada.
         </p>
         <label
           className="btn-ghost"
