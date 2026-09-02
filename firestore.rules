@@ -136,6 +136,10 @@ service cloud.firestore {
       allow read: if esComptePersonal();
       allow write: if esAdmin();
     }
+    match /configuracio/ponderacioLlengua {
+      allow read: if esComptePersonal();
+      allow write: if esAdmin();
+    }
     match /configuracio/{altres} {
       allow read, write: if esAdmin();
     }
