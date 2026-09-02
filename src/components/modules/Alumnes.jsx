@@ -8,7 +8,7 @@ import { cursEscolarActual } from '../../lib/cursEscolar'
 import BotoDrive from '../BotoDrive'
 import { carregaXLSX } from '../../lib/carregaLlibreries'
 import { normalitza } from '../../lib/text'
-import { llegeixResumAD, llegeixResumSIEI } from '../../lib/sicAlumnatIndicadors'
+import { llegeixResumAD, llegeixResumSIEI, llegeixResumPIPerArea, PI_AREES } from '../../lib/sicAlumnatIndicadors'
 
 const DEFAULT_CLASSES = ['1r A', '1r B']
 
@@ -39,7 +39,12 @@ const MOTIU_NESE_REDUCCIO = 'situacions socioeconòmiques'
 // Afectat per un Pl?"): no calia cap pestanya a part per ell — la
 // pestanya "ESFERA PI" del llibre és un resum agregat pensat per a altres
 // usos, no la font original.
+//
+// El desglossament del PI per àrea sí que cal buscar-lo a part, a
+// "ESFERA PI (1)" — no a "ESFERA PI", que porta les àrees en un ordre
+// diferent a cada classe (vegeu sicAlumnatIndicadors.js).
 const FULL_ESFERA_AD = 'ESFERA AD'
+const FULL_ESFERA_PI_AREA = 'ESFERA PI (1)'
 
 export default function Alumnes() {
   const [classes, setClasses] = useState(
@@ -55,6 +60,7 @@ export default function Alumnes() {
   // perquè no passi desapercebut que el NESE detallat no s'ha actualitzat
   // en aquesta pujada. El PI no en depèn (ve del full principal).
   const [fullAdTrobat, setFullAdTrobat] = useState(true)
+  const [fullPiAreaTrobat, setFullPiAreaTrobat] = useState(true)
   // Actualització de SIEI: fitxer a part ("14b. Alumnes NESE"), no del
   // mateix llibre que ESFERA/ESFERA PI/AD, així que va per la seva pròpia
   // pujada en lloc d'enganxar-se al flux de dalt.
@@ -233,6 +239,7 @@ export default function Alumnes() {
     setErrorFitxer(null)
     setPrevisualitzacio(null)
     setFullAdTrobat(true)
+    setFullPiAreaTrobat(true)
 
     const reader = new FileReader()
     reader.onload = (event) => {
@@ -241,15 +248,19 @@ export default function Alumnes() {
         const primerFull = workbook.Sheets[workbook.SheetNames[0]]
         const files = XLSX.utils.sheet_to_json(primerFull, { header: 1, raw: false })
 
-        // NESE detallat: pestanya a part del mateix llibre ("ESFERA AD").
-        // Si no hi és (fitxer parcial o exportació antiga), es continua
-        // igualment amb tothom a false/buit — no bloqueja la importació
-        // del llistat principal, que és la part imprescindible. El PI, en
-        // canvi, ja ve al mateix full principal (columna "Curriculum -
-        // Afectat per un Pl?"): no calia cap pestanya a part per ell.
+        // NESE detallat i desglossament del PI per àrea: pestanyes a part
+        // del mateix llibre. Si no hi són (fitxer parcial o exportació
+        // antiga), es continua igualment amb tothom a false/buit — no
+        // bloqueja la importació del llistat principal, que és la part
+        // imprescindible. El PI general, en canvi, ja ve al mateix full
+        // principal (columna "Curriculum - Afectat per un Pl?").
         const fullAD = workbook.Sheets[FULL_ESFERA_AD]
+        const fullPIArea = workbook.Sheets[FULL_ESFERA_PI_AREA]
         const resumAD = fullAD
           ? llegeixResumAD(XLSX.utils.sheet_to_json(fullAD, { header: 1, raw: false }))
+          : new Map()
+        const resumPIArea = fullPIArea
+          ? llegeixResumPIPerArea(XLSX.utils.sheet_to_json(fullPIArea, { header: 1, raw: false }))
           : new Map()
 
         const perClasse = {}
@@ -267,6 +278,7 @@ export default function Alumnes() {
           const neseEconomic = esNese && neseMotiu.toLowerCase().includes(MOTIU_NESE_REDUCCIO)
           const pi = fila[COL_PI]?.toString().trim().toLowerCase() === 'sí'
           const ad = resumAD.get(idalu)
+          const piArees = resumPIArea.get(idalu)?.arees
           if (!perClasse[curs]) perClasse[curs] = []
           perClasse[curs].push({
             nom,
@@ -278,6 +290,13 @@ export default function Alumnes() {
             adTipusA: ad?.tipusANee ?? false,
             adTipusB: ad?.tipusB ?? false,
             adTipusC: ad?.tipusC ?? false,
+            // Un camp pla per àrea (p. ex. piEfisica, piMatematiques…),
+            // igual que la resta de flags — més fàcil de filtrar i
+            // desar a Firestore que un objecte niat.
+            ...Object.fromEntries(PI_AREES.map(({ id }) => [
+              `pi${id.charAt(0).toUpperCase()}${id.slice(1)}`,
+              piArees?.[id] ?? false,
+            ])),
           })
         }
 
@@ -301,10 +320,15 @@ export default function Alumnes() {
               adTipusA: f.adTipusA,
               adTipusB: f.adTipusB,
               adTipusC: f.adTipusC,
+              ...Object.fromEntries(PI_AREES.map(({ id }) => {
+                const camp = `pi${id.charAt(0).toUpperCase()}${id.slice(1)}`
+                return [camp, f[camp]]
+              })),
             }))
         }
         setPrevisualitzacio(previsualitzat)
         setFullAdTrobat(Boolean(fullAD))
+        setFullPiAreaTrobat(Boolean(fullPIArea))
       } catch (err) {
         setErrorFitxer(`No s'ha pogut llegir el fitxer: ${err.message}`)
       }
@@ -569,12 +593,18 @@ export default function Alumnes() {
 
         {previsualitzacio && (
           <div style={{ marginTop: 16 }}>
-            {!fullAdTrobat && (
+            {(!fullAdTrobat || !fullPiAreaTrobat) && (
               <div className="placeholder-box" style={{ borderStyle: 'solid', borderColor: 'var(--amber-dark)', marginBottom: 12 }}>
-                <strong>Atenció:</strong> aquest fitxer no porta el full &quot;ESFERA AD&quot;.
-                El NESE detallat de tothom quedarà a &quot;No&quot; en aquesta importació — puja el
-                llibre sencer si vols actualitzar-lo. (El PI no es veu afectat: ve del full
-                principal.)
+                <strong>Atenció:</strong> aquest fitxer no porta{' '}
+                {!fullAdTrobat && !fullPiAreaTrobat
+                  ? 'els fulls "ESFERA AD" ni "ESFERA PI (1)"'
+                  : !fullAdTrobat ? 'el full "ESFERA AD"' : 'el full "ESFERA PI (1)"'}
+                . {!fullAdTrobat && !fullPiAreaTrobat
+                  ? 'El NESE detallat i el desglossament del PI per àrea de tothom quedaran'
+                  : !fullAdTrobat ? 'El NESE detallat de tothom quedarà'
+                  : 'El desglossament del PI per àrea de tothom quedarà'}
+                {' '}a &quot;No&quot; en aquesta importació — puja el llibre sencer si vols
+                actualitzar-los. (El PI general no es veu afectat: ve del full principal.)
               </div>
             )}
             <p style={{ fontSize: 14, fontWeight: 600 }}>
@@ -1053,10 +1083,11 @@ async function syncTotesLesClasses(perClasse) {
   let desactivats = 0
 
   for (const [curs, alumnes] of Object.entries(perClasse)) {
-    for (const {
-      nom, numLlista, idalu, neseEconomic,
-      pi, adMotiu, adFlag, adTipusA, adTipusB, adTipusC,
-    } of alumnes) {
+    for (const alumne of alumnes) {
+      const {
+        nom, numLlista, idalu, neseEconomic,
+        pi, adMotiu, adFlag, adTipusA, adTipusB, adTipusC,
+      } = alumne
       const id = idalu ? String(idalu) : (existentsPerNom.get(nom)?.id ?? slug(nom))
       const existent = idalu ? existentsPerId.get(id) : existentsPerNom.get(nom)
 
@@ -1067,7 +1098,7 @@ async function syncTotesLesClasses(perClasse) {
         {
           nom, curs, numLlista, idalu: idalu ?? null, neseEconomic: Boolean(neseEconomic), actiu: true,
           // PI i NESE detallat pel SIC automàtic (vegeu sicAlumnatIndicadors.js).
-          // Si el fitxer pujat no portava els fulls "ESFERA PI"/"ESFERA AD",
+          // Si el fitxer pujat no portava els fulls "ESFERA PI (1)"/"ESFERA AD",
           // aquests venen tots a false/buit — no s'esborra res del que ja hi
           // hagués abans amb el merge, però tampoc es dona per fet que sigui
           // correcte: per això la pantalla avisa quan falten aquests fulls.
@@ -1077,6 +1108,12 @@ async function syncTotesLesClasses(perClasse) {
           adTipusA: Boolean(adTipusA),
           adTipusB: Boolean(adTipusB),
           adTipusC: Boolean(adTipusC),
+          // Desglossament del PI per àrea: un camp pla per àrea
+          // (piEfisica, piMatematiques…), igual que la resta de flags.
+          ...Object.fromEntries(PI_AREES.map(({ id: areaId }) => {
+            const camp = `pi${areaId.charAt(0).toUpperCase()}${areaId.slice(1)}`
+            return [camp, Boolean(alumne[camp])]
+          })),
           actualitzatEl: serverTimestamp(),
         },
         { merge: true }
