@@ -53,6 +53,11 @@ export const COL·LECCIONS = [
   { id: 'lectoescripturaEI', nom: 'Lectoescriptura EI', sobreescriu: true },
   { id: 'economia', nom: 'Economia', sobreescriu: true },
   { id: 'documentacio', nom: 'Documentació', sobreescriu: true },
+  // L'històric d'altes i baixes de SIEI/EE fetes a mà des d'Atenció a la
+  // diversitat. No es pot reconstruir (no ve de cap full extern) — si es
+  // perdés, es perdria constància de qui i quan va donar d'alta o de
+  // baixa cada alumne.
+  { id: 'diversitatHistoric', nom: 'Històric SIEI/EE', sobreescriu: false },
   { id: 'configuracio', nom: 'Configuració', sobreescriu: true },
 ]
 
