@@ -2,6 +2,12 @@ import { useEffect, useMemo, useState } from 'react'
 import { collection, getDocs, query, where } from 'firebase/firestore'
 import { db } from '../../firebase'
 import { comparaCursos } from '../../lib/ordreCursos'
+import { PI_AREES } from '../../lib/sicAlumnatIndicadors'
+
+/** "efisica" → "piEfisica", igual que es desa a Firestore des d'Alumnes.jsx. */
+function campArea(areaId) {
+  return `pi${areaId.charAt(0).toUpperCase()}${areaId.slice(1)}`
+}
 
 /**
  * Mòdul "Atenció a la diversitat". Primera versió: només mostra el que ja
@@ -15,6 +21,7 @@ export default function AtencioDiversitat() {
   const [carregant, setCarregant] = useState(true)
   const [missatge, setMissatge] = useState(null)
   const [classeFiltrada, setClasseFiltrada] = useState('')
+  const [areaPiFiltrada, setAreaPiFiltrada] = useState('')
   const [piObert, setPiObert] = useState(true)
   const [adObert, setAdObert] = useState(true)
 
@@ -44,11 +51,14 @@ export default function AtencioDiversitat() {
 
   // Alumnes amb PI, per classe i endreçats per cognom dins de cada una
   // (el nom es desa "Cognom, Nom", així que ordenar pel nom tal qual ja
-  // ordena per cognom).
+  // ordena per cognom). El filtre d'àrea només afecta aquest bloc: l'AD
+  // no té àrees.
   const ambPi = useMemo(() => {
+    const campFiltre = areaPiFiltrada ? campArea(areaPiFiltrada) : null
     const perClasse = {}
     for (const a of alumnesFiltrats) {
       if (!a.pi) continue
+      if (campFiltre && !a[campFiltre]) continue
       if (!perClasse[a.curs]) perClasse[a.curs] = []
       perClasse[a.curs].push(a)
     }
@@ -56,7 +66,7 @@ export default function AtencioDiversitat() {
       llista.sort((x, y) => (x.nom ?? '').localeCompare(y.nom ?? '', 'ca'))
     }
     return Object.entries(perClasse).sort(([a], [b]) => comparaCursos(a, b))
-  }, [alumnesFiltrats])
+  }, [alumnesFiltrats, areaPiFiltrada])
 
   const totalPi = ambPi.reduce((acc, [, llista]) => acc + llista.length, 0)
 
@@ -169,13 +179,24 @@ export default function AtencioDiversitat() {
           </h3>
         </button>
 
+        <label className="field" style={{ marginTop: 8, maxWidth: 240 }}>
+          <span>Filtra per àrea del PI</span>
+          <select
+            value={areaPiFiltrada}
+            onChange={(e) => setAreaPiFiltrada(e.target.value)}
+            style={{ border: '1px solid var(--line)', borderRadius: 8, padding: '10px 12px' }}
+          >
+            <option value="">Totes les àrees</option>
+            {PI_AREES.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
+          </select>
+        </label>
+
         {piObert && (
           ambPi.length === 0 ? (
             <p className="nota" style={{ marginTop: 8 }}>
-              Cap alumne amb PI{classeFiltrada ? ` a ${classeFiltrada}` : ''}. Si n&apos;hi hauria
-              d&apos;haver, comprova que el darrer fitxer pujat a Alumnes portava el full
-              &quot;ESFERA PI&quot; — si falta, la pantalla de pujada n&apos;avisa amb un requadre
-              taronja abans de desar.
+              {areaPiFiltrada
+                ? `Cap alumne amb PI a ${PI_AREES.find((a) => a.id === areaPiFiltrada)?.label}${classeFiltrada ? ` a ${classeFiltrada}` : ''}.`
+                : `Cap alumne amb PI${classeFiltrada ? ` a ${classeFiltrada}` : ''}. Si n'hi hauria d'haver, comprova que el darrer fitxer pujat a Alumnes portava el full "ESFERA PI" — si falta, la pantalla de pujada n'avisa amb un requadre taronja abans de desar.`}
             </p>
           ) : (
             ambPi.map(([curs, llista]) => (
