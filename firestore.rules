@@ -22,6 +22,15 @@ service cloud.firestore {
       return request.auth != null && request.auth.token.email == 'ce@escolamestregibert.cat';
     }
 
+    // El compte d'Educació Especial: no és administrador de tota l'app,
+    // però necessita donar d'alta/baixa alumnes de SIEI/EE des d'"Atenció
+    // a la diversitat" — per això pot actualitzar NOMÉS els camps "siei"
+    // i "ee" de la fitxa de l'alumne (res més: ni crear-ne, ni esborrar,
+    // ni tocar cap altre camp), i crear entrades a l'històric.
+    function esEE() {
+      return request.auth != null && request.auth.token.email == 'ee@escolamestregibert.cat';
+    }
+
     // Personal del centre: domini correcte i NO és un compte d'alumnat
     // (que sempre comencen per "00", doble zero). Aquesta comprovació es
     // fa aquí, a Firestore, perquè cap alumne pugui llegir ni escriure
@@ -90,10 +99,15 @@ service cloud.firestore {
 
     // Fitxa central de l'alumne. Tothom del personal la pot consultar (cal
     // per passar llista, posar notes, etc.), però només l'administrador
-    // la pot donar d'alta, editar o desactivar.
+    // la pot donar d'alta, editar o desactivar. Excepció puntual: el
+    // compte d'EE pot actualitzar els camps "siei"/"ee" (i la data de
+    // modificació), per donar d'alta o de baixa des d'"Atenció a la
+    // diversitat" — res més.
     match /alumnes/{alumneId} {
       allow read: if esComptePersonal();
       allow write: if esAdmin();
+      allow update: if esEE()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['siei', 'ee', 'actualitzatEl']);
     }
 
     // Calendari escolar: tothom del personal el pot consultar (cal per
@@ -227,6 +241,17 @@ service cloud.firestore {
     match /valoracionsConfig/{cursEscolarId} {
       allow read: if esComptePersonal();
       allow write: if esAdmin();
+    }
+
+    // Històric d'altes i baixes de SIEI/EE, fetes des d'"Atenció a la
+    // diversitat". Mateix criteri d'accés que la fitxa de l'alumne:
+    // l'administrador i el compte d'EE hi poden llegir i crear entrades
+    // noves — mai modificar-les ni esborrar-les, és un registre, no
+    // s'edita a posteriori.
+    match /diversitatHistoric/{esdevenimentId} {
+      allow read: if esAdmin() || esEE();
+      allow create: if esAdmin() || esEE();
+      allow update, delete: if false;
     }
 
     // Per defecte, tot el que no s'hagi definit explícitament queda bloquejat.
