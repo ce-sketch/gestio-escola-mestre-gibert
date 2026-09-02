@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 
-import { esAdmin, esComptePersonal, ADMIN_EMAIL } from './roles'
+import { esAdmin, esComptePersonal, esEE, ADMIN_EMAIL, EE_EMAIL } from './roles'
 
 describe('esAdmin', () => {
   // Els mòduls de direcció (SIC, PGAC, Economia, Alumnes, Backup…) es
@@ -30,6 +30,31 @@ describe('esAdmin', () => {
 
   it('no es deixa enganyar per les majúscules', () => {
     expect(esAdmin({ email: 'CE@EscolaMestreGibert.cat' })).toBe(true)
+  })
+})
+
+describe('esEE', () => {
+  // Excepció puntual per a "Atenció a la diversitat": aquest compte no és
+  // administrador (no ha de veure Economia, PGAC, Backup...), però sí que
+  // ha de poder veure aquest mòdul concret.
+  it('només accepta el compte d\'Educació Especial', () => {
+    expect(EE_EMAIL).toBe('ee@escolamestregibert.cat')
+    expect(esEE({ email: 'ee@escolamestregibert.cat' })).toBe(true)
+  })
+
+  it('no accepta l\'administrador ni cap altre compte del centre', () => {
+    expect(esEE({ email: 'ce@escolamestregibert.cat' })).toBe(false)
+    expect(esEE({ email: 'mestre@escolamestregibert.cat' })).toBe(false)
+  })
+
+  it('no peta sense usuari ni sense correu', () => {
+    expect(esEE(null)).toBe(false)
+    expect(esEE(undefined)).toBe(false)
+    expect(esEE({})).toBe(false)
+  })
+
+  it('no es deixa enganyar per les majúscules', () => {
+    expect(esEE({ email: 'EE@EscolaMestreGibert.cat' })).toBe(true)
   })
 })
 
