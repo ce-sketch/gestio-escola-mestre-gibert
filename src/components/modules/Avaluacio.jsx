@@ -86,9 +86,10 @@ const GRUPS = [
 ]
 
 export default function Avaluacio() {
-  // La primera pestanya del primer grup: si es canvia l'ordre, cal
-  // canviar-ho també aquí o s'obre una pestanya que ja no és la primera.
-  const [actiu, setActiu] = useState('lectoescriptura-ei')
+  // Per defecte s'obre TEE, no la primera pestanya de la llista (que és
+  // Lectoescriptura EI, ordenada així a posta perquè Infantil vagi
+  // primer al menú — però no interessa que sigui la que s'obre sola).
+  const [actiu, setActiu] = useState('tee')
 
   // Hi ha pestanyes restringides a direcció (l'Històric). Es filtren aquí
   // perquè no apareguin ni al menú ni es puguin obrir; el component
