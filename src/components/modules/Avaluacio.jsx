@@ -86,10 +86,9 @@ const GRUPS = [
 ]
 
 export default function Avaluacio() {
-  // Per defecte s'obre TEE, no la primera pestanya de la llista (que és
-  // Lectoescriptura EI, ordenada així a posta perquè Infantil vagi
-  // primer al menú — però no interessa que sigui la que s'obre sola).
-  const [actiu, setActiu] = useState('tee')
+  // Cap pestanya oberta d'entrada: fins que no es cliqui alguna, no es
+  // carrega res.
+  const [actiu, setActiu] = useState('')
 
   // Hi ha pestanyes restringides a direcció (l'Històric). Es filtren aquí
   // perquè no apareguin ni al menú ni es puguin obrir; el component
@@ -99,7 +98,7 @@ export default function Avaluacio() {
     .map((g) => ({ ...g, pestanyes: g.pestanyes.filter((p) => !p.nomesAdmin || admin) }))
     .filter((g) => g.pestanyes.length > 0)
   const totes = grupsVisibles.flatMap((g) => g.pestanyes)
-  const Actiu = totes.find((p) => p.id === actiu)?.component ?? TEE
+  const Actiu = totes.find((p) => p.id === actiu)?.component ?? null
 
   return (
     <div className="module">
@@ -144,7 +143,9 @@ export default function Avaluacio() {
       </div>
 
       <div style={{ marginTop: 20 }}>
-        <Actiu />
+        {Actiu ? <Actiu /> : (
+          <p className="nota">Tria una pestanya de dalt per començar.</p>
+        )}
       </div>
     </div>
   )
