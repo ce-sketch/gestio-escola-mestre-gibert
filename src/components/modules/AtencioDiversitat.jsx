@@ -4,6 +4,8 @@ import { db } from '../../firebase'
 import { comparaCursos } from '../../lib/ordreCursos'
 import { PI_AREES } from '../../lib/sicAlumnatIndicadors'
 import { CICLES, cicleDe } from '../../lib/rubricaTEE'
+import { exportaExcel, exportaPDF } from '../../lib/exportTaula'
+import { cursEscolarActual } from '../../lib/cursEscolar'
 
 /** "efisica" → "piEfisica", igual que es desa a Firestore des d'Alumnes.jsx. */
 function campArea(areaId) {
@@ -34,6 +36,8 @@ export default function AtencioDiversitat() {
   const [areaPiFiltrada, setAreaPiFiltrada] = useState('')
   const [piObert, setPiObert] = useState(true)
   const [adObert, setAdObert] = useState(true)
+  const [descarregant, setDescarregant] = useState(null)
+  const [missatgeDescarrega, setMissatgeDescarrega] = useState(null)
 
   useEffect(() => {
     async function carrega() {
@@ -120,6 +124,65 @@ export default function AtencioDiversitat() {
 
   if (carregant) return <p>Carregant…</p>
 
+  /** Un full (files de la taula) per a un grup de PI (Infantil o Primària). */
+  function fullPi(alumnesLlista, areesIds) {
+    const arees = PI_AREES.filter((a) => areesIds.has(a.id))
+    const capcalera = ['Classe', 'Alumne', ...arees.map((a) => a.label)]
+    const cos = alumnesLlista.map((a) => [
+      a.curs, a.nom, ...arees.map((area) => (a[campArea(area.id)] ? 'Sí' : 'No')),
+    ])
+    return [capcalera, ...cos]
+  }
+
+  /** El full de la taula d'Esfera AD. */
+  function fullAd() {
+    const capcalera = ['Classe', 'Alumne', 'Motiu', 'NESE', 'Tipus A', 'Tipus B', 'Tipus C']
+    const cos = ambAd.map((a) => [
+      a.curs, a.nom, a.adMotiu || '', a.adFlag ? 'Sí' : 'No',
+      a.adTipusA ? 'Sí' : 'No', a.adTipusB ? 'Sí' : 'No', a.adTipusC ? 'Sí' : 'No',
+    ])
+    return [capcalera, ...cos]
+  }
+
+  async function descarrega(quin, fes) {
+    setDescarregant(quin)
+    setMissatgeDescarrega(null)
+    try {
+      await fes()
+    } catch (err) {
+      setMissatgeDescarrega({ type: 'error', text: `No s'ha pogut generar la descàrrega: ${err.message}` })
+    } finally {
+      setDescarregant(null)
+    }
+  }
+
+  const dadesBase = { cursEscolarId: cursEscolarActual(), etiqueta: 'Atenció a la diversitat' }
+
+  function BotonsDescarrega({ id, onExcel, onPdf }) {
+    return (
+      <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+        <button
+          type="button"
+          className="btn-ghost"
+          style={{ fontSize: 12, padding: '5px 12px', color: 'var(--navy)', borderColor: 'var(--navy)' }}
+          onClick={() => descarrega(`${id}-excel`, onExcel)}
+          disabled={descarregant !== null}
+        >
+          {descarregant === `${id}-excel` ? 'Generant…' : '📥 Excel'}
+        </button>
+        <button
+          type="button"
+          className="btn-ghost"
+          style={{ fontSize: 12, padding: '5px 12px', color: 'var(--navy)', borderColor: 'var(--navy)' }}
+          onClick={() => descarrega(`${id}-pdf`, onPdf)}
+          disabled={descarregant !== null}
+        >
+          {descarregant === `${id}-pdf` ? 'Generant…' : '📄 PDF'}
+        </button>
+      </div>
+    )
+  }
+
   /** Una taula d'alumnes amb PI, amb només les columnes d'àrea que li
    *  toquen (Infantil o Primària). */
   function TaulaPi({ titol, alumnesLlista, areesIds }) {
@@ -199,44 +262,97 @@ export default function AtencioDiversitat() {
         </select>
       </label>
 
-      <div style={{ overflowX: 'auto', marginTop: 20 }}>
-        <table style={{ borderCollapse: 'collapse', fontSize: 13, minWidth: 480 }}>
-          <thead>
-            <tr style={{ background: 'var(--bg-soft, #f5f5f0)', textAlign: 'left' }}>
-              <th style={{ padding: '8px 12px', fontWeight: 700 }}>
-                NESE{classeFiltrada ? ` — ${classeFiltrada}` : ''}
-              </th>
-              <th style={{ padding: '8px 12px' }}>Amb motiu</th>
-              <th style={{ padding: '8px 12px' }}>NESE (flag)</th>
-              <th style={{ padding: '8px 12px' }}>Tipus A NEE</th>
-              <th style={{ padding: '8px 12px' }}>Tipus B</th>
-              <th style={{ padding: '8px 12px' }}>Tipus C</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr style={{ borderTop: '1px solid var(--line)', textAlign: 'right' }}>
-              <td style={{ padding: '6px 12px', textAlign: 'left', color: 'var(--ink-soft)' }}>
-                {comptadors.total} alumnes
-              </td>
-              <td style={{ padding: '6px 12px' }}>{comptadors.motiu.pct.toFixed(2)}%</td>
-              <td style={{ padding: '6px 12px' }}>{comptadors.nese.pct.toFixed(2)}%</td>
-              <td style={{ padding: '6px 12px' }}>{comptadors.tipusA.pct.toFixed(2)}%</td>
-              <td style={{ padding: '6px 12px' }}>{comptadors.tipusB.pct.toFixed(2)}%</td>
-              <td style={{ padding: '6px 12px' }}>{comptadors.tipusC.pct.toFixed(2)}%</td>
-            </tr>
-            <tr style={{ textAlign: 'right', fontWeight: 600 }}>
-              <td style={{ padding: '2px 12px' }} />
-              <td style={{ padding: '2px 12px' }}>{comptadors.motiu.n}</td>
-              <td style={{ padding: '2px 12px' }}>{comptadors.nese.n}</td>
-              <td style={{ padding: '2px 12px' }}>{comptadors.tipusA.n}</td>
-              <td style={{ padding: '2px 12px' }}>{comptadors.tipusB.n}</td>
-              <td style={{ padding: '2px 12px' }}>{comptadors.tipusC.n}</td>
-            </tr>
-          </tbody>
-        </table>
+      <div className="caixa" style={{ marginTop: 20 }}>
+        <p style={{ fontWeight: 700, fontSize: 15, marginBottom: 2 }}>
+          NESE{classeFiltrada ? ` — ${classeFiltrada}` : ''}
+          <span style={{ fontWeight: 400, color: 'var(--ink-soft)', fontSize: 13 }}> · {comptadors.total} alumnes</span>
+        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 12, marginTop: 12 }}>
+          {[
+            { label: 'Amb motiu', ...comptadors.motiu },
+            { label: 'NESE (flag)', ...comptadors.nese },
+            { label: 'Tipus A NEE', ...comptadors.tipusA },
+            { label: 'Tipus B', ...comptadors.tipusB },
+            { label: 'Tipus C', ...comptadors.tipusC },
+          ].map((c) => (
+            <div key={c.label} style={{ border: '1px solid var(--line)', borderRadius: 10, padding: '14px 10px', textAlign: 'center' }}>
+              <div style={{ fontSize: 26, fontWeight: 700, color: 'var(--navy)', lineHeight: 1.1 }}>{c.pct.toFixed(1)}%</div>
+              <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 4 }}>{c.label}</div>
+              <div style={{ fontSize: 13, fontWeight: 600, marginTop: 4 }}>{c.n} alumnes</div>
+            </div>
+          ))}
+        </div>
       </div>
 
-      <div style={{ marginTop: 24 }}>
+      <div className="caixa" style={{ marginTop: 16 }}>
+        <button
+          type="button"
+          onClick={() => setAdObert((v) => !v)}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6, background: 'transparent',
+            border: 'none', padding: 0, cursor: 'pointer', font: 'inherit', color: 'inherit',
+          }}
+        >
+          <span style={{ fontSize: 12, color: 'var(--ink-soft)', width: 14 }}>{adObert ? '▾' : '▸'}</span>
+          <h3 style={{ fontSize: 18, margin: 0 }}>
+            Esfera AD — NESE <span style={{ fontWeight: 400, color: 'var(--ink-soft)', fontSize: 14 }}>({ambAd.length})</span>
+          </h3>
+        </button>
+        <p className="nota" style={{ marginTop: 4 }}>
+          &quot;NESE&quot; és el flag de la columna F del full (0/1); &quot;Motiu&quot; ve de
+          la columna E, en text lliure — no sempre coincideixen (vegeu
+          sicAlumnatIndicadors.js).
+        </p>
+        <BotonsDescarrega
+          id="ad"
+          onExcel={() => exportaExcel('Esfera AD - NESE', { ...dadesBase, fulls: [{ nom: 'Esfera AD', files: fullAd() }] })}
+          onPdf={() => exportaPDF('Esfera AD - NESE', { ...dadesBase, fulls: [{ nom: 'Esfera AD', files: fullAd() }] })}
+        />
+
+        {adObert && (
+          ambAd.length === 0 ? (
+            <p className="nota" style={{ marginTop: 8 }}>
+              Cap alumne amb dades de NESE{classeFiltrada ? ` a ${classeFiltrada}` : ''}.
+            </p>
+          ) : (
+            <div style={{ overflowX: 'auto', marginTop: 8 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead>
+                  <tr style={{ borderBottom: '2px solid var(--line)', textAlign: 'left' }}>
+                    <th style={{ padding: '6px 8px' }}>Classe</th>
+                    <th style={{ padding: '6px 8px' }}>Alumne</th>
+                    <th style={{ padding: '6px 8px' }}>Motiu</th>
+                    <th style={{ padding: '6px 8px' }}>NESE</th>
+                    <th style={{ padding: '6px 8px' }}>Tipus A</th>
+                    <th style={{ padding: '6px 8px' }}>Tipus B</th>
+                    <th style={{ padding: '6px 8px' }}>Tipus C</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ambAd.map((a) => (
+                    <tr key={a.id} style={{ borderBottom: '1px solid var(--line)' }}>
+                      <td style={{ padding: '6px 8px' }}>{a.curs}</td>
+                      <td style={{ padding: '6px 8px' }}>{a.nom}</td>
+                      <td style={{ padding: '6px 8px' }}>{a.adMotiu || '—'}</td>
+                      <td style={{ padding: '6px 8px' }}>{a.adFlag ? 'Sí' : '—'}</td>
+                      <td style={{ padding: '6px 8px' }}>{a.adTipusA ? 'Sí' : '—'}</td>
+                      <td style={{ padding: '6px 8px' }}>{a.adTipusB ? 'Sí' : '—'}</td>
+                      <td style={{ padding: '6px 8px' }}>{a.adTipusC ? 'Sí' : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
+        )}
+        {missatgeDescarrega && (
+          <p style={{ marginTop: 8, fontSize: 12, color: missatgeDescarrega.type === 'error' ? 'var(--red)' : 'var(--green)' }}>
+            {missatgeDescarrega.text}
+          </p>
+        )}
+      </div>
+
+      <div className="caixa" style={{ marginTop: 16 }}>
         <button
           type="button"
           onClick={() => setPiObert((v) => !v)}
@@ -250,6 +366,23 @@ export default function AtencioDiversitat() {
             Alumnes amb PI <span style={{ fontWeight: 400, color: 'var(--ink-soft)', fontSize: 14 }}>({totalPi})</span>
           </h3>
         </button>
+        <BotonsDescarrega
+          id="pi"
+          onExcel={() => exportaExcel('Alumnes amb PI', {
+            ...dadesBase,
+            fulls: [
+              { nom: 'PI Infantil', files: fullPi(ambPiInfantil, AREES_INFANTIL_IDS) },
+              { nom: 'PI Primària', files: fullPi(ambPiPrimaria, AREES_PRIMARIA_IDS) },
+            ],
+          })}
+          onPdf={() => exportaPDF('Alumnes amb PI', {
+            ...dadesBase,
+            fulls: [
+              { nom: 'PI Infantil', files: fullPi(ambPiInfantil, AREES_INFANTIL_IDS) },
+              { nom: 'PI Primària', files: fullPi(ambPiPrimaria, AREES_PRIMARIA_IDS) },
+            ],
+          })}
+        />
 
         <div style={{ display: 'flex', gap: 16, marginTop: 8, flexWrap: 'wrap' }}>
           <label className="field" style={{ maxWidth: 240 }}>
@@ -304,64 +437,6 @@ export default function AtencioDiversitat() {
             <TaulaPi titol="Educació Infantil" alumnesLlista={ambPiInfantil} areesIds={AREES_INFANTIL_IDS} />
             <TaulaPi titol="Primària" alumnesLlista={ambPiPrimaria} areesIds={AREES_PRIMARIA_IDS} />
           </>
-        )}
-      </div>
-
-      <div style={{ marginTop: 32, borderTop: '1px solid var(--line)', paddingTop: 20 }}>
-        <button
-          type="button"
-          onClick={() => setAdObert((v) => !v)}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 6, background: 'transparent',
-            border: 'none', padding: 0, cursor: 'pointer', font: 'inherit', color: 'inherit',
-          }}
-        >
-          <span style={{ fontSize: 12, color: 'var(--ink-soft)', width: 14 }}>{adObert ? '▾' : '▸'}</span>
-          <h3 style={{ fontSize: 18, margin: 0 }}>
-            Esfera AD — NESE <span style={{ fontWeight: 400, color: 'var(--ink-soft)', fontSize: 14 }}>({ambAd.length})</span>
-          </h3>
-        </button>
-        <p className="nota" style={{ marginTop: 4 }}>
-          &quot;NESE&quot; és el flag de la columna F del full (0/1); &quot;Motiu&quot; ve de
-          la columna E, en text lliure — no sempre coincideixen (vegeu
-          sicAlumnatIndicadors.js).
-        </p>
-
-        {adObert && (
-          ambAd.length === 0 ? (
-            <p className="nota" style={{ marginTop: 8 }}>
-              Cap alumne amb dades de NESE{classeFiltrada ? ` a ${classeFiltrada}` : ''}.
-            </p>
-          ) : (
-            <div style={{ overflowX: 'auto', marginTop: 8 }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                <thead>
-                  <tr style={{ borderBottom: '2px solid var(--line)', textAlign: 'left' }}>
-                    <th style={{ padding: '6px 8px' }}>Classe</th>
-                    <th style={{ padding: '6px 8px' }}>Alumne</th>
-                    <th style={{ padding: '6px 8px' }}>Motiu</th>
-                    <th style={{ padding: '6px 8px' }}>NESE</th>
-                    <th style={{ padding: '6px 8px' }}>Tipus A</th>
-                    <th style={{ padding: '6px 8px' }}>Tipus B</th>
-                    <th style={{ padding: '6px 8px' }}>Tipus C</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {ambAd.map((a) => (
-                    <tr key={a.id} style={{ borderBottom: '1px solid var(--line)' }}>
-                      <td style={{ padding: '6px 8px' }}>{a.curs}</td>
-                      <td style={{ padding: '6px 8px' }}>{a.nom}</td>
-                      <td style={{ padding: '6px 8px' }}>{a.adMotiu || '—'}</td>
-                      <td style={{ padding: '6px 8px' }}>{a.adFlag ? 'Sí' : '—'}</td>
-                      <td style={{ padding: '6px 8px' }}>{a.adTipusA ? 'Sí' : '—'}</td>
-                      <td style={{ padding: '6px 8px' }}>{a.adTipusB ? 'Sí' : '—'}</td>
-                      <td style={{ padding: '6px 8px' }}>{a.adTipusC ? 'Sí' : '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )
         )}
       </div>
     </div>
