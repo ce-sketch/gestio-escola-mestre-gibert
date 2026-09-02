@@ -7,6 +7,7 @@ import { taulesNotesClasse } from '../../../lib/notesTaules'
 import { cursEscolarActual } from '../../../lib/cursEscolar'
 import { classesActives } from '../../../lib/provesActives'
 import { grauPrimaria } from '../../../lib/rubricaLectura'
+import { taulaPonderacioLlengua } from '../../../lib/ponderacioLlengua'
 import { exportaExcel, exportaPDF } from '../../../lib/exportTaula'
 
 /**
@@ -360,6 +361,49 @@ export default function NotesGenerals() {
             Per baixar totes les classes de cop, ves a la pestanya &quot;Descàrregues&quot;, dins
             de &quot;Resums i informes&quot;.
           </p>
+
+          {(() => {
+            const taula = taulaPonderacioLlengua(classe)
+            if (!taula) return null
+            return (
+              <div className="caixa" style={{ marginTop: 16, maxWidth: 520 }}>
+                <p style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>
+                  Ponderació qualificació de l&apos;àmbit lingüístic
+                </p>
+                <p className="nota" style={{ marginBottom: 8 }}>
+                  Català i castellà, {classe}. Encara no calcula la nota — de moment és només
+                  informativa (properament s&apos;hi podrà editar, i lligar-la amb TEE/CL/VL).
+                </p>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ borderCollapse: 'collapse', fontSize: 12 }}>
+                    <thead>
+                      <tr style={{ background: 'var(--bg-soft, #f5f5f0)', textAlign: 'left' }}>
+                        <th style={{ padding: '4px 10px' }} />
+                        {taula.periodes.map((p) => (
+                          <th key={p.id} style={{ padding: '4px 10px', fontWeight: 600 }}>{p.id}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr style={{ borderTop: '1px solid var(--line)' }}>
+                        <td style={{ padding: '4px 10px', fontWeight: 500 }}>Comunicació oral</td>
+                        {taula.periodes.map((p) => <td key={p.id} style={{ padding: '4px 10px' }}>{p.comunicacioOral}</td>)}
+                      </tr>
+                      <tr style={{ borderTop: '1px solid var(--line)' }}>
+                        <td style={{ padding: '4px 10px', fontWeight: 500 }}>Expressió escrita</td>
+                        {taula.periodes.map((p) => <td key={p.id} style={{ padding: '4px 10px' }}>{p.expressioEscrita}</td>)}
+                      </tr>
+                      <tr style={{ borderTop: '1px solid var(--line)' }}>
+                        <td style={{ padding: '4px 10px', fontWeight: 500 }}>Comprensió lectora</td>
+                        {taula.periodes.map((p) => <td key={p.id} style={{ padding: '4px 10px' }}>{p.comprensioLectora}</td>)}
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )
+          })()}
+
           <div style={{ overflowX: 'auto', marginTop: 12 }}>
             <table style={{ borderCollapse: 'collapse', fontSize: 13, width: '100%', marginTop: 0 }}>
               <thead>
