@@ -141,6 +141,15 @@ export const PI_AREES = [
   { id: 'descobertaMateix', label: "Descoberta d'un mateix i dels altres" },
 ]
 
+/** "efisica" → "piEfisica", igual que es desa a Firestore des
+ *  d'Alumnes.jsx — un sol lloc perquè qualsevol pantalla que necessiti
+ *  saber si un alumne té PI en una àrea concreta (per exemple, per
+ *  destacar-ho a la graella de notes) faci servir sempre el mateix nom
+ *  de camp. */
+export function campAreaPI(areaId) {
+  return `pi${areaId.charAt(0).toUpperCase()}${areaId.slice(1)}`
+}
+
 /**
  * Llegeix el full "ESFERA PI (1)" i torna un Map IDALU → { arees }, amb
  * `arees` un objecte `{ efisica: bool, ..., descobertaEntorn: bool, ... }`
