@@ -2,15 +2,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { addDoc, collection, doc, getDocs, limit, orderBy, query, serverTimestamp, updateDoc, where } from 'firebase/firestore'
 import { db, auth } from '../../firebase'
 import { comparaCursos } from '../../lib/ordreCursos'
-import { PI_AREES } from '../../lib/sicAlumnatIndicadors'
+import { PI_AREES, campAreaPI } from '../../lib/sicAlumnatIndicadors'
 import { CICLES, cicleDe } from '../../lib/rubricaTEE'
 import { exportaExcel, exportaPDF } from '../../lib/exportTaula'
 import { cursEscolarActual } from '../../lib/cursEscolar'
-
-/** "efisica" → "piEfisica", igual que es desa a Firestore des d'Alumnes.jsx. */
-function campArea(areaId) {
-  return `pi${areaId.charAt(0).toUpperCase()}${areaId.slice(1)}`
-}
 
 // Les àrees de PI d'Infantil i de Primària són diferents (vegeu
 // sicAlumnatIndicadors.js): "Anglès" es comparteix, la resta no. Per
@@ -75,7 +70,7 @@ export default function AtencioDiversitat() {
   // (1r-6è) segons `cicleDe()`. El filtre d'àrea només afecta aquest
   // bloc: l'AD no té àrees.
   const [ambPiInfantil, ambPiPrimaria] = useMemo(() => {
-    const campFiltre = areaPiFiltrada ? campArea(areaPiFiltrada) : null
+    const campFiltre = areaPiFiltrada ? campAreaPI(areaPiFiltrada) : null
     const llista = alumnesFiltrats
       .filter((a) => a.pi && (!campFiltre || a[campFiltre]))
       .sort((a, b) => comparaCursos(a.curs, b.curs) || (a.nom ?? '').localeCompare(b.nom ?? '', 'ca'))
@@ -135,7 +130,7 @@ export default function AtencioDiversitat() {
     const arees = PI_AREES.filter((a) => areesIds.has(a.id))
     const capcalera = ['Classe', 'Alumne', ...arees.map((a) => a.label)]
     const cos = alumnesLlista.map((a) => [
-      a.curs, a.nom, ...arees.map((area) => (a[campArea(area.id)] ? 'Sí' : 'No')),
+      a.curs, a.nom, ...arees.map((area) => (a[campAreaPI(area.id)] ? 'Sí' : 'No')),
     ])
     return [capcalera, ...cos]
   }
@@ -246,7 +241,7 @@ export default function AtencioDiversitat() {
                     <td style={{ padding: '6px 8px' }}>{a.curs}</td>
                     <td style={{ padding: '6px 8px' }}>{a.nom}</td>
                     {arees.map((area) => {
-                      const hiEs = Boolean(a[campArea(area.id)])
+                      const hiEs = Boolean(a[campAreaPI(area.id)])
                       return (
                         <td
                           key={area.id}
