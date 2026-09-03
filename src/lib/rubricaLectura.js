@@ -142,7 +142,6 @@ export function vlAEscalaComuna(paraulesMinut, nivellLabel, curs) {
 
   const idxInicialPropi = ESCALA_NIVELL_LECTOR.indexOf(`I${grau}`)
   const idxMitjanaPropi = idxInicialPropi + 1
-  const idxFinalPropi = idxInicialPropi + 2
 
   if (idxAlumne < idxInicialPropi) return 'no_assoliment'
   if (idxAlumne === idxInicialPropi) return 'assoliment_satisfactori'

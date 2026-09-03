@@ -81,7 +81,7 @@ function llegeixComissio(wb, fullsObjectiu) {
     for (let f = 1; f <= Math.min(ws.rowCount, 15) && filaCap === null; f++) {
       const fila = ws.getRow(f)
       let teActuacions = false
-      fila.eachCell({ includeEmpty: false }, (cell, col) => {
+      fila.eachCell({ includeEmpty: false }, (cell, _col) => {
         if (/Actuacions?\s*\/?\s*Activitats?/i.test(neteja(text(cell)))) teActuacions = true
       })
       if (!teActuacions) continue
