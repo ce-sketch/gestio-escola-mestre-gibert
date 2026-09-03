@@ -9,6 +9,7 @@ import { enviaAvis, WORKER_AVISOS_URL } from '../../../lib/email'
 import { cursEscolarActual } from '../../../lib/cursEscolar'
 import { exportaExcel, exportaPDF } from '../../../lib/exportTaula'
 import { taulaPonderacioLlengua, carregaPonderacioLlengua, desaPonderacioLlengua, grupNivell } from '../../../lib/ponderacioLlengua'
+import { campAreaPI } from '../../../lib/sicAlumnatIndicadors'
 import { esAdmin } from '../../../lib/roles'
 
 const TRIMESTRES = ['1r trimestre', '2n trimestre', '3r trimestre']
@@ -527,11 +528,15 @@ export default function NotaArea() {
             {alumnesClasse.map((alumne) => {
               const incoherencia = comprovaCoherencia(alumne.id)
               const autoOmplert = esAutoOmplert(alumne.id)
+              const esPI = Boolean(alumne[campAreaPI('catala')])
+              const fons = notaGeneralAlumne(alumne.id) === 'no_assoliment'
+                ? 'var(--red-soft, #FBD9D6)'
+                : (esPI ? 'var(--green-soft, #D9F2DE)' : undefined)
               return (
                 <tr key={alumne.id} style={{ borderBottom: '1px solid var(--line)' }}>
                   <td style={{ padding: '6px 8px', color: 'var(--ink-soft)' }}>{alumne.numLlista ?? '—'}</td>
                   <td style={{ padding: '6px 8px', fontWeight: 500 }}>{alumne.nom}</td>
-                  <td style={{ padding: '4px 6px' }}>
+                  <td style={{ padding: '4px 6px', background: fons }}>
                     <select
                       value={notaGeneralAlumne(alumne.id)}
                       onChange={(e) => desaUn(alumne, e.target.value)}
@@ -539,6 +544,7 @@ export default function NotaArea() {
                       style={{
                         border: `1px solid ${autoOmplert ? 'var(--amber-dark)' : 'var(--line)'}`,
                         borderRadius: 6, padding: '4px 6px', fontSize: 12,
+                        background: fons ?? '#fff',
                       }}
                       title={autoOmplert ? 'Omplert automàticament des de "Notes per àrea"' : undefined}
                     >
