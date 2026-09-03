@@ -8,6 +8,7 @@ import { cursEscolarActual } from '../../../lib/cursEscolar'
 import { classesActives } from '../../../lib/provesActives'
 import { grauPrimaria } from '../../../lib/rubricaLectura'
 import { taulaPonderacioLlengua, carregaPonderacioLlengua, desaPonderacioLlengua, grupNivell } from '../../../lib/ponderacioLlengua'
+import { campAreaPI } from '../../../lib/sicAlumnatIndicadors'
 import { esAdmin } from '../../../lib/roles'
 import { exportaExcel, exportaPDF } from '../../../lib/exportTaula'
 
@@ -108,6 +109,17 @@ export default function NotesGenerals() {
 
   function clauValor(alumneId, areaId, trim = trimestre) {
     return `${alumneId}__${areaId}__${trim}`
+  }
+
+  /** El fons de la cel·la d'una nota, segons les dues regles acordades:
+   *  vermell si la nota és per sota de 5 (mana per sobre de tot: una
+   *  nota insuficient s'ha de veure encara que l'àrea tingui PI), verd
+   *  si l'alumne té PI en aquesta àrea concreta, res si no es compleix
+   *  cap de les dues. */
+  function fonsNota(notaNum, esPI) {
+    if (notaNum !== null && Number.isFinite(notaNum) && notaNum < 5) return 'var(--red-soft, #FBD9D6)'
+    if (esPI) return 'var(--green-soft, #D9F2DE)'
+    return undefined
   }
 
   /** La nota d'un alumne, una àrea i UN trimestre concret. Les edicions
@@ -573,6 +585,7 @@ export default function NotesGenerals() {
                         ? notaFinalArea(a.deArees.map((id) => notaFinalAlumneArea(alumne.id, id)))
                         : notaFinalAlumneArea(alumne.id, a.id)
                       const nivellFinal = final !== null ? nivellDe(final) : null
+                      const esPI = Boolean(alumne[campAreaPI(a.id)])
                       return (
                         <Fragment key={a.id}>
                           {TRIMESTRES.map((t, ti) => {
@@ -580,13 +593,14 @@ export default function NotesGenerals() {
                             // surt la Final, calculada de Plàstica i Música.
                             if (a.calculada) {
                               return (
-                                <td key={t} style={{ padding: '4px 3px', textAlign: 'center', borderLeft: ti === 0 ? '1px solid var(--line)' : 'none', color: 'var(--ink-soft)' }}>
+                                <td key={t} style={{ padding: '4px 3px', textAlign: 'center', borderLeft: ti === 0 ? '1px solid var(--line)' : 'none', color: 'var(--ink-soft)', background: fonsNota(final, esPI) }}>
                                   —
                                 </td>
                               )
                             }
                             const nota = notaAlumneTrimestre(alumne.id, a.id, t)
-                            const nivell = nota !== '' ? nivellDe(Number(nota)) : null
+                            const notaNum = nota !== '' ? Number(nota) : null
+                            const nivell = nota !== '' ? nivellDe(notaNum) : null
                             const clau = clauValor(alumne.id, a.id, t)
                             const esActiu = t === trimestre
                             const estaDesant = esActiu && desantClau === clau
@@ -596,13 +610,13 @@ export default function NotesGenerals() {
                             // trimestre.
                             if (!esActiu) {
                               return (
-                                <td key={t} style={{ padding: '4px 3px', textAlign: 'center', borderLeft: ti === 0 ? '1px solid var(--line)' : 'none', color: nivell?.id === 'no_assoliment' ? 'var(--red)' : 'var(--ink)' }}>
+                                <td key={t} style={{ padding: '4px 3px', textAlign: 'center', borderLeft: ti === 0 ? '1px solid var(--line)' : 'none', color: nivell?.id === 'no_assoliment' ? 'var(--red)' : 'var(--ink)', background: fonsNota(notaNum, esPI) }}>
                                   {nota !== '' ? nota : '—'}
                                 </td>
                               )
                             }
                             return (
-                              <td key={t} style={{ padding: '4px 3px', position: 'relative', borderLeft: ti === 0 ? '1px solid var(--line)' : 'none' }}>
+                              <td key={t} style={{ padding: '4px 3px', position: 'relative', borderLeft: ti === 0 ? '1px solid var(--line)' : 'none', background: fonsNota(notaNum, esPI) }}>
                                 <input
                                   type="number"
                                   min={0}
@@ -618,6 +632,7 @@ export default function NotesGenerals() {
                                     padding: '4px 4px',
                                     fontSize: 12,
                                     width: 44,
+                                    background: fonsNota(notaNum, esPI) ?? '#fff',
                                   }}
                                 />
                               </td>
@@ -629,7 +644,7 @@ export default function NotesGenerals() {
                             // editar faria pensar que es pot desviar-ne.
                             if (a.calculada) {
                               return (
-                                <td style={{ padding: '4px 6px', textAlign: 'center', fontWeight: 700, color: nivellFinal?.color ?? 'var(--ink-soft)' }}>
+                                <td style={{ padding: '4px 6px', textAlign: 'center', fontWeight: 700, color: nivellFinal?.color ?? 'var(--ink-soft)', background: fonsNota(final, esPI) }}>
                                   {final ?? '—'}
                                 </td>
                               )
@@ -643,8 +658,9 @@ export default function NotesGenerals() {
                             const mostrat = valors[clauF] !== undefined
                               ? valors[clauF]
                               : (manual !== null ? String(manual) : (final ?? ''))
+                            const mostratNum = mostrat !== '' ? Number(mostrat) : null
                             return (
-                              <td style={{ padding: '4px 3px', textAlign: 'center' }}>
+                              <td style={{ padding: '4px 3px', textAlign: 'center', background: fonsNota(mostratNum, esPI) }}>
                                 <input
                                   type="number"
                                   min={0}
@@ -658,6 +674,7 @@ export default function NotesGenerals() {
                                   onChange={(e) => setValors((prev) => ({ ...prev, [clauF]: e.target.value }))}
                                   onBlur={(e) => desaCella(alumne, a, e.target.value, TRIMESTRE_FINAL)}
                                   style={{
+                                    background: fonsNota(mostratNum, esPI) ?? '#fff',
                                     // Vora contínua = posada a mà; discontínua =
                                     // calculada. Sense distingir-ho, no se sabria
                                     // si una final ve de la mitjana o d'una
@@ -673,7 +690,6 @@ export default function NotesGenerals() {
                                     fontWeight: 700,
                                     textAlign: 'center',
                                     color: nivellFinal?.color ?? 'var(--ink)',
-                                    background: 'transparent',
                                   }}
                                 />
                               </td>
