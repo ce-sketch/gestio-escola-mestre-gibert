@@ -102,7 +102,14 @@ export default function Avaluacio() {
 
   return (
     <div className="module">
-      <h2>Avaluació</h2>
+      <button
+        type="button"
+        onClick={() => setActiu('')}
+        title="Torna a l'inici d'Avaluació"
+        style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left' }}
+      >
+        <h2 style={{ margin: 0 }}>Avaluació</h2>
+      </button>
 
       <div style={{ marginTop: 20, borderBottom: '1px solid var(--line)', paddingBottom: 4 }}>
         {grupsVisibles.map((g, i) => (
@@ -114,7 +121,7 @@ export default function Avaluacio() {
               {g.pestanyes.map((p) => (
                 <button
                   key={p.id}
-                  onClick={() => setActiu(p.id)}
+                  onClick={() => setActiu(actiu === p.id ? '' : p.id)}
                   style={{
                     background: 'none',
                     border: 'none',
