@@ -181,7 +181,7 @@ export default function Absentisme() {
           `,
         })
         enviats += 1
-      } catch (err) {
+      } catch {
         errors += 1
       }
     }

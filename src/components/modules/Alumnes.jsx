@@ -128,7 +128,6 @@ export default function Alumnes() {
   // Firestore protegeixen l'històric dels cursos ja tancats.
   const esCursEnMarxa = cursProves.trim() === cursEscolarActual()
 
-  const [ajutFitxer, setAjutFitxer] = useState(null)
   const [ajutCarregant, setAjutCarregant] = useState(false)
   const [ajutMissatge, setAjutMissatge] = useState(null)
 
@@ -207,18 +206,25 @@ export default function Alumnes() {
         }
 
         const alumnesRef = collection(db, 'alumnes')
+        const snapExistents = await getDocs(collection(db, 'alumnes'))
+        const existentsIds = new Set(snapExistents.docs.map((d) => d.id))
+        const trobades = actualitzacions.filter(({ idalu }) => existentsIds.has(idalu))
         let actualitzats = 0
-        let noTrobats = 0
-        for (let i = 0; i < actualitzacions.length; i += 500) {
+        const noTrobats = actualitzacions.length - trobades.length
+        for (let i = 0; i < trobades.length; i += 500) {
           const batch = writeBatch(db)
-          for (const { idalu, programa } of actualitzacions.slice(i, i + 500)) {
+          for (const { idalu, programa } of trobades.slice(i, i + 500)) {
             batch.set(doc(alumnesRef, idalu), { ajutNese: programa }, { merge: true })
           }
           await batch.commit()
-          actualitzats += actualitzacions.slice(i, i + 500).length
+          actualitzats += trobades.slice(i, i + 500).length
         }
 
-        setAjutMissatge({ type: 'ok', text: `Etiqueta d'ajut (Motxilles/Pla de Xoc) actualitzada per ${actualitzats} alumnes.` })
+        setAjutMissatge({
+          type: 'ok',
+          text: `Etiqueta d'ajut (Motxilles/Pla de Xoc) actualitzada per ${actualitzats} alumnes.`
+            + (noTrobats > 0 ? ` (${noTrobats} IDALU del fitxer no coincideixen amb cap alumne actual — no s'han creat fitxes noves.)` : ''),
+        })
       } catch (err) {
         setAjutMissatge({ type: 'error', text: `No s'ha pogut llegir el fitxer: ${err.message}` })
       } finally {

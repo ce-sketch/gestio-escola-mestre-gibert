@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import JSZip from 'jszip'
 import { exportaDadesCrues, restauraDades, inspeccionaBackup, estatBackup } from '../../lib/backupDades'
-import { collection, getDocs, doc, getDoc, setDoc, deleteDoc, writeBatch, serverTimestamp, orderBy, query, limit } from 'firebase/firestore'
+import { collection, getDocs, doc, getDoc, setDoc, writeBatch, serverTimestamp, orderBy, query, limit } from 'firebase/firestore'
 import { db, auth } from '../../firebase'
 import { aCsv, formataData } from '../../lib/csv'
 import { comptaDiesLectius } from '../../lib/calendar'
@@ -53,7 +53,7 @@ export default function Backup() {
       // La més recent, seleccionada d'entrada: és la que es voldrà mirar
       // gairebé sempre.
       setVersioTriadaId((actual) => actual || llista[0]?.id || '')
-    } catch (err) {
+    } catch {
       // Si encara no hi ha cap versió (o falta l'índex), no cal amoïnar l'usuari.
       setVersions([])
     } finally {

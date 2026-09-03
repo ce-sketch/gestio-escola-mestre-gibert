@@ -3,6 +3,9 @@ import { executaComprovacions } from '../../lib/comprovacions'
 
 export default function Comprovacions() {
   const [torn, setTorn] = useState(0)
+  // `torn` no s'usa dins d'executaComprovacions(): és a posta, només
+  // perquè canviar-lo (el botó "Torna a comprovar") forci un recàlcul.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const grups = useMemo(() => executaComprovacions(), [torn])
 
   const totes = grups.flatMap((g) => g.proves)
