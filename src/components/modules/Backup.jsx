@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import JSZip from 'jszip'
-import { exportaDadesCrues, restauraDades, inspeccionaBackup, estatBackup } from '../../lib/backupDades'
+import { exportaDadesCrues, restauraDades, inspeccionaBackup, estatBackup, COL·LECCIONS } from '../../lib/backupDades'
 import { collection, getDocs, doc, getDoc, setDoc, writeBatch, serverTimestamp, orderBy, query, limit } from 'firebase/firestore'
 import { db, auth } from '../../firebase'
 import { aCsv, formataData } from '../../lib/csv'
@@ -23,6 +23,10 @@ export default function Backup() {
   const [nomVersio, setNomVersio] = useState('')
   const [versions, setVersions] = useState([])
   const [carregantVersions, setCarregantVersions] = useState(true)
+  // Esborrat total (auditoria): cap dada real de cap alumne, enlloc.
+  const [confirmaEsborratTotal, setConfirmaEsborratTotal] = useState('')
+  const [esborrantTot, setEsborrantTot] = useState(false)
+  const [resultatEsborratTotal, setResultatEsborratTotal] = useState(null)
   const [confirmaRestaura, setConfirmaRestaura] = useState({}) // { [versioId]: text escrit }
   const [restaurant, setRestaurant] = useState(null)
   const [versioTriadaId, setVersioTriadaId] = useState('')
@@ -389,6 +393,44 @@ export default function Backup() {
   // igual: si cada pantalla portés el seu, una podria avisar i l'altra no.
   const { dies: diesDesDelBackup, antic: avisAntic } = estatBackup(ultimBackup)
 
+  /**
+   * Esborra TOTA dada real d'alumnes de tota l'app — no només
+   * "alumnes", també notes, assistència, valoracions, l'històric de
+   * SIEI/EE, les còpies de seguretat desades... Es deixa fora només
+   * "configuracio" (paràmetres de l'app: pesos, ponderacions, festes
+   * actives — no hi ha cap dada d'alumnes).
+   *
+   * Pensat per quan cal que l'app no tingui CAP dada real (per exemple,
+   * abans d'una auditoria): un "esborra alumnes" sol no n'hi ha prou,
+   * perquè les notes i l'assistència es queden fent referència a
+   * alumnes que ja no existeixen però que igualment porten el seu IDALU.
+   */
+  async function esborraTotesLesDadesReals() {
+    setEsborrantTot(true)
+    setResultatEsborratTotal(null)
+    const resultat = {}
+    try {
+      for (const { id } of COL·LECCIONS) {
+        if (id === 'configuracio') continue // paràmetres, sense dades d'alumnes
+        const ref = collection(db, id)
+        const snap = await getDocs(ref)
+        const docs = snap.docs
+        for (let i = 0; i < docs.length; i += 500) {
+          const batch = writeBatch(db)
+          for (const d of docs.slice(i, i + 500)) batch.delete(doc(ref, d.id))
+          await batch.commit()
+        }
+        resultat[id] = docs.length
+      }
+      setResultatEsborratTotal({ ok: true, resultat })
+      setConfirmaEsborratTotal('')
+    } catch (err) {
+      setResultatEsborratTotal({ ok: false, error: err.message, parcial: resultat })
+    } finally {
+      setEsborrantTot(false)
+    }
+  }
+
   return (
     <div className="module">
       <p className="module-eyebrow">Còpia de seguretat</p>
@@ -655,6 +697,60 @@ documentacio.csv (quan hi hagi dades)`}
               </ul>
             )}
           </div>
+        )}
+      </div>
+
+      <div className="placeholder-box" style={{ borderStyle: 'solid', borderColor: 'var(--red)', marginTop: 24 }}>
+        <strong style={{ color: 'var(--red)' }}>Zona perillosa: esborra TOTES les dades reals de l&apos;app</strong>
+        <p style={{ marginTop: 6, fontSize: 13 }}>
+          Esborra de cop tot el que faci referència a alumnes reals — no només la llista
+          d&apos;alumnes: notes, assistència, valoracions, l&apos;històric de SIEI/EE, les còpies de
+          seguretat desades... Es deixa fora únicament &quot;Configuració&quot; (pesos, ponderacions,
+          festes actives), que no porta cap dada d&apos;alumnes. <strong>No es pot desfer.</strong>
+        </p>
+        <p className="nota" style={{ marginTop: 4 }}>
+          Pensat per a quan l&apos;app no pot tenir cap dada real (per exemple, abans d&apos;una
+          auditoria) i es vol seguir provant només amb dades anonimitzades.
+        </p>
+        <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <input
+            type="text"
+            value={confirmaEsborratTotal}
+            onChange={(e) => setConfirmaEsborratTotal(e.target.value)}
+            placeholder="Escriu ESBORRA TOT per confirmar"
+            style={{ border: '1px solid var(--red)', borderRadius: 6, padding: '6px 10px', fontSize: 13, minWidth: 220 }}
+          />
+          <button
+            type="button"
+            onClick={esborraTotesLesDadesReals}
+            disabled={confirmaEsborratTotal !== 'ESBORRA TOT' || esborrantTot}
+            style={{
+              background: 'var(--red)', color: '#fff', border: 'none', borderRadius: 6,
+              padding: '7px 16px', fontSize: 13, fontWeight: 600,
+              cursor: confirmaEsborratTotal === 'ESBORRA TOT' ? 'pointer' : 'not-allowed',
+              opacity: confirmaEsborratTotal === 'ESBORRA TOT' ? 1 : 0.5,
+            }}
+          >
+            {esborrantTot ? 'Esborrant…' : 'Esborra totes les dades reals'}
+          </button>
+        </div>
+
+        {resultatEsborratTotal && (
+          resultatEsborratTotal.ok ? (
+            <div style={{ marginTop: 10 }}>
+              <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--green)' }}>Fet. Registres esborrats per col·lecció:</p>
+              <ul style={{ fontSize: 13, marginTop: 4, paddingLeft: 18 }}>
+                {Object.entries(resultatEsborratTotal.resultat).map(([col, n]) => (
+                  <li key={col}>{col}: {n}</li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <p style={{ marginTop: 10, fontSize: 13, color: 'var(--red)' }}>
+              S&apos;ha aturat a mitges: {resultatEsborratTotal.error}. Torna-ho a provar — les
+              col·leccions ja buides no es tornaran a tocar de franc.
+            </p>
+          )
         )}
       </div>
 
