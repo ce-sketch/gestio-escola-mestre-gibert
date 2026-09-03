@@ -42,6 +42,7 @@ export default function ValoracioActivitats({ cursEscolarId, cicleActivitats }) 
   }
 
   async function desaActivitats(activitatsNoves) {
+    setDesant(true)
     try {
       const id = `${cursEscolarId}__activitats-${slug(cicleActivitats)}`
       await setDoc(doc(db, 'activitatsComplementariesDetall', id), {
@@ -53,6 +54,8 @@ export default function ValoracioActivitats({ cursEscolarId, cicleActivitats }) 
       })
     } catch (err) {
       setMissatge({ type: 'error', text: `No s'ha pogut desar: ${err.message}` })
+    } finally {
+      setDesant(false)
     }
   }
 
