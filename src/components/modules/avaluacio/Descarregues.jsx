@@ -55,6 +55,7 @@ export default function Descarregues() {
   const { alumnesTots, registres, carregant, missatge } = useNotesAreaDades()
   const [cursEscolarId, setCursEscolarId] = useState(cursEscolarActual())
   const [generant, setGenerant] = useState(null) // 'excel' | 'pdf' | null
+  const [missatgeDescarrega, setMissatgeDescarrega] = useState(null)
 
   // Les altres proves viuen a col·leccions diferents de les notes per
   // àrea, i el hook de dades només carrega aquelles. Es carreguen aquí
@@ -319,10 +320,11 @@ export default function Descarregues() {
 
   async function descarrega(quin, fes) {
     setGenerant(quin)
+    setMissatgeDescarrega(null)
     try {
       await fes()
     } catch (err) {
-      alert(`No s'ha pogut generar la descàrrega: ${err.message}`)
+      setMissatgeDescarrega({ type: 'error', text: `No s'ha pogut generar la descàrrega: ${err.message}` })
     } finally {
       setGenerant(null)
     }
@@ -371,6 +373,12 @@ export default function Descarregues() {
           {generant === 'pdf' ? 'Generant…' : '📄 Descarrega-ho tot en PDF'}
         </button>
       </div>
+
+      {missatgeDescarrega && (
+        <p style={{ marginTop: 8, fontSize: 13, color: missatgeDescarrega.type === 'error' ? 'var(--red)' : 'var(--green)' }}>
+          {missatgeDescarrega.text}
+        </p>
+      )}
 
       <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 16 }}>
         Inclou tot el que es resumeix del curs: la lectoescriptura d&apos;Infantil, els resums de

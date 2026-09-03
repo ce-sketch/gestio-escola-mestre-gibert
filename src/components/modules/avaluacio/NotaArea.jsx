@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { collection, query, where, getDocs, addDoc, doc, getDoc, serverTimestamp } from 'firebase/firestore'
 import { db, auth } from '../../../firebase'
 import { NIVELLS, nivellDe, nivellPerId, redueixVigents } from '../../../lib/avaluacioCatala'
-import { NIVELLS_PER_CICLE, cicleDe, aEscalaComuna } from '../../../lib/rubricaTEE'
+import { aEscalaComuna } from '../../../lib/rubricaTEE'
 import { clAEscalaComuna, vlAEscalaComuna } from '../../../lib/rubricaLectura'
 import { interpretaDictatNivellUnic } from '../../../lib/dictatTEE'
 import { enviaAvis, WORKER_AVISOS_URL } from '../../../lib/email'
@@ -65,7 +65,6 @@ export default function NotaArea() {
 
   const cursos = useMemo(() => [...new Set(alumnesTots.map((a) => a.curs))].sort(), [alumnesTots])
   const alumnesClasse = useMemo(() => alumnesTots.filter((a) => a.curs === curs), [alumnesTots, curs])
-  const cicle = cicleDe(curs)
 
   useEffect(() => {
     if (!curs) return
