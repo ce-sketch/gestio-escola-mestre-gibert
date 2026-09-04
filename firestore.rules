@@ -41,49 +41,41 @@ service cloud.firestore {
         && !request.auth.token.email.matches('^00.*');
     }
 
-    // ── Curs escolar en marxa, calculat aquí mateix ──────────────────────
-    // Es fa servir per deixar netejar dades de proves del curs actual sense
-    // obrir la porta a esborrar l'històric d'anys anteriors. El tall és
-    // l'agost, igual que a cursEscolarActual() de l'app.
-    function anyIniciCurs() {
-      return request.time.month() >= 8 ? request.time.year() : request.time.year() - 1;
-    }
-
-    // "2026-27"
-    function cursEnMarxa() {
-      return string(anyIniciCurs()) + '-' + string(anyIniciCurs() + 1)[2:4];
-    }
-
     // Assistència: registres d'entrada per data, mai se sobreescriuen.
-    // L'administrador en pot esborrar, però NOMÉS els del curs en marxa
-    // (l'assistència no porta el camp "cursEscolar", així que es mira la
-    // data: de l'1 de setembre al 31 d'agost, com fa la consulta de l'app).
-    // L'històric de cursos tancats queda intocable per a tothom.
+    // L'administrador els pot esborrar tots — abans només deixava els del
+    // curs en marxa (per protegir l'històric d'anys anteriors d'un
+    // esborrat accidental), però això topava amb l'esborrat TOTAL de
+    // Backup ("Esborra totes les dades reals", per exemple abans d'una
+    // auditoria): si hi havia un sol registre d'un curs tancat, tota
+    // l'operació fallava aquí i es quedava a mitges. La protecció contra
+    // esborrats accidentals ja la dona el "ESBORRA TOT" que cal escriure
+    // a mà, no calia repetir-la aquí.
     match /assistencia/{registreId} {
       allow read: if esComptePersonal();
       allow create: if esComptePersonal();
       allow update: if false; // un registre existent no es modifica mai
-      allow delete: if esAdmin()
-        && resource.data.data >= string(anyIniciCurs()) + '-09-01'
-        && resource.data.data <= string(anyIniciCurs() + 1) + '-08-31';
+      allow delete: if esAdmin();
     }
 
-    // Avaluació: notes per alumne, àrea i trimestre. Mateix criteri, però
-    // aquí sí que hi ha el camp "cursEscolar" per comparar directament.
-    // Els registres antics que no el portin no es poden esborrar: si mai
-    // n'apareixen, s'hi afegeix el camp i llavors sí.
+    // Avaluació: notes per alumne, àrea i trimestre. Mateix criteri que
+    // Assistència de sobre: l'administrador les pot esborrar totes,
+    // incloent-hi les de cursos tancats.
     match /avaluacio/{registreId} {
       allow read: if esComptePersonal();
       allow create: if esComptePersonal();
       allow update: if false;
-      allow delete: if esAdmin() && resource.data.cursEscolar == cursEnMarxa();
+      allow delete: if esAdmin();
     }
 
-    // Documentació: metadades de documents (els fitxers en si aniran a Cloudflare R2).
+    // Documentació: metadades de documents (els fitxers en si aniran a
+    // Cloudflare R2). No es poden editar mai un cop creats; esborrar-les
+    // sí, però només l'administrador — igual que la resta, per poder-ho
+    // fer servir des de l'esborrat TOTAL de Backup.
     match /documentacio/{registreId} {
       allow read: if esComptePersonal();
       allow create: if esComptePersonal();
-      allow update, delete: if false;
+      allow update: if false;
+      allow delete: if esAdmin();
     }
 
     // Històric de proves internes (TEE i VL/CL), curs rere curs.
@@ -248,14 +240,17 @@ service cloud.firestore {
     }
 
     // Històric d'altes i baixes de SIEI/EE, fetes des d'"Atenció a la
-    // diversitat". Mateix criteri d'accés que la fitxa de l'alumne:
-    // l'administrador i el compte d'EE hi poden llegir i crear entrades
-    // noves — mai modificar-les ni esborrar-les, és un registre, no
-    // s'edita a posteriori.
+    // diversitat". L'administrador i el compte d'EE hi poden llegir i
+    // crear entrades noves — MAI modificar-les (és un registre d'audit,
+    // no s'edita a posteriori). Esborrar-les sí que ho pot fer
+    // l'administrador, però només per a l'esborrat TOTAL de Backup (per
+    // exemple abans d'una auditoria) — no hi ha cap botó normal de l'app
+    // que n'esborri cap una per una.
     match /diversitatHistoric/{esdevenimentId} {
       allow read: if esAdmin() || esEE();
       allow create: if esAdmin() || esEE();
-      allow update, delete: if false;
+      allow update: if false;
+      allow delete: if esAdmin();
     }
 
     // Per defecte, tot el que no s'hagi definit explícitament queda bloquejat.
